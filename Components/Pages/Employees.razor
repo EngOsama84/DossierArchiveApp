@@ -1,0 +1,501 @@
+﻿@page "/employees"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>أضابير الموظفين والأرشيف</PageTitle>
+
+<div dir="rtl" class="pa-4" style="background-color: #f6f7f9; min-height: 92vh; text-align: right;">
+
+    <!-- الشريط العلوي -->
+    <div class="d-flex justify-space-between align-center mb-3">
+        <!-- فلاتر الموظفين في اليمين -->
+        <div class="d-flex align-center gap-2">
+            <MudTextField @bind-Value="_employeeSearchText"
+                          Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Clearable="true"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Style="background-color: white; width: 280px;" />
+
+            <MudSelect T="string"
+                       @bind-Value="_employeeStatusFilter"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Dense="true"
+                       Style="background-color: white; width: 140px;">
+                <MudSelectItem Value="@("Active")">الفعالون</MudSelectItem>
+                <MudSelectItem Value="@("Inactive")">غير الفعالين</MudSelectItem>
+                <MudSelectItem Value="@("All")">الكل</MudSelectItem>
+            </MudSelect>
+        </div>
+
+        <!-- زر إضافة مستند في اليسار -->
+        <div>
+            @if (_selectedEmployee != null)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.NoteAdd"
+                           OnClick="OpenAddDocumentDialog"
+                           Style="background-color: #1B4D3E; color: white; border-radius: 6px; font-weight: bold; padding: 8px 24px;">
+                    إضافة مستند
+                </MudButton>
+            }
+        </div>
+    </div>
+
+    <!-- شبكة العرض الرئيسية -->
+    <MudGrid Spacing="3">
+
+        <!-- 1. قائمة الموظفين (في اليمين) -->
+        <MudItem xs="12" md="3">
+            <MudPaper Elevation="1" Class="pa-3" Style="border-radius: 8px; background-color: white;">
+                <MudText Typo="Typo.h5" Class="fw-bold text-center mb-3" Style="color: #1B4D3E;">
+                    الموظفون
+                </MudText>
+
+                <MudButton Variant="Variant.Filled"
+                           FullWidth="true"
+                           Class="mb-2"
+                           OnClick="OpenAddEmployeeDialog"
+                           Style="background-color: #F4E8D1; color: #7A5B15; font-weight: bold; border-radius: 6px;">
+                    إضافة موظف
+                </MudButton>
+
+                <div class="d-flex gap-2 mb-3">
+                    <MudButton Variant="Variant.Filled"
+                               FullWidth="true"
+                               Disabled="@(_selectedEmployee == null)"
+                               OnClick="OpenEditEmployeeDialog"
+                               Style="@(_selectedEmployee != null ? "background-color: #E3F2FD; color: #1565C0; font-weight: bold;" : "")">
+                        تعديل
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Filled"
+                               FullWidth="true"
+                               Disabled="@(_selectedEmployee == null)"
+                               OnClick="DeleteSelectedEmployee"
+                               Style="@(_selectedEmployee != null ? "background-color: #B71C1C; color: white; font-weight: bold;" : "")">
+                        حذف
+                    </MudButton>
+                </div>
+
+                <div style="max-height: 68vh; overflow-y: auto; padding-right: 4px;">
+                    @if (_loadingEmployees)
+                    {
+                        <div class="d-flex justify-center pa-4">
+                            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var emp in FilteredEmployees)
+                        {
+                            bool isSelected = _selectedEmployee?.EmployeeId == emp.EmployeeId;
+                            <div class="employee-card pa-3 mb-2"
+                                 @onclick="@(() => SelectEmployee(emp))"
+                                 style="@GetEmployeeCardStyle(isSelected)">
+                                <div class="d-flex justify-space-between align-center">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
+                                            @emp.EmployeeName
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            الأضبارة: @emp.FileNumber
+                                        </MudText>
+                                    </div>
+                                    @if (emp.IsActive != 1)
+                                    {
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text">معطل</MudChip>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- 2. منطقة المستندات والفلاتر (في اليسار) -->
+        <MudItem xs="12" md="9">
+            <MudPaper Elevation="1" Class="pa-5" Style="border-radius: 8px; min-height: 80vh; background-color: white;">
+                @if (_selectedEmployee != null)
+                {
+                    <div class="d-flex align-center justify-start mb-4">
+                        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #2c3e50;">
+                            كتب @_selectedEmployee.EmployeeName
+                        </MudText>
+                    </div>
+
+                    <MudGrid Spacing="2" Class="mb-2">
+                        <MudItem xs="12" sm="3">
+                            <MudSelect T="int?" @bind-Value="_selectedMainCatId"
+                                       Label="التصنيف الرئيسي: الكل"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Clearable="true">
+                                <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
+                                @foreach (var cat in _mainCategories)
+                                {
+                                    <MudSelectItem Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="2">
+                            <MudSelect T="int?" @bind-Value="_selectedPrimaryCatId"
+                                       Label="الفرعي الأول: الكل"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Clearable="true">
+                                <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
+                                @foreach (var cat in _primaryCategories)
+                                {
+                                    <MudSelectItem Value="@((int?)cat.PrimaryCategoryId)">@cat.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="2">
+                            <MudSelect T="int?" @bind-Value="_selectedSecondaryCatId"
+                                       Label="الفرعي الثاني: الكل"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Clearable="true">
+                                <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
+                                @foreach (var cat in _secondaryCategories)
+                                {
+                                    <MudSelectItem Value="@((int?)cat.SecondaryCategoryId)">@cat.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudTextField @bind-Value="_docSubjectFilter"
+                                          Placeholder="موضوع الكتاب"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Clearable="true"
+                                          Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="2">
+                            <MudTextField @bind-Value="_docNumberFilter"
+                                          Placeholder="رقم الكتاب"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Clearable="true"
+                                          Immediate="true" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudGrid Spacing="2" Class="mb-1" AlignItems="Center">
+                        <MudItem xs="12" sm="4">
+                            <MudDatePicker Label="من تاريخ"
+                                           @bind-Date="_dateFrom"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Clearable="true"
+                                           DateFormat="yyyy/MM/dd" />
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudDatePicker Label="إلى تاريخ"
+                                           @bind-Date="_dateTo"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Clearable="true"
+                                           DateFormat="yyyy/MM/dd" />
+                        </MudItem>
+                        <MudItem xs="12" sm="4" Class="text-end">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                البحث والفلاتر تعمل تلقائياً أثناء التغيير.
+                            </MudText>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudDivider Class="my-3" />
+
+                    <MudTable Items="@FilteredDocuments"
+                              Dense="true"
+                              Hover="true"
+                              Elevation="0"
+                              Loading="@_loadingDocs"
+                              LoadingProgressColor="Color.Primary">
+                        <HeaderContent>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa;">الرقم</MudTh>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa;">الموضوع</MudTh>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa;">التاريخ</MudTh>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa;">التصنيف</MudTh>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa;">الملف</MudTh>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center;">إجراء</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="الرقم">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">
+                                    @context.DocumentNumber
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="الموضوع" Class="fw-bold">@context.Subject</MudTd>
+                            <MudTd DataLabel="التاريخ">@context.DocumentDate</MudTd>
+                            <MudTd DataLabel="التصنيف">
+                                @GetCategoryHierarchyName(context)
+                            </MudTd>
+                            <MudTd DataLabel="الملف">
+                                <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => ViewDocument(context))" />
+                            </MudTd>
+                            <MudTd DataLabel="إجراء" Style="text-align: center;">
+                                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => DeleteDocument(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <div class="pa-8 text-center">
+                                <MudText Typo="Typo.body1" Color="Color.Secondary">لا توجد كتب مطابقة.</MudText>
+                            </div>
+                        </NoRecordsContent>
+                    </MudTable>
+                }
+                else
+                {
+                    <div class="d-flex flex-column align-center justify-center" style="height: 60vh;">
+                        <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" Color="Color.Secondary" Style="font-size: 5rem;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-3">
+                            يرجى اختيار موظف من القائمة لعرض إضبارته ومستنداته
+                        </MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</div>
+
+<style>
+    .employee-card {
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.2s ease-in-out;
+    }
+
+        .employee-card:hover {
+            background-color: #f1f7f4 !important;
+        }
+</style>
+
+@code {
+    private List<Employee> _employees = new();
+    private Employee? _selectedEmployee;
+    private bool _loadingEmployees = true;
+    private string _employeeSearchText = "";
+    private string _employeeStatusFilter = "Active";
+
+    private List<Document> _documents = new();
+    private List<MainCategory> _mainCategories = new();
+    private List<PrimaryCategory> _primaryCategories = new();
+    private List<SecondaryCategory> _secondaryCategories = new();
+    private bool _loadingDocs = false;
+
+    private string _docNumberFilter = "";
+    private string _docSubjectFilter = "";
+    private int? _selectedMainCatId;
+    private int? _selectedPrimaryCatId;
+    private int? _selectedSecondaryCatId;
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+        await LoadEmployees();
+    }
+
+    private async Task LoadCategories()
+    {
+        _mainCategories = await DbContext.MainCategories.ToListAsync();
+        _primaryCategories = await DbContext.PrimaryCategories.ToListAsync();
+        _secondaryCategories = await DbContext.SecondaryCategories.ToListAsync();
+    }
+
+    private async Task LoadEmployees()
+    {
+        _loadingEmployees = true;
+        try
+        {
+            _employees = await DbContext.Employees
+                .OrderBy(e => e.FileNumber)
+                .ToListAsync();
+
+            if (_employees.Any() && _selectedEmployee == null)
+            {
+                await SelectEmployee(_employees.First());
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"خطأ أثناء تحميل الموظفين: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loadingEmployees = false;
+        }
+    }
+
+    private async Task SelectEmployee(Employee emp)
+    {
+        _selectedEmployee = emp;
+        await LoadEmployeeDocuments(emp.EmployeeId);
+    }
+
+    private async Task LoadEmployeeDocuments(int employeeId)
+    {
+        _loadingDocs = true;
+        try
+        {
+            var docIds = await DbContext.DocumentEmployees
+                .Where(de => de.EmployeeId == employeeId)
+                .Select(de => de.DocumentId)
+                .ToListAsync();
+
+            _documents = await DbContext.Documents
+                .Where(d => docIds.Contains(d.DocumentId) && d.IsDeleted == 0)
+                .OrderByDescending(d => d.DocumentDate)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"خطأ أثناء جلب المستندات: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loadingDocs = false;
+        }
+    }
+
+    private IEnumerable<Employee> FilteredEmployees => _employees.Where(e =>
+    {
+        if (_employeeStatusFilter == "Active" && e.IsActive != 1) return false;
+        if (_employeeStatusFilter == "Inactive" && e.IsActive == 1) return false;
+
+        if (!string.IsNullOrWhiteSpace(_employeeSearchText))
+        {
+            bool matchName = e.EmployeeName.Contains(_employeeSearchText, StringComparison.OrdinalIgnoreCase);
+            bool matchFile = e.FileNumber.Contains(_employeeSearchText, StringComparison.OrdinalIgnoreCase);
+            if (!matchName && !matchFile) return false;
+        }
+
+        return true;
+    });
+
+    private IEnumerable<Document> FilteredDocuments => _documents.Where(d =>
+    {
+        if (!string.IsNullOrWhiteSpace(_docNumberFilter) && !d.DocumentNumber.Contains(_docNumberFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(_docSubjectFilter) && !d.Subject.Contains(_docSubjectFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (_selectedMainCatId.HasValue && d.MainCategoryId != _selectedMainCatId.Value)
+            return false;
+
+        if (_selectedPrimaryCatId.HasValue && d.PrimaryCategoryId != _selectedPrimaryCatId.Value)
+            return false;
+
+        if (_selectedSecondaryCatId.HasValue && d.SecondaryCategoryId != _selectedSecondaryCatId.Value)
+            return false;
+
+        if (_dateFrom.HasValue && DateTime.TryParse(d.DocumentDate, out var docDate) && docDate < _dateFrom.Value)
+            return false;
+
+        if (_dateTo.HasValue && DateTime.TryParse(d.DocumentDate, out var docDate2) && docDate2 > _dateTo.Value)
+            return false;
+
+        return true;
+    });
+
+    private string GetCategoryHierarchyName(Document doc)
+    {
+        var main = _mainCategories.FirstOrDefault(c => c.MainCategoryId == doc.MainCategoryId)?.Name;
+        var prim = _primaryCategories.FirstOrDefault(c => c.PrimaryCategoryId == doc.PrimaryCategoryId)?.Name;
+        return $"{main} / {prim}";
+    }
+
+    private string GetEmployeeCardStyle(bool isSelected)
+    {
+        if (isSelected)
+        {
+            return "background-color: #E8F5E9; border-right: 5px solid #C5A059; border: 1px solid #C8E6C9;";
+        }
+        return "background-color: #FFFFFF; border: 1px solid #EEEEEE;";
+    }
+
+    private void OpenAddEmployeeDialog()
+    {
+        Snackbar.Add("فتح نافذة إضافة موظف جديد", Severity.Info);
+    }
+
+    private void OpenEditEmployeeDialog()
+    {
+        if (_selectedEmployee != null)
+        {
+            Snackbar.Add($"تعديل بيانات: {_selectedEmployee.EmployeeName}", Severity.Info);
+        }
+    }
+
+    private async Task DeleteSelectedEmployee()
+    {
+        if (_selectedEmployee == null) return;
+
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "تأكيد الحذف",
+            $"هل أنت متأكد من حذف الموظف: {_selectedEmployee.EmployeeName}؟",
+            yesText: "نعم، حذف", cancelText: "إلغاء");
+
+        if (confirm == true)
+        {
+            DbContext.Employees.Remove(_selectedEmployee);
+            await DbContext.SaveChangesAsync();
+            _employees.Remove(_selectedEmployee);
+            _selectedEmployee = _employees.FirstOrDefault();
+            if (_selectedEmployee != null) await SelectEmployee(_selectedEmployee);
+            Snackbar.Add("تم الحذف بنجاح", Severity.Success);
+        }
+    }
+
+    private void OpenAddDocumentDialog()
+    {
+        Snackbar.Add($"إضافة مستند جديد للموظف: {_selectedEmployee?.EmployeeName}", Severity.Info);
+    }
+
+    private void ViewDocument(Document doc)
+    {
+        Snackbar.Add($"معاينة الملف: {doc.OriginalFileName}", Severity.Normal);
+    }
+
+    private async Task DeleteDocument(Document doc)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "تأكيد حذف المستند",
+            $"هل أنت متأكد من حذف الكتاب رقم: {doc.DocumentNumber}؟",
+            yesText: "نعم، حذف", cancelText: "إلغاء");
+
+        if (confirm == true)
+        {
+            doc.IsDeleted = 1;
+            await DbContext.SaveChangesAsync();
+            _documents.Remove(doc);
+            Snackbar.Add("تم نقل المستند إلى المحذوفات", Severity.Success);
+        }
+    }
+}

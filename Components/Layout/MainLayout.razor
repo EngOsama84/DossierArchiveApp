@@ -1,26 +1,31 @@
 ﻿@inherits LayoutComponentBase
 
-<MudThemeProvider Theme="_customTheme" IsDarkMode="false" />
-<MudPopoverProvider />
-<MudDialogProvider FullWidth="true" CloseButton="true" BackdropClick="false" />
-<MudSnackbarProvider />
+<MudRTLProvider RightToLeft="true">
+    <MudThemeProvider Theme="_customTheme" IsDarkMode="false" />
+    <MudPopoverProvider />
+    <MudDialogProvider FullWidth="true" CloseButton="true" BackdropClick="false" />
+    <MudSnackbarProvider />
 
-<MudLayout RightToLeft="true">
-    <MudAppBar Elevation="1" Color="Color.Primary" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-        <MudText Typo="Typo.h6" Class="mr-3">نظام إدارة الأضابير والأرشفة الإلكترونية</MudText>
-        <MudSpacer />
-        <MudText Typo="Typo.body2">الجمهورية العراقية</MudText>
-    </MudAppBar>
+    <MudLayout RightToLeft="true">
+        <!-- الشريط العلوي -->
+        <MudAppBar Elevation="1" Color="Color.Primary" Dense="true" Fixed="true">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+            <MudText Typo="Typo.h6" Class="mr-3">نظام إدارة الأضابير والأرشفة الإلكترونية</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.body2">الجمهورية العراقية</MudText>
+        </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-        <NavMenu />
-    </MudDrawer>
+        <!-- القائمة الجانبية في أقصى اليمين -->
+        <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Anchor="Anchor.Right">
+            <NavMenu />
+        </MudDrawer>
 
-    <MudMainContent Class="pa-4">
-        @Body
-    </MudMainContent>
-</MudLayout>
+        <!-- مساحة عرض الشاشات والمحتوى مع إزاحة تبدأ من تحت الشريط مباشرة -->
+        <MudMainContent Class="pt-14 pa-4">
+            @Body
+        </MudMainContent>
+    </MudLayout>
+</MudRTLProvider>
 
 @code {
     private bool _drawerOpen = true;
@@ -30,13 +35,12 @@
         _drawerOpen = !_drawerOpen;
     }
 
-    // تطبيق الهوية البصرية: الأخضر الداكن المؤسسي + لمسات ذهبية
     private MudTheme _customTheme = new MudTheme()
     {
         PaletteLight = new PaletteLight()
         {
-            Primary = "#1B4D3E",          // أخضر داكن مؤسسي (Dark Green)
-            Secondary = "#C5A059",        // لمسة ذهبية هادئة (Muted Gold)
+            Primary = "#1B4D3E",
+            Secondary = "#C5A059",
             AppbarBackground = "#1B4D3E",
             Background = "#F8F9FA",
             Surface = "#FFFFFF",

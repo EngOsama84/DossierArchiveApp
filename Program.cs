@@ -1,25 +1,33 @@
+using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using DossierArchiveApp.Components;
+using DossierArchiveApp.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// 1. ≈÷«›… Œœ„«  „ﬂÊ‰«  Blazor
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// 2.  ”ÃÌ· Œœ„«  „ﬂ »… MudBlazor
 builder.Services.AddMudServices();
+
+// ========================================================
+// 3. „ﬂ«‰ ”ÿ— ﬁ«⁄œ… «·»Ì«‰«  »«·÷»ÿ (Â‰«):
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite("Data Source=dossiers.sqlite3"));
+// ========================================================
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+//  ﬂÊÌ‰ „”«— «·ÿ·»«  (HTTP request pipeline)
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
-
 app.UseStaticFiles();
 app.UseAntiforgery();
 
