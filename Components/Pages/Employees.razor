@@ -136,10 +136,14 @@
                         </MudText>
                     </div>
 
+                    <!-- شريط فلاتر التصنيفات الأربعة الشجرية المشروطة + حقول البحث -->
                     <MudGrid Spacing="2" Class="mb-2">
-                        <MudItem xs="12" sm="3">
-                            <MudSelect T="int?" @bind-Value="_selectedMainCatId"
-                                       Label="التصنيف الرئيسي: الكل"
+
+                        <!-- 1. نوع الكتاب (المستوى الأول - مفعل دائماً) -->
+                        <MudItem xs="12" sm="2">
+                            <MudSelect T="int?" Value="_selectedMainCatId"
+                                       ValueChanged="OnMainCategoryChanged"
+                                       Label="نوع الكتاب: الكل"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
@@ -151,35 +155,62 @@
                                 }
                             </MudSelect>
                         </MudItem>
+
+                        <!-- 2. التصنيف الرئيسي (معطل حتى يتم اختيار نوع الكتاب) -->
                         <MudItem xs="12" sm="2">
-                            <MudSelect T="int?" @bind-Value="_selectedPrimaryCatId"
-                                       Label="الفرعي الأول: الكل"
+                            <MudSelect T="int?" Value="_selectedPrimaryCatId"
+                                       ValueChanged="OnPrimaryCategoryChanged"
+                                       Label="التصنيف الرئيسي: الكل"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
-                                       Clearable="true">
+                                       Clearable="true"
+                                       Disabled="@(_selectedMainCatId == null || !AvailablePrimaryCategories.Any())">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
-                                @foreach (var cat in _primaryCategories)
+                                @foreach (var cat in AvailablePrimaryCategories)
                                 {
                                     <MudSelectItem Value="@((int?)cat.PrimaryCategoryId)">@cat.Name</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
+
+                        <!-- 3. التصنيف الفرعي الأول (معطل حتى يتم اختيار التصنيف الرئيسي) -->
                         <MudItem xs="12" sm="2">
-                            <MudSelect T="int?" @bind-Value="_selectedSecondaryCatId"
-                                       Label="الفرعي الثاني: الكل"
+                            <MudSelect T="int?" Value="_selectedSecondaryCatId"
+                                       ValueChanged="OnSecondaryCategoryChanged"
+                                       Label="الفرعي الأول: الكل"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
-                                       Clearable="true">
+                                       Clearable="true"
+                                       Disabled="@(_selectedPrimaryCatId == null || !AvailableSecondaryCategories.Any())">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
-                                @foreach (var cat in _secondaryCategories)
+                                @foreach (var cat in AvailableSecondaryCategories)
                                 {
                                     <MudSelectItem Value="@((int?)cat.SecondaryCategoryId)">@cat.Name</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
-                        <MudItem xs="12" sm="3">
+
+                        <!-- 4. التصنيف الفرعي الثاني (معطل دائماً إلا إذا كان الفرعي الأول له تفرع فرعي ثانٍ أو كان لجنة) -->
+                        <MudItem xs="12" sm="2">
+                            <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
+                                       Label="الفرعي الثاني: الكل"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Clearable="true"
+                                       Disabled="@(!IsTertiaryEnabled)">
+                                <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
+                                @foreach (var cat in AvailableTertiaryCategories)
+                                {
+                                    <MudSelectItem Value="@((int?)cat.TertiaryCategoryId)">@cat.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <!-- موضوع الكتاب -->
+                        <MudItem xs="12" sm="2">
                             <MudTextField @bind-Value="_docSubjectFilter"
                                           Placeholder="موضوع الكتاب"
                                           Variant="Variant.Outlined"
@@ -187,6 +218,8 @@
                                           Clearable="true"
                                           Immediate="true" />
                         </MudItem>
+
+                        <!-- رقم الكتاب -->
                         <MudItem xs="12" sm="2">
                             <MudTextField @bind-Value="_docNumberFilter"
                                           Placeholder="رقم الكتاب"
@@ -197,7 +230,8 @@
                         </MudItem>
                     </MudGrid>
 
-                    <MudGrid Spacing="2" Class="mb-1" AlignItems="Center">
+                    <!-- فلاتر التواريخ والملاحظة -->
+                    <MudGrid Spacing="2" Class="mb-1" Justify="Justify.Center">
                         <MudItem xs="12" sm="4">
                             <MudDatePicker Label="من تاريخ"
                                            @bind-Date="_dateFrom"
@@ -223,6 +257,7 @@
 
                     <MudDivider Class="my-3" />
 
+                    <!-- جدول استعراض كتب الموظف -->
                     <MudTable Items="@FilteredDocuments"
                               Dense="true"
                               Hover="true"
@@ -233,7 +268,7 @@
                             <MudTh Style="font-weight: bold; background-color: #fafafa;">الرقم</MudTh>
                             <MudTh Style="font-weight: bold; background-color: #fafafa;">الموضوع</MudTh>
                             <MudTh Style="font-weight: bold; background-color: #fafafa;">التاريخ</MudTh>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa;">التصنيف</MudTh>
+                            <MudTh Style="font-weight: bold; background-color: #fafafa;">التصنيف الشجري</MudTh>
                             <MudTh Style="font-weight: bold; background-color: #fafafa;">الملف</MudTh>
                             <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center;">إجراء</MudTh>
                         </HeaderContent>
@@ -245,7 +280,7 @@
                             </MudTd>
                             <MudTd DataLabel="الموضوع" Class="fw-bold">@context.Subject</MudTd>
                             <MudTd DataLabel="التاريخ">@context.DocumentDate</MudTd>
-                            <MudTd DataLabel="التصنيف">
+                            <MudTd DataLabel="التصنيف الشجري">
                                 @GetCategoryHierarchyName(context)
                             </MudTd>
                             <MudTd DataLabel="الملف">
@@ -302,16 +337,38 @@
     private string _employeeStatusFilter = "Active";
 
     private List<Document> _documents = new();
+
+    // قوائم التصنيفات الأربعة الكاملة
     private List<MainCategory> _mainCategories = new();
     private List<PrimaryCategory> _primaryCategories = new();
     private List<SecondaryCategory> _secondaryCategories = new();
+    private List<TertiaryCategory> _tertiaryCategories = new();
     private bool _loadingDocs = false;
 
+    // اللجان الرسمية وفق القانون الإداري والمالي العراقي
+    private readonly List<string> _iraqiCommittees = new()
+    {
+        "تحقيقية",
+        "تدقيقية",
+        "فتح وتحليل العطاءات",
+        "استلام وإنجاز",
+        "مشتريات واعتدال أسعار",
+        "شطب وإتلاف",
+        "جرد سنوي",
+        "تضمين",
+        "تثمين وبيع وإيجار أموال الدولة",
+        "احتساب خدمة وتقاعد",
+        "فنية تخصصية",
+        "مقابلة وترقية"
+    };
+
+    // محددات الفلاتر
     private string _docNumberFilter = "";
     private string _docSubjectFilter = "";
     private int? _selectedMainCatId;
     private int? _selectedPrimaryCatId;
     private int? _selectedSecondaryCatId;
+    private int? _selectedTertiaryCatId;
     private DateTime? _dateFrom;
     private DateTime? _dateTo;
 
@@ -326,6 +383,85 @@
         _mainCategories = await DbContext.MainCategories.ToListAsync();
         _primaryCategories = await DbContext.PrimaryCategories.ToListAsync();
         _secondaryCategories = await DbContext.SecondaryCategories.ToListAsync();
+        _tertiaryCategories = await DbContext.TertiaryCategories.ToListAsync();
+    }
+
+    // التحقق هل الفرعي الأول المختار هو (لجنة)
+    private bool IsCurrentSecondaryCommittee
+    {
+        get
+        {
+            if (!_selectedSecondaryCatId.HasValue) return false;
+            var currentSec = _secondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
+            return currentSec != null && currentSec.Name.Contains("لجنة");
+        }
+    }
+
+    // 1. التصنيف الرئيسي المتاح: يعتمد على نوع الكتاب
+    private IEnumerable<PrimaryCategory> AvailablePrimaryCategories =>
+        _selectedMainCatId.HasValue
+            ? _primaryCategories.Where(p => p.MainCategoryId == _selectedMainCatId.Value)
+            : Enumerable.Empty<PrimaryCategory>();
+
+    // 2. التصنيف الفرعي الأول المتاح: يعتمد على التصنيف الرئيسي
+    private IEnumerable<SecondaryCategory> AvailableSecondaryCategories =>
+        _selectedPrimaryCatId.HasValue
+            ? _secondaryCategories.Where(s => s.PrimaryCategoryId == _selectedPrimaryCatId.Value)
+            : Enumerable.Empty<SecondaryCategory>();
+
+    // 3. التصنيف الفرعي الثاني المتاح: يشمل ما في قاعدة البيانات + اللجان العراقية إن كان الفرعي الأول لجنة
+    private IEnumerable<TertiaryCategory> AvailableTertiaryCategories
+    {
+        get
+        {
+            if (!_selectedSecondaryCatId.HasValue)
+                return Enumerable.Empty<TertiaryCategory>();
+
+            var dbList = _tertiaryCategories
+                .Where(t => t.SecondaryCategoryId == _selectedSecondaryCatId.Value)
+                .ToList();
+
+            if (dbList.Any()) return dbList;
+
+            if (IsCurrentSecondaryCommittee)
+            {
+                int virtualId = -100;
+                return _iraqiCommittees.Select(name => new TertiaryCategory
+                {
+                    TertiaryCategoryId = virtualId--,
+                    SecondaryCategoryId = _selectedSecondaryCatId.Value,
+                    Name = name
+                }).ToList();
+            }
+
+            return Enumerable.Empty<TertiaryCategory>();
+        }
+    }
+
+    // شرط تفعيل القائمة الفرعية الثانية
+    private bool IsTertiaryEnabled => _selectedSecondaryCatId.HasValue &&
+        (AvailableTertiaryCategories.Any() || IsCurrentSecondaryCommittee);
+
+    // أحداث تحديث الفلاتر الشجرية وتصفير الأبناء عند تغيير الأب (Strict Cascading)
+    private void OnMainCategoryChanged(int? value)
+    {
+        _selectedMainCatId = value;
+        _selectedPrimaryCatId = null;
+        _selectedSecondaryCatId = null;
+        _selectedTertiaryCatId = null;
+    }
+
+    private void OnPrimaryCategoryChanged(int? value)
+    {
+        _selectedPrimaryCatId = value;
+        _selectedSecondaryCatId = null;
+        _selectedTertiaryCatId = null;
+    }
+
+    private void OnSecondaryCategoryChanged(int? value)
+    {
+        _selectedSecondaryCatId = value;
+        _selectedTertiaryCatId = null;
     }
 
     private async Task LoadEmployees()
@@ -415,6 +551,20 @@
         if (_selectedSecondaryCatId.HasValue && d.SecondaryCategoryId != _selectedSecondaryCatId.Value)
             return false;
 
+        if (_selectedTertiaryCatId.HasValue)
+        {
+            if (_selectedTertiaryCatId.Value < 0)
+            {
+                var selectedName = AvailableTertiaryCategories.FirstOrDefault(t => t.TertiaryCategoryId == _selectedTertiaryCatId.Value)?.Name;
+                if (!string.IsNullOrEmpty(selectedName) && !d.Subject.Contains(selectedName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+            else if (d.TertiaryCategoryId != _selectedTertiaryCatId.Value)
+            {
+                return false;
+            }
+        }
+
         if (_dateFrom.HasValue && DateTime.TryParse(d.DocumentDate, out var docDate) && docDate < _dateFrom.Value)
             return false;
 
@@ -428,7 +578,11 @@
     {
         var main = _mainCategories.FirstOrDefault(c => c.MainCategoryId == doc.MainCategoryId)?.Name;
         var prim = _primaryCategories.FirstOrDefault(c => c.PrimaryCategoryId == doc.PrimaryCategoryId)?.Name;
-        return $"{main} / {prim}";
+        var sec = _secondaryCategories.FirstOrDefault(c => c.SecondaryCategoryId == doc.SecondaryCategoryId)?.Name;
+        var tert = _tertiaryCategories.FirstOrDefault(c => c.TertiaryCategoryId == doc.TertiaryCategoryId)?.Name;
+
+        var parts = new List<string?> { main, prim, sec, tert }.Where(s => !string.IsNullOrWhiteSpace(s));
+        return string.Join(" / ", parts);
     }
 
     private string GetEmployeeCardStyle(bool isSelected)
@@ -457,7 +611,7 @@
     {
         if (_selectedEmployee == null) return;
 
-        bool? confirm = await DialogService.ShowMessageBoxAsync(
+        bool? confirm = await DialogService.ShowMessageBox(
             "تأكيد الحذف",
             $"هل أنت متأكد من حذف الموظف: {_selectedEmployee.EmployeeName}؟",
             yesText: "نعم، حذف", cancelText: "إلغاء");
@@ -485,7 +639,7 @@
 
     private async Task DeleteDocument(Document doc)
     {
-        bool? confirm = await DialogService.ShowMessageBoxAsync(
+        bool? confirm = await DialogService.ShowMessageBox(
             "تأكيد حذف المستند",
             $"هل أنت متأكد من حذف الكتاب رقم: {doc.DocumentNumber}؟",
             yesText: "نعم، حذف", cancelText: "إلغاء");
