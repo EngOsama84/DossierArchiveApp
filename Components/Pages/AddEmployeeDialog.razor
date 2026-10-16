@@ -1,0 +1,200 @@
+﻿@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+
+<MudRTLProvider RightToLeft="true">
+    <MudDialog Style="direction: rtl; text-align: right;">
+        <TitleContent>
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" />
+                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">إضافة إضبارة موظف جديدة</MudText>
+            </div>
+        </TitleContent>
+        <DialogContent>
+            <MudForm @ref="_form" @bind-IsValid="_isValid">
+                <MudTextField T="string"
+                              Label="اسم الموظف الكامل"
+                              @bind-Value="_newEmployee.EmployeeName"
+                              Required="true"
+                              RequiredError="يرجى إدخال اسم الموظف"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="mb-4" />
+
+                <MudTextField T="string"
+                              Label="رقم الأضبارة"
+                              @bind-Value="_newEmployee.FileNumber"
+                              Required="true"
+                              RequiredError="يرجى تحديد رقم الأضبارة"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="mb-4" />
+
+                <div class="d-flex align-center justify-space-between mt-2 px-1">
+                    <MudText Typo="Typo.body2" Class="fw-bold">الموظف في الخدمة الفعلية (فعال)</MudText>
+                    <MudSwitch @bind-Value="_isActive"
+                               Color="Color.Success" />
+                </div>
+            </MudForm>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Secondary">إلغاء</MudButton>
+            <MudButton OnClick="Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Disabled="@(!_isValid || _isSaving)"
+                       Style="background-color: #1B4D3E; color: white; min-width: 150px;">
+                @if (_isSaving)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <span class="ms-2">جارٍ الحفظ...</span>
+                }
+                else
+                {
+                    <span>حفظ الموظف والمجلدات</span>
+                }
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudRTLProvider>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private MudForm _form = default!;
+    private bool _isValid;
+    private bool _isSaving;
+    private bool _isActive = true;
+
+    private Employee _newEmployee = new()
+    {
+        CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        IsActive = 1
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var maxId = await DbContext.Employees.MaxAsync(e => (int?)e.EmployeeId) ?? 0;
+            _newEmployee.FileNumber = (maxId + 1).ToString("D4");
+        }
+        catch
+        {
+            _newEmployee.FileNumber = "0001";
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_isValid) return;
+
+        string trimmedName = _newEmployee.EmployeeName.Trim();
+        string trimmedFile = _newEmployee.FileNumber.Trim();
+
+        _isSaving = true;
+        try
+        {
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            if (settings == null || string.IsNullOrWhiteSpace(settings.BaseFolderPath))
+            {
+                Snackbar.Add("لم يتم تحديد مسار مجلد النظام الرئيسي! يرجى التوجه إلى شاشة الإعدادات وضبط المسار أولاً.", Severity.Error);
+                _isSaving = false;
+                return;
+            }
+
+            if (!Directory.Exists(settings.BaseFolderPath))
+            {
+                Snackbar.Add($"مجلد النظام الرئيسي غير موجود على القرص ({settings.BaseFolderPath})! يرجى التحقق من وجوده في شاشة الإعدادات.", Severity.Error);
+                _isSaving = false;
+                return;
+            }
+
+            bool nameExists = await DbContext.Employees.AnyAsync(e => e.EmployeeName == trimmedName);
+            if (nameExists)
+            {
+                Snackbar.Add("اسم الموظف مسجل مسبقاً، يرجى التأكد من الاسم!", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            bool fileExists = await DbContext.Employees.AnyAsync(e => e.FileNumber == trimmedFile);
+            if (fileExists)
+            {
+                Snackbar.Add("رقم الأضبارة مستخدم مسبقاً لموظف آخر!", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            string cleanName = string.Concat(trimmedName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            string cleanFile = string.Concat(trimmedFile.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+            string employeeFolderRelPath = $"{cleanFile}_{cleanName}";
+            string employeeFolderFullPath = Path.Combine(settings.BaseFolderPath, employeeFolderRelPath);
+
+            if (!Directory.Exists(employeeFolderFullPath))
+            {
+                Directory.CreateDirectory(employeeFolderFullPath);
+            }
+
+            var primaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
+            if (primaryCategories.Any())
+            {
+                foreach (var cat in primaryCategories)
+                {
+                    string cleanCat = string.Concat(cat.Name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                    string subCategoryFolder = Path.Combine(employeeFolderFullPath, cleanCat);
+                    if (!Directory.Exists(subCategoryFolder))
+                    {
+                        Directory.CreateDirectory(subCategoryFolder);
+                    }
+                }
+            }
+            else
+            {
+                string[] defaultFolders = { "أوامر إدارية", "استمارات ومستمسكات", "طلبات شخصية", "كتب اعتيادية" };
+                foreach (var folder in defaultFolders)
+                {
+                    string subFolder = Path.Combine(employeeFolderFullPath, folder);
+                    if (!Directory.Exists(subFolder))
+                    {
+                        Directory.CreateDirectory(subFolder);
+                    }
+                }
+            }
+
+            _newEmployee.EmployeeName = trimmedName;
+            _newEmployee.FileNumber = trimmedFile;
+            _newEmployee.IsActive = _isActive ? 1 : 0;
+            _newEmployee.EmployeeFolderPath = employeeFolderRelPath;
+
+            DbContext.Employees.Add(_newEmployee);
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add($"تم حفظ الموظف وإنشاء مجلد إضباره بنجاح: {employeeFolderRelPath}", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(_newEmployee));
+        }
+        catch (DbUpdateException)
+        {
+            Snackbar.Add("تعذر الحفظ لوجود تشابه في القيود الفريدة لقاعدة البيانات", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء إنشاء المجلدات أو الحفظ: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

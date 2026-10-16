@@ -1,58 +1,97 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+
+<MudThemeProvider Theme="_customTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
 <MudRTLProvider RightToLeft="true">
-    <MudThemeProvider Theme="_customTheme" IsDarkMode="false" />
-    <MudPopoverProvider />
-    <MudDialogProvider FullWidth="true" CloseButton="true" BackdropClick="false" />
-    <MudSnackbarProvider />
-
-    <MudLayout RightToLeft="true">
-        <!-- الشريط العلوي -->
-        <MudAppBar Elevation="1" Color="Color.Primary" Dense="true" Fixed="true">
+    <MudLayout>
+        <!-- الترويسة العلوية - مدمجة بنظام التخطيط المعياري لـ MudBlazor -->
+        <MudAppBar Elevation="1" Dense="true" Fixed="true" Style="background-color: #1B4D3E; color: white;">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-            <MudText Typo="Typo.h6" Class="mr-3">نظام إدارة الأضابير والأرشفة الإلكترونية</MudText>
+
+            <!-- شعار المديرية -->
+            @if (!string.IsNullOrEmpty(_settings?.LogoPath))
+            {
+                <img src="@_settings.LogoPath" style="height: 32px; width: 32px; object-fit: contain; margin-left: 10px; border-radius: 4px; background: white; padding: 2px;" alt="شعار" />
+            }
+
+            <!-- اسم المديرية واسم القسم -->
+            <div class="d-flex flex-column mr-2">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="line-height: 1.2;">
+                    @(!string.IsNullOrEmpty(_settings?.DirectorateName) ? _settings.DirectorateName : "نظام إدارة الأضابير والأرشفة الإلكترونية")
+                </MudText>
+                @if (!string.IsNullOrEmpty(_settings?.DepartmentName))
+                {
+                    <MudText Typo="Typo.caption" Style="opacity: 0.85;">
+                        @_settings.DepartmentName
+                    </MudText>
+                }
+            </div>
+
             <MudSpacer />
-            <MudText Typo="Typo.body2">الجمهورية العراقية</MudText>
+
+            <MudText Typo="Typo.caption" Class="fw-bold" Style="opacity: 0.85;">
+                الأرشفة الإلكترونية
+            </MudText>
         </MudAppBar>
 
-        <!-- القائمة الجانبية في أقصى اليمين -->
-        <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Anchor="Anchor.Right">
+        <!-- القائمة الجانبية -->
+        <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
             <NavMenu />
         </MudDrawer>
 
-        <!-- مساحة عرض الشاشات والمحتوى مع إزاحة تبدأ من تحت الشريط مباشرة -->
-        <MudMainContent Class="pt-14 pa-4">
+        <!-- مساحة العمل: معالجة الهامش العلوي (pt-12) لمنع تداخل الـ AppBar مع محتوى الصفحات -->
+        <MudMainContent Class="pt-12 px-2 pb-4">
             @Body
         </MudMainContent>
     </MudLayout>
 </MudRTLProvider>
 
+<style>
+    /* فرض الخط المختار على كامل عناصر الواجهة */
+    body, *, .mud-typography, .mud-input, .mud-button-root, .mud-table {
+        font-family: '@(_selectedFont)', 'Dubai', 'Segoe UI', Tahoma, sans-serif !important;
+    }
+</style>
+
 @code {
     private bool _drawerOpen = true;
+    private SystemSetting? _settings;
+    private string _selectedFont = "Dubai";
+    private MudTheme _customTheme = new();
 
-    private void DrawerToggle()
-    {
-        _drawerOpen = !_drawerOpen;
-    }
+    private void DrawerToggle() => _drawerOpen = !_drawerOpen;
 
-    private MudTheme _customTheme = new MudTheme()
+    protected override async Task OnInitializedAsync()
     {
-        PaletteLight = new PaletteLight()
+        try
         {
-            Primary = "#1B4D3E",
-            Secondary = "#C5A059",
-            AppbarBackground = "#1B4D3E",
-            Background = "#F8F9FA",
-            Surface = "#FFFFFF",
-            DrawerBackground = "#FFFFFF",
-            TextPrimary = "#2C3E50"
-        },
-        Typography = new Typography()
-        {
-            Default = new DefaultTypography()
+            _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            if (_settings != null && !string.IsNullOrWhiteSpace(_settings.FontFamily))
             {
-                FontFamily = new[] { "Segoe UI", "Tahoma", "Calibri", "Arial", "sans-serif" }
+                _selectedFont = _settings.FontFamily;
             }
         }
-    };
+        catch
+        {
+            _selectedFont = "Dubai";
+        }
+
+        _customTheme = new MudTheme()
+        {
+            Typography = new Typography()
+            {
+                Default = new DefaultTypography()
+                {
+                    FontFamily = new[] { _selectedFont, "Dubai", "Segoe UI", "Tahoma", "sans-serif" }
+                }
+            }
+        };
+    }
 }

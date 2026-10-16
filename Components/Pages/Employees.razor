@@ -594,16 +594,50 @@
         return "background-color: #FFFFFF; border: 1px solid #EEEEEE;";
     }
 
-    private void OpenAddEmployeeDialog()
+    private async Task OpenAddEmployeeDialog()
     {
-        Snackbar.Add("فتح نافذة إضافة موظف جديد", Severity.Info);
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<AddEmployeeDialog>("إضافة موظف", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is Employee createdEmployee)
+        {
+            // إعادة تحميل قائمة الموظفين وتحديد الموظف المضاف حديثاً
+            await LoadEmployees();
+            var emp = _employees.FirstOrDefault(e => e.EmployeeId == createdEmployee.EmployeeId);
+            if (emp != null)
+            {
+                await SelectEmployee(emp);
+            }
+        }
     }
 
-    private void OpenEditEmployeeDialog()
+    private async Task OpenEditEmployeeDialog()
     {
-        if (_selectedEmployee != null)
+        if (_selectedEmployee == null) return;
+
+        var parameters = new DialogParameters { ["EmployeeToEdit"] = _selectedEmployee };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<EditEmployeeDialog>("تعديل موظف", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is Employee updatedEmp)
         {
-            Snackbar.Add($"تعديل بيانات: {_selectedEmployee.EmployeeName}", Severity.Info);
+            // تحديث العنصر في القائمة المحلية فوراً
+            var index = _employees.FindIndex(e => e.EmployeeId == updatedEmp.EmployeeId);
+            if (index != -1)
+            {
+                _employees[index] = updatedEmp;
+            }
+            _selectedEmployee = updatedEmp;
+            StateHasChanged();
         }
     }
 
@@ -611,19 +645,69 @@
     {
         if (_selectedEmployee == null) return;
 
-        bool? confirm = await DialogService.ShowMessageBox(
-            "تأكيد الحذف",
-            $"هل أنت متأكد من حذف الموظف: {_selectedEmployee.EmployeeName}؟",
-            yesText: "نعم، حذف", cancelText: "إلغاء");
+        // 1. التحقق الاستباقي: هل يمتلك الموظف مستندات وكتباً في إضباره؟
+        bool hasDocuments = await DbContext.DocumentEmployees
+            .AnyAsync(de => de.EmployeeId == _selectedEmployee.EmployeeId);
 
-        if (confirm == true)
+        if (hasDocuments)
         {
-            DbContext.Employees.Remove(_selectedEmployee);
-            await DbContext.SaveChangesAsync();
+            // منع الحذف لحماية الوثائق
+            await DialogService.ShowMessageBox(
+                "لا يمكن حذف الإضبارة",
+                $"الموظف ({_selectedEmployee.EmployeeName}) يحتوي على كتب ووثائق رسمية مؤرشفة في إضباره.\nلحماية البيانات والوثائق الإدارية، يمنع حذف الموظف نهائياً. يمكنك تعديل حالته إلى (غير فعال) بدلاً من الحذف.",
+                yesText: "حسناً");
+            return;
+        }
+
+        // 2. تأكيد بشري صريح في حال كانت الإضبارة فارغة
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد حذف الموظف",
+            $"هل أنت متأكد من حذف إضبارة الموظف: ({_selectedEmployee.EmployeeName})؟\nسيتم حذف سجله ومجلده نهائياً من النظام.",
+            yesText: "نعم، حذف نهائي",
+            cancelText: "إلغاء");
+
+        if (confirm != true) return;
+
+        try
+        {
+            // 3. حذف المجلد الفيزيائي الفارغ من القرص
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            if (settings != null && !string.IsNullOrWhiteSpace(settings.BaseFolderPath) && !string.IsNullOrWhiteSpace(_selectedEmployee.EmployeeFolderPath))
+            {
+                string employeeFolderFullPath = Path.Combine(settings.BaseFolderPath, _selectedEmployee.EmployeeFolderPath);
+
+                if (Directory.Exists(employeeFolderFullPath))
+                {
+                    Directory.Delete(employeeFolderFullPath, true);
+                }
+            }
+
+            // 4. حذف السجل من قاعدة البيانات
+            var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == _selectedEmployee.EmployeeId);
+            if (empDb != null)
+            {
+                DbContext.Employees.Remove(empDb);
+                await DbContext.SaveChangesAsync();
+            }
+
+            // 5. تحديث القائمة في الواجهة
             _employees.Remove(_selectedEmployee);
             _selectedEmployee = _employees.FirstOrDefault();
-            if (_selectedEmployee != null) await SelectEmployee(_selectedEmployee);
-            Snackbar.Add("تم الحذف بنجاح", Severity.Success);
+
+            if (_selectedEmployee != null)
+            {
+                await SelectEmployee(_selectedEmployee);
+            }
+            else
+            {
+                _documents.Clear();
+            }
+
+            Snackbar.Add("تم حذف الموظف ومجلده بنجاح", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء عملية الحذف: {ex.Message}", Severity.Error);
         }
     }
 

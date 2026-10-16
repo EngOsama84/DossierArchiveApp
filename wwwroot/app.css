@@ -49,3 +49,15 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+/* œ⁄„ « Ã«Â ÕﬁÊ· «·≈œŒ«· ›Ì «·‰Ê«›– «·„‰»Àﬁ… „‰ «·Ì„Ì‰ ··Ì”«— */
+.mud-dialog .mud-input-label-outlined {
+    right: 14px !important;
+    left: auto !important;
+    transform-origin: top right !important;
+}
+
+.mud-dialog legend {
+    text-align: right !important;
+    margin-right: 8px !important;
+    margin-left: 0 !important;
+}

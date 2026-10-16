@@ -8,11 +8,44 @@ public class SystemSetting
 {
     [Key]
     [Column("SettingID")]
-    public int SettingId { get; set; }
+    public int SettingId { get; set; } = 1;
 
     [Column("BaseFolderPath")]
     public string BaseFolderPath { get; set; } = string.Empty;
 
+    // الهوية المؤسسية
+    [Column("DirectorateName")]
+    public string DirectorateName { get; set; } = "المديرية العامة";
+
+    [Column("DepartmentName")]
+    public string DepartmentName { get; set; } = "شعبة تكنولوجيا المعلومات";
+
+    [Column("LogoPath")]
+    public string LogoPath { get; set; } = string.Empty;
+
+    [Column("FontFamily")]
+    public string FontFamily { get; set; } = "Dubai";
+
+    // إعدادات الماسح الضوئي (Hardware & Quality)
+    [Column("DefaultScannerName")]
+    public string DefaultScannerName { get; set; } = string.Empty;
+
+    [Column("ScanSource")]
+    public string ScanSource { get; set; } = "Feeder"; // Feeder أو Flatbed
+
+    [Column("DuplexScan")]
+    public int DuplexScan { get; set; } = 0; // مسح الوجهين
+
+    [Column("ScannerResolutionDPI")]
+    public int ScannerResolutionDPI { get; set; } = 200;
+
+    [Column("ScannerColorMode")]
+    public string ScannerColorMode { get; set; } = "Grayscale";
+
+    [Column("PdfCompressionLevel")]
+    public string PdfCompressionLevel { get; set; } = "Medium";
+
+    // باقي الإعدادات
     [Column("EmployeeDisplayMode")]
     public string EmployeeDisplayMode { get; set; } = "Active";
 
@@ -39,30 +72,4 @@ public class SystemSetting
 
     [Column("KeepAuditLog")]
     public int KeepAuditLog { get; set; } = 1;
-}
-
-[Table("TB_AuditLog")]
-public class AuditLog
-{
-    [Key]
-    [Column("LogID")]
-    public int LogId { get; set; }
-
-    [Column("UserID")]
-    public int? UserId { get; set; }
-
-    [Column("ActionType")]
-    public string ActionType { get; set; } = string.Empty;
-
-    [Column("EntityType")]
-    public string? EntityType { get; set; }
-
-    [Column("EntityID")]
-    public int? EntityId { get; set; }
-
-    [Column("Description")]
-    public string Description { get; set; } = string.Empty;
-
-    [Column("CreatedAt")]
-    public string CreatedAt { get; set; } = string.Empty;
 }
