@@ -1,8 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-using MudBlazor.Services;
 using DossierArchiveApp.Components;
 using DossierArchiveApp.Data;
+using DossierArchiveApp.Models;
 using DossierArchiveApp.Services;
+using Microsoft.EntityFrameworkCore;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 //  ”ÃÌ· Œœ„… «·„«”Õ «·÷Ê∆Ì
 builder.Services.AddSingleton<ScannerService>();
-
+builder.Services.AddScoped<UserSessionService>();
 var app = builder.Build();
 
 //  —ﬁÌ… „ƒﬂœ… ·ÃœÊ· «·≈⁄œ«œ«  ›Ì SQLite ⁄‰œ ﬂ· ≈ﬁ·«⁄
@@ -41,7 +42,46 @@ using (var scope = app.Services.CreateScope())
     TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerColorMode TEXT DEFAULT 'Grayscale';");
     TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN PdfCompressionLevel TEXT DEFAULT 'Medium';");
 }
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+    // «· Õﬁﬁ „‰ ÊÃÊœ „” Œœ„ „œÌ—° Ê≈‰‘«∆Â  ·ﬁ«∆Ì« ≈–« ·„ Ìﬂ‰ „ÊÃÊœ«
+    var hasAdmin = db.Users.Any(u => u.UserTypeId == 1);
+    if (!hasAdmin)
+    {
+        var defaultAdmin = new User
+        {
+            UserName = "admin",
+            PasswordHash = "123456", // ﬂ·„… „—Ê— «·Õ”«» «·«› —«÷Ì
+            UserTypeId = 1,          // „œÌ— ‰Ÿ«„
+            IsActive = 1,
+            CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+            UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+        };
+        db.Users.Add(defaultAdmin);
+        db.SaveChanges();
+    }
+}
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // 1. «·»ÕÀ ⁄‰ Õ”«» admin √Ê √Ê· Õ”«» ›Ì «·ÃœÊ·
+    var adminUser = db.Users.FirstOrDefault(u => u.UserName.ToLower() == "admin")
+                    ?? db.Users.FirstOrDefault();
+
+    if (adminUser != null)
+    {
+        //  ⁄ÌÌ‰ ﬂ·„… «·„—Ê— ≈·Ï 123456 Ê ›⁄Ì· «·Õ”«» ﬂ„œÌ— ‰Ÿ«„
+        adminUser.PasswordHash = "123456";
+        adminUser.UserTypeId = 1; // „œÌ— ‰Ÿ«„ ﬂ«„· «·’·«ÕÌ« 
+        adminUser.IsActive = 1;   // „›⁄·
+        adminUser.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+        db.SaveChanges();
+    }
+}
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

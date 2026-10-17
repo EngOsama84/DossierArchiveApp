@@ -1,0 +1,176 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
+@inject AppDbContext DbContext
+@inject UserSessionService SessionService
+@inject ISnackbar Snackbar
+
+<div dir="rtl" class="d-flex align-center justify-center" style="position: fixed; inset: 0; background: linear-gradient(135deg, #0d2820 0%, #1B4D3E 100%); z-index: 9999;">
+    <MudPaper Elevation="10" Class="pa-6" Style="width: 100%; max-width: 440px; border-radius: 12px; background-color: #ffffff;">
+
+        <!-- الترويسة والشعار -->
+        <div class="text-center mb-4">
+            @if (!string.IsNullOrWhiteSpace(_settings?.LogoPath))
+            {
+                <!-- شعار بحجم صورة شخصية رسمية (عرض 100px وارتفاع 120px) مع إطار خفيف -->
+                <img src="@_settings.LogoPath"
+                     style="width: 100px; height: 125px; object-fit: contain; border-radius: 8px; border: 1px solid #e0e0e0; padding: 4px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 10px;"
+                     alt="شعار المؤسسة" />
+            }
+            else
+            {
+                <div class="d-inline-flex align-center justify-center rounded-circle p-3 mb-2" style="background-color: #e8f5e9;">
+                    <MudIcon Icon="@Icons.Material.Filled.FolderShared" Style="font-size: 3rem; color: #1B4D3E;" />
+                </div>
+            }
+
+            <!-- 1. اسم البرنامج -->
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E; line-height: 1.3;">
+                برنامج الأضابير الإلكترونية
+            </MudText>
+
+            <!-- 2. اسم المديرية -->
+            @if (!string.IsNullOrEmpty(_settings?.DirectorateName))
+            {
+                <MudText Typo="Typo.subtitle1" Class="fw-bold mt-1" Style="color: #2c3e50;">
+                    @_settings.DirectorateName
+                </MudText>
+            }
+
+            <!-- 3. اسم القسم / الشعبة -->
+            @if (!string.IsNullOrEmpty(_settings?.DepartmentName))
+            {
+                <MudText Typo="Typo.body2" Class="fw-bold text-secondary" Style="margin-top: 2px;">
+                    @_settings.DepartmentName
+                </MudText>
+            }
+
+            <MudText Typo="Typo.caption" Class="d-block mt-2 text-muted" Style="font-size: 0.8rem;">
+                تسجيل الدخول للمتابعة
+            </MudText>
+        </div>
+
+        <!-- رسالة الخطأ الواضحة -->
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true" Class="mb-3 text-right" Style="font-size: 0.85rem; border-radius: 6px;">
+                @_errorMessage
+            </MudAlert>
+        }
+
+        <!-- حقل اسم المستخدم -->
+        <div class="mb-3">
+            <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">اسم المستخدم *</MudText>
+            <MudTextField @bind-Value="_userName"
+                          Placeholder="أدخل اسم المستخدم"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person"
+                          Immediate="true" />
+        </div>
+
+        <!-- حقل كلمة المرور -->
+        <div class="mb-4">
+            <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">كلمة المرور *</MudText>
+            <MudTextField @bind-Value="_password"
+                          Placeholder="أدخل كلمة المرور"
+                          InputType="InputType.Password"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Lock"
+                          OnKeyDown="@(async (e) => { if (e.Key == "Enter") await AttemptLogin(); })" />
+        </div>
+
+        <!-- زر الدخول -->
+        <MudButton Variant="Variant.Filled"
+                   FullWidth="true"
+                   Size="Size.Large"
+                   OnClick="AttemptLogin"
+                   Disabled="_isLoggingIn"
+                   Style="background-color: #1B4D3E; color: white; font-weight: bold; border-radius: 6px; padding: 10px;">
+            @if (_isLoggingIn)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="mr-2">جارٍ التحقق...</span>
+            }
+            else
+            {
+                <span>تسجيل الدخول</span>
+            }
+        </MudButton>
+
+    </MudPaper>
+</div>
+
+@code {
+    private string _userName = string.Empty;
+    private string _password = string.Empty;
+    private string? _errorMessage;
+    private bool _isLoggingIn = false;
+    private SystemSetting? _settings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+        }
+        catch { }
+    }
+
+    private async Task AttemptLogin()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_userName))
+        {
+            _errorMessage = "يرجى كتابة اسم المستخدم";
+            return;
+        }
+
+        _isLoggingIn = true;
+        try
+        {
+            var user = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.UserName.ToLower() == _userName.Trim().ToLower());
+
+            if (user == null)
+            {
+                _errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة!";
+                Snackbar.Add(_errorMessage, Severity.Error);
+                return;
+            }
+
+            if (user.IsActive == 0)
+            {
+                _errorMessage = "هذا الحساب معطل حالياً، يرجى مراجعة الإدارة.";
+                Snackbar.Add(_errorMessage, Severity.Warning);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(user.PasswordHash) && user.PasswordHash != _password)
+            {
+                _errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة!";
+                Snackbar.Add(_errorMessage, Severity.Error);
+                return;
+            }
+
+            user.LastLogin = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.SetUserAsync(user);
+            Snackbar.Add($"أهلاً بك، {user.UserName}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"خطأ في الاتصال بالنظام: {ex.Message}";
+        }
+        finally
+        {
+            _isLoggingIn = false;
+        }
+    }
+}

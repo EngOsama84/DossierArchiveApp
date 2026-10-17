@@ -1,21 +1,26 @@
 ﻿@page "/employees"
+@page "/"
 @rendermode InteractiveServer
 
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject UserSessionService SessionService
 
 <PageTitle>أضابير الموظفين والأرشيف</PageTitle>
 
-<div dir="rtl" class="pa-4" style="background-color: #f6f7f9; min-height: 92vh; text-align: right;">
+<div dir="rtl" class="pa-3 pa-md-4" style="background-color: #f6f7f9; min-height: 92vh; text-align: right;">
 
-    <!-- الشريط العلوي -->
-    <div class="d-flex justify-space-between align-center mb-3">
-        <!-- فلاتر الموظفين في اليمين -->
-        <div class="d-flex align-center gap-2">
+    <!-- الشريط العلوي المتجاوب -->
+    <div class="d-flex flex-wrap align-center justify-space-between gap-2 mb-3">
+        <!-- فلاتر وبحث الموظفين -->
+        <div class="d-flex flex-grow-1 align-center gap-2" style="max-width: 650px; min-width: 260px;">
             <MudTextField @bind-Value="_employeeSearchText"
                           Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
                           Variant="Variant.Outlined"
@@ -24,72 +29,82 @@
                           Immediate="true"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search"
-                          Style="background-color: white; width: 280px;" />
+                          Class="flex-grow-1"
+                          Style="background-color: white;" />
 
             <MudSelect T="string"
                        @bind-Value="_employeeStatusFilter"
                        Variant="Variant.Outlined"
                        Margin="Margin.Dense"
                        Dense="true"
-                       Style="background-color: white; width: 140px;">
+                       Style="background-color: white; min-width: 110px; max-width: 130px;">
                 <MudSelectItem Value="@("Active")">الفعالون</MudSelectItem>
                 <MudSelectItem Value="@("Inactive")">غير الفعالين</MudSelectItem>
                 <MudSelectItem Value="@("All")">الكل</MudSelectItem>
             </MudSelect>
         </div>
 
-        <!-- زر إضافة مستند في اليسار -->
+        <!-- زر إضافة مستند -->
         <div>
-            @if (_selectedEmployee != null)
+            @if (_selectedEmployee != null && SessionService.CanAdd)
             {
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.NoteAdd"
                            OnClick="OpenAddDocumentDialog"
-                           Style="background-color: #1B4D3E; color: white; border-radius: 6px; font-weight: bold; padding: 8px 24px;">
+                           Style="background-color: #1B4D3E; color: white; border-radius: 6px; font-weight: bold; padding: 7px 20px; white-space: nowrap;">
                     إضافة مستند
                 </MudButton>
             }
         </div>
     </div>
 
-    <!-- شبكة العرض الرئيسية -->
-    <MudGrid Spacing="3">
+    <!-- شبكة العرض الرئيسية المتجاوبة -->
+    <MudGrid Spacing="2">
 
         <!-- 1. قائمة الموظفين (في اليمين) -->
-        <MudItem xs="12" md="3">
+        <MudItem xs="12" md="4" lg="3">
             <MudPaper Elevation="1" Class="pa-3" Style="border-radius: 8px; background-color: white;">
-                <MudText Typo="Typo.h5" Class="fw-bold text-center mb-3" Style="color: #1B4D3E;">
+                <MudText Typo="Typo.h6" Class="fw-bold text-center mb-2" Style="color: #1B4D3E;">
                     الموظفون
                 </MudText>
 
-                <MudButton Variant="Variant.Filled"
-                           FullWidth="true"
-                           Class="mb-2"
-                           OnClick="OpenAddEmployeeDialog"
-                           Style="background-color: #F4E8D1; color: #7A5B15; font-weight: bold; border-radius: 6px;">
-                    إضافة موظف
-                </MudButton>
-
-                <div class="d-flex gap-2 mb-3">
+                @if (SessionService.CanAddEmployee)
+                {
                     <MudButton Variant="Variant.Filled"
                                FullWidth="true"
-                               Disabled="@(_selectedEmployee == null)"
-                               OnClick="OpenEditEmployeeDialog"
-                               Style="@(_selectedEmployee != null ? "background-color: #E3F2FD; color: #1565C0; font-weight: bold;" : "")">
-                        تعديل
+                               Class="mb-2"
+                               OnClick="OpenAddEmployeeDialog"
+                               Style="background-color: #F4E8D1; color: #7A5B15; font-weight: bold; border-radius: 6px;">
+                        إضافة موظف
                     </MudButton>
+                }
 
-                    <MudButton Variant="Variant.Filled"
-                               FullWidth="true"
-                               Disabled="@(_selectedEmployee == null)"
-                               OnClick="DeleteSelectedEmployee"
-                               Style="@(_selectedEmployee != null ? "background-color: #B71C1C; color: white; font-weight: bold;" : "")">
-                        حذف
-                    </MudButton>
+                <div class="d-flex gap-2 mb-2">
+                    @if (SessionService.CanEditEmployee)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   FullWidth="true"
+                                   Disabled="@(_selectedEmployee == null)"
+                                   OnClick="OpenEditEmployeeDialog"
+                                   Style="@(_selectedEmployee != null ? "background-color: #E3F2FD; color: #1565C0; font-weight: bold;" : "")">
+                            تعديل
+                        </MudButton>
+                    }
+                    @if (SessionService.CanDeleteEmployee)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   FullWidth="true"
+                                   Disabled="@(_selectedEmployee == null)"
+                                   OnClick="DeleteSelectedEmployee"
+                                   Style="@(_selectedEmployee != null ? "background-color: #B71C1C; color: white; font-weight: bold;" : "")">
+                            حذف
+                        </MudButton>
+                    }
                 </div>
 
-                <div style="max-height: 68vh; overflow-y: auto; padding-right: 4px;">
+                <!-- قائمة الموظفين مع تمرير داخلي مريح -->
+                <div style="max-height: calc(100vh - 250px); overflow-y: auto; padding-right: 2px;">
                     @if (_loadingEmployees)
                     {
                         <div class="d-flex justify-center pa-4">
@@ -101,12 +116,12 @@
                         @foreach (var emp in FilteredEmployees)
                         {
                             bool isSelected = _selectedEmployee?.EmployeeId == emp.EmployeeId;
-                            <div class="employee-card pa-3 mb-2"
+                            <div class="employee-card pa-2 mb-2"
                                  @onclick="@(() => SelectEmployee(emp))"
                                  style="@GetEmployeeCardStyle(isSelected)">
                                 <div class="d-flex justify-space-between align-center">
-                                    <div>
-                                        <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
+                                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        <MudText Typo="Typo.body2" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
                                             @emp.EmployeeName
                                         </MudText>
                                         <MudText Typo="Typo.caption" Color="Color.Secondary">
@@ -126,24 +141,24 @@
         </MudItem>
 
         <!-- 2. منطقة المستندات والفلاتر (في اليسار) -->
-        <MudItem xs="12" md="9">
-            <MudPaper Elevation="1" Class="pa-5" Style="border-radius: 8px; min-height: 80vh; background-color: white;">
+        <MudItem xs="12" md="8" lg="9">
+            <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="border-radius: 8px; min-height: 80vh; background-color: white;">
                 @if (_selectedEmployee != null)
                 {
-                    <div class="d-flex align-center justify-start mb-4">
-                        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #2c3e50;">
+                    <div class="d-flex align-center justify-start mb-3">
+                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2c3e50;">
                             كتب @_selectedEmployee.EmployeeName
                         </MudText>
                     </div>
 
-                    <!-- شريط فلاتر التصنيفات الأربعة الشجرية المشروطة + حقول البحث -->
-                    <MudGrid Spacing="2" Class="mb-2">
+                    <!-- شريط فلاتر التصنيفات الأربعة الشجرية -->
+                    <MudGrid Spacing="1" Class="mb-2">
 
-                        <!-- 1. نوع الكتاب (المستوى الأول - مفعل دائماً) -->
-                        <MudItem xs="12" sm="2">
+                        <!-- 1. نوع الكتاب -->
+                        <MudItem xs="6" sm="4" md="2">
                             <MudSelect T="int?" Value="_selectedMainCatId"
                                        ValueChanged="OnMainCategoryChanged"
-                                       Label="نوع الكتاب: الكل"
+                                       Label="نوع الكتاب"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
@@ -156,11 +171,11 @@
                             </MudSelect>
                         </MudItem>
 
-                        <!-- 2. التصنيف الرئيسي (معطل حتى يتم اختيار نوع الكتاب) -->
-                        <MudItem xs="12" sm="2">
+                        <!-- 2. التصنيف الرئيسي -->
+                        <MudItem xs="6" sm="4" md="2">
                             <MudSelect T="int?" Value="_selectedPrimaryCatId"
                                        ValueChanged="OnPrimaryCategoryChanged"
-                                       Label="التصنيف الرئيسي: الكل"
+                                       Label="التصنيف الرئيسي"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
@@ -174,11 +189,11 @@
                             </MudSelect>
                         </MudItem>
 
-                        <!-- 3. التصنيف الفرعي الأول (معطل حتى يتم اختيار التصنيف الرئيسي) -->
-                        <MudItem xs="12" sm="2">
+                        <!-- 3. التصنيف الفرعي الأول -->
+                        <MudItem xs="6" sm="4" md="2">
                             <MudSelect T="int?" Value="_selectedSecondaryCatId"
                                        ValueChanged="OnSecondaryCategoryChanged"
-                                       Label="الفرعي الأول: الكل"
+                                       Label="الفرعي الأول"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
@@ -192,10 +207,10 @@
                             </MudSelect>
                         </MudItem>
 
-                        <!-- 4. التصنيف الفرعي الثاني (معطل دائماً إلا إذا كان الفرعي الأول له تفرع فرعي ثانٍ أو كان لجنة) -->
-                        <MudItem xs="12" sm="2">
+                        <!-- 4. التصنيف الفرعي الثاني -->
+                        <MudItem xs="6" sm="4" md="2">
                             <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
-                                       Label="الفرعي الثاني: الكل"
+                                       Label="الفرعي الثاني"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
@@ -210,9 +225,9 @@
                         </MudItem>
 
                         <!-- موضوع الكتاب -->
-                        <MudItem xs="12" sm="2">
+                        <MudItem xs="6" sm="4" md="2">
                             <MudTextField @bind-Value="_docSubjectFilter"
-                                          Placeholder="موضوع الكتاب"
+                                          Placeholder="الموضوع"
                                           Variant="Variant.Outlined"
                                           Margin="Margin.Dense"
                                           Clearable="true"
@@ -220,7 +235,7 @@
                         </MudItem>
 
                         <!-- رقم الكتاب -->
-                        <MudItem xs="12" sm="2">
+                        <MudItem xs="6" sm="4" md="2">
                             <MudTextField @bind-Value="_docNumberFilter"
                                           Placeholder="رقم الكتاب"
                                           Variant="Variant.Outlined"
@@ -230,9 +245,9 @@
                         </MudItem>
                     </MudGrid>
 
-                    <!-- فلاتر التواريخ والملاحظة -->
-                    <MudGrid Spacing="2" Class="mb-1" Justify="Justify.Center">
-                        <MudItem xs="12" sm="4">
+                    <!-- فلاتر التواريخ -->
+                    <MudGrid Spacing="1" Class="mb-2" AlignItems="Center">
+                        <MudItem xs="6" sm="4">
                             <MudDatePicker Label="من تاريخ"
                                            @bind-Date="_dateFrom"
                                            Variant="Variant.Outlined"
@@ -240,7 +255,7 @@
                                            Clearable="true"
                                            DateFormat="yyyy/MM/dd" />
                         </MudItem>
-                        <MudItem xs="12" sm="4">
+                        <MudItem xs="6" sm="4">
                             <MudDatePicker Label="إلى تاريخ"
                                            @bind-Date="_dateTo"
                                            Variant="Variant.Outlined"
@@ -250,64 +265,81 @@
                         </MudItem>
                         <MudItem xs="12" sm="4" Class="text-end">
                             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                البحث والفلاتر تعمل تلقائياً أثناء التغيير.
+                                الفلاتر تُحدث النتائج تلقائياً
                             </MudText>
                         </MudItem>
                     </MudGrid>
 
-                    <MudDivider Class="my-3" />
+                    <MudDivider Class="my-2" />
 
-                    <!-- جدول استعراض كتب الموظف -->
-                    <MudTable Items="@FilteredDocuments"
-                              Dense="true"
-                              Hover="true"
-                              Elevation="0"
-                              Loading="@_loadingDocs"
-                              LoadingProgressColor="Color.Primary">
-                        <HeaderContent>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa;">الرقم</MudTh>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa;">الموضوع</MudTh>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa;">التاريخ</MudTh>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa;">التصنيف الشجري</MudTh>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa;">الملف</MudTh>
-                            <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center;">إجراء</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="الرقم">
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">
-                                    @context.DocumentNumber
-                                </MudChip>
-                            </MudTd>
-                            <MudTd DataLabel="الموضوع" Class="fw-bold">@context.Subject</MudTd>
-                            <MudTd DataLabel="التاريخ">@context.DocumentDate</MudTd>
-                            <MudTd DataLabel="التصنيف الشجري">
-                                @GetCategoryHierarchyName(context)
-                            </MudTd>
-                            <MudTd DataLabel="الملف">
-                                <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
-                                               Color="Color.Error"
-                                               Size="Size.Small"
-                                               OnClick="@(() => ViewDocument(context))" />
-                            </MudTd>
-                            <MudTd DataLabel="إجراء" Style="text-align: center;">
-                                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
-                                               Color="Color.Error"
-                                               Size="Size.Small"
-                                               OnClick="@(() => DeleteDocument(context))" />
-                            </MudTd>
-                        </RowTemplate>
-                        <NoRecordsContent>
-                            <div class="pa-8 text-center">
-                                <MudText Typo="Typo.body1" Color="Color.Secondary">لا توجد كتب مطابقة.</MudText>
-                            </div>
-                        </NoRecordsContent>
-                    </MudTable>
+                    <!-- جدول استعراض كتب الموظف مع شريط تمرير أفقي responsive -->
+                    <div style="overflow-x: auto;">
+                        <MudTable Items="@FilteredDocuments"
+                                  Dense="true"
+                                  Hover="true"
+                                  Elevation="0"
+                                  Loading="@_loadingDocs"
+                                  LoadingProgressColor="Color.Primary">
+                            <HeaderContent>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; white-space: nowrap;">الرقم</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; min-width: 140px;">الموضوع</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; white-space: nowrap;">التاريخ</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa;">التصنيف الشجري</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; white-space: nowrap;">الملف</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; white-space: nowrap;">إجراء</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="الرقم">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">
+                                        @context.DocumentNumber
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="الموضوع" Class="fw-bold">@context.Subject</MudTd>
+                                <MudTd DataLabel="التاريخ" Style="white-space: nowrap;">@context.DocumentDate</MudTd>
+                                <MudTd DataLabel="التصنيف الشجري">
+                                    @GetCategoryHierarchyName(context)
+                                </MudTd>
+                                <MudTd DataLabel="الملف" Style="text-align: center;">
+                                    <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ViewDocument(context))" />
+                                </MudTd>
+                                <MudTd DataLabel="إجراء" Style="text-align: center;">
+                                    <div class="d-flex justify-center gap-1">
+                                        @if (SessionService.CanEdit)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                           Color="Color.Info"
+                                                           Size="Size.Small"
+                                                           Title="تعديل المستند"
+                                                           OnClick="@(() => OpenEditDocumentDialog(context))" />
+                                        }
+
+                                        @if (SessionService.CanDelete)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           Title="حذف المستند"
+                                                           OnClick="@(() => DeleteDocument(context))" />
+                                        }
+                                    </div>
+                                </MudTd>
+                            </RowTemplate>
+                            <NoRecordsContent>
+                                <div class="pa-6 text-center">
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">لا توجد كتب مطابقة لبحثك.</MudText>
+                                </div>
+                            </NoRecordsContent>
+                        </MudTable>
+                    </div>
                 }
                 else
                 {
                     <div class="d-flex flex-column align-center justify-center" style="height: 60vh;">
-                        <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" Color="Color.Secondary" Style="font-size: 5rem;" />
-                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-3">
+                        <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" Color="Color.Secondary" Style="font-size: 4.5rem;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-3 text-center">
                             يرجى اختيار موظف من القائمة لعرض إضبارته ومستنداته
                         </MudText>
                     </div>
@@ -338,14 +370,12 @@
 
     private List<Document> _documents = new();
 
-    // قوائم التصنيفات الأربعة الكاملة
     private List<MainCategory> _mainCategories = new();
     private List<PrimaryCategory> _primaryCategories = new();
     private List<SecondaryCategory> _secondaryCategories = new();
     private List<TertiaryCategory> _tertiaryCategories = new();
     private bool _loadingDocs = false;
 
-    // اللجان الرسمية وفق القانون الإداري والمالي العراقي
     private readonly List<string> _iraqiCommittees = new()
     {
         "تحقيقية",
@@ -362,7 +392,6 @@
         "مقابلة وترقية"
     };
 
-    // محددات الفلاتر
     private string _docNumberFilter = "";
     private string _docSubjectFilter = "";
     private int? _selectedMainCatId;
@@ -386,7 +415,6 @@
         _tertiaryCategories = await DbContext.TertiaryCategories.ToListAsync();
     }
 
-    // التحقق هل الفرعي الأول المختار هو (لجنة)
     private bool IsCurrentSecondaryCommittee
     {
         get
@@ -397,19 +425,16 @@
         }
     }
 
-    // 1. التصنيف الرئيسي المتاح: يعتمد على نوع الكتاب
     private IEnumerable<PrimaryCategory> AvailablePrimaryCategories =>
         _selectedMainCatId.HasValue
             ? _primaryCategories.Where(p => p.MainCategoryId == _selectedMainCatId.Value)
             : Enumerable.Empty<PrimaryCategory>();
 
-    // 2. التصنيف الفرعي الأول المتاح: يعتمد على التصنيف الرئيسي
     private IEnumerable<SecondaryCategory> AvailableSecondaryCategories =>
         _selectedPrimaryCatId.HasValue
             ? _secondaryCategories.Where(s => s.PrimaryCategoryId == _selectedPrimaryCatId.Value)
             : Enumerable.Empty<SecondaryCategory>();
 
-    // 3. التصنيف الفرعي الثاني المتاح: يشمل ما في قاعدة البيانات + اللجان العراقية إن كان الفرعي الأول لجنة
     private IEnumerable<TertiaryCategory> AvailableTertiaryCategories
     {
         get
@@ -438,11 +463,9 @@
         }
     }
 
-    // شرط تفعيل القائمة الفرعية الثانية
     private bool IsTertiaryEnabled => _selectedSecondaryCatId.HasValue &&
         (AvailableTertiaryCategories.Any() || IsCurrentSecondaryCommittee);
 
-    // أحداث تحديث الفلاتر الشجرية وتصفير الأبناء عند تغيير الأب (Strict Cascading)
     private void OnMainCategoryChanged(int? value)
     {
         _selectedMainCatId = value;
@@ -608,7 +631,6 @@
 
         if (!result.Canceled && result.Data is Employee createdEmployee)
         {
-            // إعادة تحميل قائمة الموظفين وتحديد الموظف المضاف حديثاً
             await LoadEmployees();
             var emp = _employees.FirstOrDefault(e => e.EmployeeId == createdEmployee.EmployeeId);
             if (emp != null)
@@ -630,7 +652,6 @@
 
         if (!result.Canceled && result.Data is Employee updatedEmp)
         {
-            // تحديث العنصر في القائمة المحلية فوراً
             var index = _employees.FindIndex(e => e.EmployeeId == updatedEmp.EmployeeId);
             if (index != -1)
             {
@@ -645,13 +666,17 @@
     {
         if (_selectedEmployee == null) return;
 
-        // 1. التحقق الاستباقي: هل يمتلك الموظف مستندات وكتباً في إضباره؟
+        if (!SessionService.CanDeleteEmployee)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لحذف الموظفين!", Severity.Error);
+            return;
+        }
+
         bool hasDocuments = await DbContext.DocumentEmployees
             .AnyAsync(de => de.EmployeeId == _selectedEmployee.EmployeeId);
 
         if (hasDocuments)
         {
-            // منع الحذف لحماية الوثائق
             await DialogService.ShowMessageBox(
                 "لا يمكن حذف الإضبارة",
                 $"الموظف ({_selectedEmployee.EmployeeName}) يحتوي على كتب ووثائق رسمية مؤرشفة في إضباره.\nلحماية البيانات والوثائق الإدارية، يمنع حذف الموظف نهائياً. يمكنك تعديل حالته إلى (غير فعال) بدلاً من الحذف.",
@@ -659,7 +684,6 @@
             return;
         }
 
-        // 2. تأكيد بشري صريح في حال كانت الإضبارة فارغة
         bool? confirm = await DialogService.ShowMessageBox(
             "تأكيد حذف الموظف",
             $"هل أنت متأكد من حذف إضبارة الموظف: ({_selectedEmployee.EmployeeName})؟\nسيتم حذف سجله ومجلده نهائياً من النظام.",
@@ -668,9 +692,12 @@
 
         if (confirm != true) return;
 
+        int deletedEmpId = _selectedEmployee.EmployeeId;
+        string deletedEmpName = _selectedEmployee.EmployeeName;
+        string deletedFileNum = _selectedEmployee.FileNumber;
+
         try
         {
-            // 3. حذف المجلد الفيزيائي الفارغ من القرص
             var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
             if (settings != null && !string.IsNullOrWhiteSpace(settings.BaseFolderPath) && !string.IsNullOrWhiteSpace(_selectedEmployee.EmployeeFolderPath))
             {
@@ -682,15 +709,20 @@
                 }
             }
 
-            // 4. حذف السجل من قاعدة البيانات
-            var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == _selectedEmployee.EmployeeId);
+            var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == deletedEmpId);
             if (empDb != null)
             {
                 DbContext.Employees.Remove(empDb);
                 await DbContext.SaveChangesAsync();
+
+                await SessionService.LogActivityAsync(
+                    actionType: "حذف موظف",
+                    entityType: "موظف",
+                    entityId: deletedEmpId,
+                    description: $"تم حذف إضبارة الموظف ({deletedEmpName}) ذات رقم الإضبارة ({deletedFileNum}) ومجلدها الفيزيائي الفارغ."
+                );
             }
 
-            // 5. تحديث القائمة في الواجهة
             _employees.Remove(_selectedEmployee);
             _selectedEmployee = _employees.FirstOrDefault();
 
@@ -713,27 +745,224 @@
 
     private void OpenAddDocumentDialog()
     {
-        Snackbar.Add($"إضافة مستند جديد للموظف: {_selectedEmployee?.EmployeeName}", Severity.Info);
+        if (_selectedEmployee != null)
+        {
+            Navigation.NavigateTo($"/add-document/{_selectedEmployee.EmployeeId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/add-document");
+        }
     }
 
-    private void ViewDocument(Document doc)
+    private void OpenEditDocumentDialog(Document doc)
     {
-        Snackbar.Add($"معاينة الملف: {doc.OriginalFileName}", Severity.Normal);
+        Navigation.NavigateTo($"/edit-document/{doc.DocumentId}");
+    }
+
+    private async Task ViewDocument(Document doc)
+    {
+        try
+        {
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            if (settings == null || string.IsNullOrWhiteSpace(settings.BaseFolderPath))
+            {
+                Snackbar.Add("لم يتم تحديد مسار المجلد الأساسي في الإعدادات!", Severity.Error);
+                return;
+            }
+
+            string? relativePath = null;
+            if (_selectedEmployee != null)
+            {
+                relativePath = await DbContext.DocumentEmployees
+                    .Where(de => de.DocumentId == doc.DocumentId && de.EmployeeId == _selectedEmployee.EmployeeId)
+                    .Select(de => de.EmployeeFilePath)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                relativePath = doc.FilePath;
+            }
+
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                Snackbar.Add("مسار المستند غير مسجل في النظام!", Severity.Warning);
+                return;
+            }
+
+            string fullDiskPath = Path.Combine(settings.BaseFolderPath, relativePath);
+
+            if (!File.Exists(fullDiskPath))
+            {
+                Snackbar.Add($"الملف غير موجود على القرص: {fullDiskPath}", Severity.Warning);
+                return;
+            }
+
+            string mode = (settings.PDFViewerMode ?? "internal").Trim().ToLower();
+
+            if (mode == "external")
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = fullDiskPath,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+            else if (mode == "browser")
+            {
+                byte[] fileBytes = await File.ReadAllBytesAsync(fullDiskPath);
+                string base64 = Convert.ToBase64String(fileBytes);
+                await JS.InvokeVoidAsync("openPdfFromBase64", base64);
+            }
+            else
+            {
+                byte[] fileBytes = await File.ReadAllBytesAsync(fullDiskPath);
+                string base64 = Convert.ToBase64String(fileBytes);
+                string dataUrl = $"data:application/pdf;base64,{base64}";
+
+                var parameters = new DialogParameters
+                {
+                    ["Title"] = $"{doc.Subject} - ({doc.DocumentNumber})",
+                    ["PdfDataUrl"] = dataUrl
+                };
+                var options = new DialogOptions
+                {
+                    MaxWidth = MaxWidth.ExtraLarge,
+                    FullWidth = true,
+                    CloseButton = false
+                };
+
+                await DialogService.ShowAsync<PdfViewerDialog>("استعراض المستند", parameters, options);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء فتح المستند: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task DeleteDocument(Document doc)
     {
-        bool? confirm = await DialogService.ShowMessageBox(
-            "تأكيد حذف المستند",
-            $"هل أنت متأكد من حذف الكتاب رقم: {doc.DocumentNumber}؟",
-            yesText: "نعم، حذف", cancelText: "إلغاء");
+        if (_selectedEmployee == null || doc == null) return;
 
-        if (confirm == true)
+        try
         {
-            doc.IsDeleted = 1;
-            await DbContext.SaveChangesAsync();
-            _documents.Remove(doc);
-            Snackbar.Add("تم نقل المستند إلى المحذوفات", Severity.Success);
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            string baseFolder = settings?.BaseFolderPath ?? string.Empty;
+
+            var allLinks = await DbContext.DocumentEmployees
+                .Where(de => de.DocumentId == doc.DocumentId)
+                .ToListAsync();
+
+            int linkedEmployeesCount = allLinks.Count;
+            bool deleteAll = false;
+
+            if (linkedEmployeesCount > 1)
+            {
+                var parameters = new DialogParameters
+                {
+                    ["ContentText"] = $"الكتاب (رقم: {doc.DocumentNumber} - {doc.Subject}) مشترك ومؤرشف في أضابير ({linkedEmployeesCount}) موظفين.\nكيف ترغب في إتمام عملية الحذف؟",
+                    ["Button1Text"] = "حذف من الموظف الحالي فقط",
+                    ["Button2Text"] = "حذف من جميع الموظفين نهائياً",
+                    ["CancelText"] = "إلغاء الأمر"
+                };
+
+                var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small };
+                var dialog = await DialogService.ShowAsync<DeleteChoiceDialog>("خيارات حذف المستند المشترك", parameters, options);
+                var result = await dialog.Result;
+
+                if (result.Canceled || result.Data == null)
+                {
+                    return;
+                }
+
+                string choice = result.Data.ToString()!;
+                deleteAll = (choice == "all");
+            }
+            else
+            {
+                bool? confirm = await DialogService.ShowMessageBox(
+                    "تأكيد حذف المستند",
+                    $"هل أنت متأكد من حذف المستند (رقم: {doc.DocumentNumber} - {doc.Subject})؟\nسيتم حذف الملف نهائياً من مجلد إضبارة الموظف وقاعدة البيانات.",
+                    yesText: "نعم، حذف",
+                    cancelText: "إلغاء");
+
+                if (confirm != true) return;
+                deleteAll = true;
+            }
+
+            if (deleteAll)
+            {
+                if (!string.IsNullOrWhiteSpace(baseFolder) && Directory.Exists(baseFolder))
+                {
+                    foreach (var link in allLinks)
+                    {
+                        if (!string.IsNullOrWhiteSpace(link.EmployeeFilePath))
+                        {
+                            string fullPath = Path.Combine(baseFolder, link.EmployeeFilePath);
+                            if (File.Exists(fullPath))
+                            {
+                                try { File.Delete(fullPath); } catch { }
+                            }
+                        }
+                    }
+                }
+
+                DbContext.DocumentEmployees.RemoveRange(allLinks);
+
+                var docDb = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == doc.DocumentId);
+                if (docDb != null)
+                {
+                    DbContext.Documents.Remove(docDb);
+                }
+
+                await DbContext.SaveChangesAsync();
+
+                await SessionService.LogActivityAsync(
+                    actionType: "حذف مستند نهائي",
+                    entityType: "مستند",
+                    entityId: doc.DocumentId,
+                    description: $"تم حذف كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) نهائياً من كافة الأضابير مع ملفاته الفيزيائية."
+                );
+
+                Snackbar.Add("تم حذف المستند وملفاته من كافة الأضابير بنجاح", Severity.Success);
+            }
+            else
+            {
+                var currentLink = allLinks.FirstOrDefault(de => de.EmployeeId == _selectedEmployee.EmployeeId);
+                if (currentLink != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(baseFolder) && !string.IsNullOrWhiteSpace(currentLink.EmployeeFilePath))
+                    {
+                        string fullPath = Path.Combine(baseFolder, currentLink.EmployeeFilePath);
+                        if (File.Exists(fullPath))
+                        {
+                            try { File.Delete(fullPath); } catch { }
+                        }
+                    }
+
+                    DbContext.DocumentEmployees.Remove(currentLink);
+                    await DbContext.SaveChangesAsync();
+
+                    await SessionService.LogActivityAsync(
+                        actionType: "فك ارتباط مستند",
+                        entityType: "مستند / موظف",
+                        entityId: doc.DocumentId,
+                        description: $"تمت إزالة كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) من إضبارة الموظف ({_selectedEmployee.EmployeeName}) فقط."
+                    );
+
+                    Snackbar.Add($"تمت إزالة المستند وملفه من إضبارة ({_selectedEmployee.EmployeeName}) فقط", Severity.Success);
+                }
+            }
+
+            await LoadEmployeeDocuments(_selectedEmployee.EmployeeId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء تنفيذ الحذف: {ex.Message}", Severity.Error);
         }
     }
 }

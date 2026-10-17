@@ -1,0 +1,170 @@
+﻿@page "/audit-logs"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+
+<PageTitle>سجل حركات النظام</PageTitle>
+
+<div dir="rtl" class="pa-4" style="background-color: #f8f9fa; min-height: 90vh; text-align: right;">
+
+    <!-- العنوان وشريط التحديث -->
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">
+                <MudIcon Icon="@Icons.Material.Filled.History" Class="ml-2" /> سجل حركات النظام
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                متابعة وتدقيق العمليات المنفذة على الأضابير والمستندات
+            </MudText>
+        </div>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadLogs"
+                   Disabled="_isLoading">
+            تحديث السجل
+        </MudButton>
+    </div>
+
+    <!-- شريط البحث والفلترة -->
+    <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background-color: white; border: 1px solid #e0e0e0; border-radius: 6px;">
+        <MudGrid Spacing="2" Class="align-center">
+            <MudItem xs="12" sm="5">
+                <MudTextField @bind-Value="_searchString"
+                              Placeholder="بحث في الوصف، اسم المستخدم، أو نوع الكيان..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" />
+            </MudItem>
+
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string" @bind-Value="_selectedActionType"
+                           Label="نوع الإجراء"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           Clearable="true">
+                    <MudSelectItem Value="@("الكل")">كل الإجراءات</MudSelectItem>
+                    <MudSelectItem Value="@("إضافة")">إضافة</MudSelectItem>
+                    <MudSelectItem Value="@("تعديل")">تعديل</MudSelectItem>
+                    <MudSelectItem Value="@("حذف")">حذف</MudSelectItem>
+                    <MudSelectItem Value="@("استعراض")">استعراض / فتح</MudSelectItem>
+                    <MudSelectItem Value="@("دخول")">تسجيل دخول</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- جدول عرض الحركات -->
+    <MudPaper Elevation="0" Class="pa-2" Style="background-color: white; border: 1px solid #e0e0e0; border-radius: 6px;">
+        <MudTable Items="FilteredLogs" Dense="true" Hover="true" Striped="true" Loading="_isLoading" Elevation="0">
+            <HeaderContent>
+                <MudTh Style="font-weight: bold; width: 170px;">التاريخ والوقت</MudTh>
+                <MudTh Style="font-weight: bold; width: 140px;">المستخدم</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center; width: 120px;">نوع الإجراء</MudTh>
+                <MudTh Style="font-weight: bold; width: 130px;">الكيان المستهدف</MudTh>
+                <MudTh Style="font-weight: bold;">تفاصيل العملية</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="التاريخ والوقت" Style="direction: ltr; text-align: right; font-size: 0.85rem; color: #555;">
+                    @context.CreatedAt
+                </MudTd>
+                <MudTd DataLabel="المستخدم">
+                    <div class="d-flex align-center gap-1">
+                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Small" Color="Color.Default" />
+                        <span class="fw-bold">@context.UserName</span>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="نوع الإجراء" Style="text-align: center;">
+                    @if (context.ActionType.Contains("إضافة") || context.ActionType.Contains("Add"))
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.ActionType</MudChip>
+                    }
+                    else if (context.ActionType.Contains("تعديل") || context.ActionType.Contains("Edit") || context.ActionType.Contains("Update"))
+                    {
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small">@context.ActionType</MudChip>
+                    }
+                    else if (context.ActionType.Contains("حذف") || context.ActionType.Contains("Delete"))
+                    {
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small">@context.ActionType</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small">@context.ActionType</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="الكيان">@(context.EntityType ?? "نظام")</MudTd>
+                <MudTd DataLabel="تفاصيل العملية">@context.Description</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد حركات مسجلة حالياً في السجل.</MudText>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="عدد الأسطر:" InfoFormat="{first_item}-{last_item} من {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+
+</div>
+
+@code {
+    private record AuditLogView(int LogId, string UserName, string ActionType, string? EntityType, int? EntityId, string Description, string CreatedAt);
+
+    private List<AuditLogView> _logs = new();
+    private bool _isLoading = true;
+    private string _searchString = string.Empty;
+    private string _selectedActionType = "الكل";
+
+    private IEnumerable<AuditLogView> FilteredLogs => _logs.Where(l =>
+        (_selectedActionType == "الكل" || string.IsNullOrEmpty(_selectedActionType) || l.ActionType.Contains(_selectedActionType)) &&
+        (string.IsNullOrWhiteSpace(_searchString) ||
+         l.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+         l.UserName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+         (l.EntityType != null && l.EntityType.Contains(_searchString, StringComparison.OrdinalIgnoreCase))));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLogs();
+    }
+
+    private async Task LoadLogs()
+    {
+        _isLoading = true;
+        try
+        {
+            var rawLogs = await DbContext.AuditLogs
+                .OrderByDescending(l => l.LogId)
+                .Take(500)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var users = await DbContext.Users.AsNoTracking().ToListAsync();
+            var userMap = users.ToDictionary(u => u.UserId, u => u.UserName);
+
+            _logs = rawLogs.Select(l => new AuditLogView(
+                l.LogId,
+                l.UserId.HasValue && userMap.ContainsKey(l.UserId.Value) ? userMap[l.UserId.Value] : "المسؤول",
+                l.ActionType,
+                l.EntityType,
+                l.EntityId,
+                l.Description,
+                l.CreatedAt
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء تحميل السجل: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

@@ -1,6 +1,8 @@
 ﻿@using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
 @using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Services
+@inject UserSessionService SessionService
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
 
@@ -87,7 +89,6 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
-
     private async Task Submit()
     {
         await _form.Validate();
@@ -194,6 +195,8 @@
             var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == EmployeeToEdit.EmployeeId);
             if (empDb != null)
             {
+                string oldName = empDb.EmployeeName; // حفظ الاسم القديم للتوثيق
+
                 empDb.EmployeeName = trimmedName;
                 empDb.FileNumber = trimmedFile;
                 empDb.IsActive = _isActive ? 1 : 0;
@@ -201,6 +204,14 @@
                 empDb.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 await DbContext.SaveChangesAsync();
+
+                // توثيق حركة التعديل في سجل الحركات باستخدام empDb
+                await SessionService.LogActivityAsync(
+                    actionType: "تعديل موظف",
+                    entityType: "موظف",
+                    entityId: empDb.EmployeeId,
+                    description: $"تم تعديل بيانات الموظف ({oldName}) - الاسم الجديد: ({empDb.EmployeeName}) ورقم الإضبارة: ({empDb.FileNumber})."
+                );
 
                 // تحديث الكائن في الذاكرة للعرض الفوري
                 EmployeeToEdit.EmployeeName = empDb.EmployeeName;

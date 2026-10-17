@@ -9,6 +9,7 @@
 @inject ScannerService ScannerService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject UserSessionService SessionService
 
 <PageTitle>إعدادات النظام العامة</PageTitle>
 
@@ -250,7 +251,8 @@
                                        Label="طريقة استعراض الكتب (PDF)"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense">
-                                <MudSelectItem Value="@("internal")">عارض المستندات المدمج</MudSelectItem>
+                                <MudSelectItem Value="@("internal")">عارض المستندات المدمج (نافذة داخل التطبيق)</MudSelectItem>
+                                <MudSelectItem Value="@("external")">تطبيق النظام الافتراضي (Adobe Acrobat / قارئ PDF)</MudSelectItem>
                                 <MudSelectItem Value="@("browser")">فتح في تبويب متصفح مستقل</MudSelectItem>
                             </MudSelect>
                         </MudItem>
@@ -479,10 +481,16 @@
             DbContext.SystemSettings.Update(_settings);
             await DbContext.SaveChangesAsync();
 
-            Snackbar.Add("تم حفظ كافة الإعدادات بنجاح!", Severity.Success);
+            // توثيق تعديل الإعدادات في سجل الحركات
+            await SessionService.LogActivityAsync(
+                actionType: "تعديل إعدادات",
+                entityType: "إعدادات النظام",
+                entityId: _settings.SettingId,
+                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بتحديث إعدادات النظام وشعار وبيانات المديرية."
+            );
 
-            // إعادة توجيه لتطبيق الخط والترويسة فوراً
-            Navigation.NavigateTo("/settings", forceLoad: true);
+            Snackbar.Add("تم حفظ كافة الإعدادات بنجاح!", Severity.Success);
+            StateHasChanged();
         }
         catch (Exception ex)
         {
@@ -493,7 +501,6 @@
             _isSaving = false;
         }
     }
-
     private async Task TriggerManualBackup()
     {
         if (string.IsNullOrWhiteSpace(_settings.BackupFolderPath))

@@ -1,0 +1,184 @@
+﻿@page "/users"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>إدارة المستخدمين</PageTitle>
+
+<div dir="rtl" class="pa-4" style="background-color: #f8f9fa; min-height: 90vh; text-align: right;">
+
+    <!-- ترويسة الصفحة -->
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">
+                <MudIcon Icon="@Icons.Material.Filled.ManageAccounts" Class="ml-2" /> إدارة المستخدمين
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                التحكم بحسابات مستخدمي النظام وتحديد مستويات الوصول والحالة
+            </MudText>
+        </div>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenAddUserDialog"
+                   Style="background-color: #1B4D3E; color: white;">
+            إضافة مستخدم جديد
+        </MudButton>
+    </div>
+
+    <!-- جدول المستخدمين -->
+    <MudPaper Elevation="0" Class="pa-2" Style="background-color: white; border: 1px solid #e0e0e0; border-radius: 6px;">
+        <MudTable Items="_users" Dense="true" Hover="true" Loading="_isLoading" Elevation="0">
+            <HeaderContent>
+                <MudTh Style="font-weight: bold; width: 80px;">رقم الحساب</MudTh>
+                <MudTh Style="font-weight: bold;">اسم المستخدم</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center;">نوع الحساب / الصلاحية</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center;">آخر تسجيل دخول</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center;">تاريخ الإنشاء</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center;">الحالة</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center; width: 120px;">إجراء</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="رقم الحساب" Class="text-muted">@context.UserId.ToString("D3")</MudTd>
+                <MudTd DataLabel="اسم المستخدم" Class="fw-bold">
+                    <div class="d-flex align-center gap-2">
+                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Primary" Size="Size.Small" />
+                        <span>@context.UserName</span>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="نوع الحساب" Style="text-align: center;">
+                    @switch (context.UserTypeId)
+                    {
+                        case 1:
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
+                                مدير نظام
+                            </MudChip>
+                            break;
+                        case 2:
+                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                                محرر بيانات
+                            </MudChip>
+                            break;
+                        case 3:
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                                مدخل بيانات
+                            </MudChip>
+                            break;
+                        case 4:
+                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">
+                                قارئ بيانات
+                            </MudChip>
+                            break;
+                        default:
+                            <MudChip T="string" Color="Color.Default" Size="Size.Small">
+                                غير محدد
+                            </MudChip>
+                            break;
+                    }
+                </MudTd>
+                <MudTd DataLabel="آخر دخول" Style="text-align: center; direction: ltr; font-size: 0.85rem; color: #555;">
+                    @(string.IsNullOrEmpty(context.LastLogin) ? "—" : context.LastLogin)
+                </MudTd>
+                <MudTd DataLabel="تاريخ الإنشاء" Style="text-align: center; direction: ltr; font-size: 0.85rem; color: #555;">
+                    @context.CreatedAt
+                </MudTd>
+                <MudTd DataLabel="الحالة" Style="text-align: center;">
+                    <MudSwitch T="bool"
+                               Value="@(context.IsActive == 1)"
+                               ValueChanged="@((val) => ToggleUserStatus(context, val))"
+                               Color="Color.Success" />
+                </MudTd>
+                <MudTd DataLabel="إجراء" Style="text-align: center;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" OnClick="@(() => OpenEditUserDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteUser(context))" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا يوجد مستخدمون مضافون حالياً.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+
+</div>
+
+@code {
+    private List<User> _users = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        _isLoading = true;
+        try
+        {
+            _users = await DbContext.Users.OrderBy(u => u.UserId).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء تحميل المستخدمين: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ToggleUserStatus(User user, bool isActive)
+    {
+        user.IsActive = isActive ? 1 : 0;
+        user.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add($"تم تحديث حالة الحساب ({user.UserName})", Severity.Info);
+    }
+
+    private async Task OpenAddUserDialog()
+    {
+        var parameters = new DialogParameters { ["UserToEdit"] = new User { UserTypeId = 2, IsActive = 1 } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("إضافة مستخدم جديد", parameters, options);
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadUsers();
+        }
+    }
+
+    private async Task OpenEditUserDialog(User user)
+    {
+        var parameters = new DialogParameters { ["UserToEdit"] = user };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("تعديل بيانات المستخدم", parameters, options);
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadUsers();
+        }
+    }
+
+    private async Task DeleteUser(User user)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد الحذف",
+            $"هل أنت متأكد من حذف الحساب ({user.UserName})؟",
+            yesText: "نعم، حذف",
+            cancelText: "إلغاء");
+
+        if (confirm == true)
+        {
+            DbContext.Users.Remove(user);
+            await DbContext.SaveChangesAsync();
+            await LoadUsers();
+            Snackbar.Add("تم حذف المستخدم بنجاح", Severity.Success);
+        }
+    }
+}

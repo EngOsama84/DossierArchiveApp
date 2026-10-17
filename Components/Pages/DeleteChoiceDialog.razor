@@ -1,0 +1,57 @@
+﻿@using MudBlazor
+
+<MudRTLProvider RightToLeft="true">
+    <MudDialog Style="direction: rtl; text-align: right;">
+        <TitleContent>
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Warning" />
+                <MudText Typo="Typo.h6" Class="fw-bold">خيارات حذف المستند المشترك</MudText>
+            </div>
+        </TitleContent>
+        <DialogContent>
+            <MudText Typo="Typo.body1" Class="mb-4" Style="white-space: pre-line; line-height: 1.6;">
+                @ContentText
+            </MudText>
+
+            <div class="d-flex flex-column gap-2 mt-2">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Warning"
+                           StartIcon="@Icons.Material.Filled.PersonRemove"
+                           OnClick="@(() => MudDialog.Close(DialogResult.Ok("current")))"
+                           Style="justify-content: flex-start; padding: 10px 16px;">
+                    @Button1Text
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Error"
+                           StartIcon="@Icons.Material.Filled.DeleteForever"
+                           OnClick="@(() => MudDialog.Close(DialogResult.Ok("all")))"
+                           Style="justify-content: flex-start; padding: 10px 16px;">
+                    @Button2Text
+                </MudButton>
+            </div>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="@(() => MudDialog.Cancel())">
+                @CancelText
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudRTLProvider>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string ContentText { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Button1Text { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Button2Text { get; set; } = string.Empty;
+
+    [Parameter]
+    public string CancelText { get; set; } = string.Empty;
+}

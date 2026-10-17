@@ -1,0 +1,304 @@
+﻿@page "/statistics"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+
+<PageTitle>الإحصائيات والتقارير</PageTitle>
+
+<div dir="rtl" class="pa-3 pa-md-4" style="background-color: #f8f9fa; min-height: 90vh; text-align: right;">
+
+    <!-- العنوان الرئيسي -->
+    <div class="mb-3">
+        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">
+            <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="ml-2" Size="Size.Medium" /> الإحصائيات العامة
+        </MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            مؤشرات أداء أرشفة الكتب والوثائق وتوزيعها السنوي والشهري
+        </MudText>
+    </div>
+
+    <!-- شريط الفلترة العلوي المتجاوب -->
+    <MudPaper Elevation="1" Class="pa-3 mb-4" Style="background-color: white; border-radius: 8px;">
+        <MudGrid Spacing="2" Class="align-center">
+
+            <!-- قائمة الموظفين -->
+            <MudItem xs="12" sm="6" md="6">
+                <MudSelect T="int?" @bind-Value="_selectedEmployeeId"
+                           Label="تحديد الموظف"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           Style="background-color: white;">
+                    <MudSelectItem Value="@((int?)null)">كل الموظفين</MudSelectItem>
+                    @foreach (var emp in _employees)
+                    {
+                        <MudSelectItem Value="@((int?)emp.EmployeeId)">@emp.EmployeeName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <!-- حقل السنة -->
+            <MudItem xs="6" sm="3" md="3">
+                <MudNumericField T="int" @bind-Value="_selectedYear"
+                                 Label="السنة"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="1980"
+                                 Max="2099"
+                                 Style="background-color: white; text-align: center;" />
+            </MudItem>
+
+            <!-- زر عرض -->
+            <MudItem xs="6" sm="3" md="3">
+                <MudButton Variant="Variant.Filled"
+                           FullWidth="true"
+                           OnClick="LoadStatistics"
+                           Disabled="_isLoading"
+                           Style="background-color: #1B4D3E; color: white; height: 40px; font-weight: bold; border-radius: 6px; white-space: nowrap;">
+                    @if (_isLoading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
+                        <span>جارٍ الجلب...</span>
+                    }
+                    else
+                    {
+                        <span>تحديث العرض</span>
+                    }
+                </MudButton>
+            </MudItem>
+
+        </MudGrid>
+    </MudPaper>
+
+    <!-- بطاقات المؤشرات الإجمالية (KPI Cards) -->
+    <MudGrid Spacing="2" Class="mb-4">
+        <!-- الوارد -->
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-3 text-center kpi-card">
+                <MudText Typo="Typo.h4" Class="fw-bold mb-1" Style="color: #1B4D3E;">@_incomingCount</MudText>
+                <MudText Typo="Typo.subtitle2" Style="color: #607d8b; font-weight: bold;">الوارد</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- الصادر -->
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-3 text-center kpi-card">
+                <MudText Typo="Typo.h4" Class="fw-bold mb-1" Style="color: #1B4D3E;">@_outgoingCount</MudText>
+                <MudText Typo="Typo.subtitle2" Style="color: #607d8b; font-weight: bold;">الصادر</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- إجمالي الكتب -->
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-3 text-center kpi-card">
+                <MudText Typo="Typo.h4" Class="fw-bold mb-1" Style="color: #1B4D3E;">@_totalCount</MudText>
+                <MudText Typo="Typo.subtitle2" Style="color: #607d8b; font-weight: bold;">إجمالي الكتب</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- قسم المخطط البياني للأشهر مع حماية العرض بالتمرير الأفقي -->
+    <MudPaper Elevation="1" Class="pa-3 pa-md-4 mb-4" Style="background-color: white; border-radius: 8px;">
+        <div class="d-flex justify-space-between align-center mb-3">
+            <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="color: #2c3e50;">
+                توزيع الكتب شهرياً لسنة @_selectedYear
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-none d-sm-inline">
+                الأشهر من 1 إلى 12
+            </MudText>
+        </div>
+
+        <div class="chart-container">
+            <!-- تحديد حد أدنى للعرض يمنع تداخل الـ 12 عموداً عند نصف الشاشة -->
+            <div class="d-flex justify-space-between align-end chart-bars-row" style="height: 190px; min-width: 500px; padding-bottom: 25px; border-bottom: 2px solid #eceff1;">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    int monthIndex = m;
+                    int count = _monthlyData[monthIndex - 1];
+                    int heightPercent = _maxMonthlyCount > 0 ? (count * 100) / _maxMonthlyCount : 0;
+                    if (heightPercent == 0 && count > 0) { heightPercent = 6; }
+
+                    <div class="d-flex flex-column align-center chart-col" style="flex: 1; padding: 0 4px;">
+                        <!-- القيمة والعمود -->
+                        <div class="d-flex flex-column align-center justify-end w-100" style="height: 140px;">
+                            <div class="chart-bar"
+                                 title="شهر @monthIndex: @count كتاب"
+                                 style="height: @(heightPercent)%; min-height: 4px; background-color: #1B4D3E; width: 60%; max-width: 28px; border-radius: 4px 4px 0 0;">
+                            </div>
+                        </div>
+
+                        <!-- رقم الشهر والعدد أسفل الخط -->
+                        <div class="text-center mt-2">
+                            <span class="d-block fw-bold text-muted" style="font-size: 0.82rem;">ش @monthIndex</span>
+                            <span class="d-block fw-bold" style="font-size: 0.8rem; color: #1B4D3E;">@count</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </MudPaper>
+
+    <!-- جدول التوزيع حسب التصنيف الأولي -->
+    <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="background-color: white; border-radius: 8px;">
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3" Style="color: #2c3e50;">
+            توزيع الكتب حسب التصنيف الأولي
+        </MudText>
+
+        <div style="overflow-x: auto;">
+            <MudTable Items="_categoryBreakdown" Dense="true" Hover="true" Elevation="0" Outlined="true">
+                <HeaderContent>
+                    <MudTh Style="font-weight: bold; background-color: #f8f9fa;">التصنيف</MudTh>
+                    <MudTh Style="font-weight: bold; background-color: #f8f9fa; text-align: center; width: 140px;">العدد</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="التصنيف" Class="fw-bold">@context.CategoryName</MudTd>
+                    <MudTd DataLabel="العدد" Style="text-align: center; font-weight: bold; color: #1B4D3E;">@context.Count</MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد بيانات مسجلة لهذه الفئات في السنة المحددة.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </div>
+    </MudPaper>
+
+</div>
+
+<style>
+    .kpi-card {
+        background-color: #ffffff;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+
+    .chart-container {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 6px;
+    }
+
+    .chart-bar {
+        transition: height 0.4s ease;
+        cursor: pointer;
+    }
+
+        .chart-bar:hover {
+            background-color: #2c7a62 !important;
+        }
+</style>
+
+@code {
+    private int _selectedYear = 2026;
+    private int? _selectedEmployeeId = null;
+    private bool _isLoading = false;
+
+    private List<Employee> _employees = new();
+
+    private int _totalCount = 0;
+    private int _outgoingCount = 0;
+    private int _incomingCount = 0;
+
+    private int[] _monthlyData = new int[12];
+    private int _maxMonthlyCount = 1;
+
+    private record CategoryStat(string CategoryName, int Count);
+    private List<CategoryStat> _categoryBreakdown = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployees();
+        await LoadStatistics();
+    }
+
+    private async Task LoadEmployees()
+    {
+        try
+        {
+            _employees = await DbContext.Employees
+                .Where(e => e.IsActive == 1)
+                .OrderBy(e => e.FileNumber)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"تعذر جلب الموظفين: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadStatistics()
+    {
+        _isLoading = true;
+        try
+        {
+            string yearStr = _selectedYear.ToString();
+
+            IQueryable<Document> query = DbContext.Documents
+                .AsNoTracking()
+                .Where(d => d.IsDeleted == 0 && d.DocumentDate.StartsWith(yearStr));
+
+            if (_selectedEmployeeId.HasValue)
+            {
+                query = query.Where(d => DbContext.DocumentEmployees
+                    .Any(de => de.DocumentId == d.DocumentId && de.EmployeeId == _selectedEmployeeId.Value));
+            }
+
+            var docs = await query.ToListAsync();
+
+            _totalCount = docs.Count;
+
+            var mainCategories = await DbContext.MainCategories.AsNoTracking().ToListAsync();
+            int? outgoingCatId = mainCategories.FirstOrDefault(m => m.Name.Contains("صادر"))?.MainCategoryId;
+            int? incomingCatId = mainCategories.FirstOrDefault(m => m.Name.Contains("وارد"))?.MainCategoryId;
+
+            _outgoingCount = docs.Count(d => d.MainCategoryId == outgoingCatId);
+            _incomingCount = docs.Count(d => d.MainCategoryId == incomingCatId);
+
+            _monthlyData = new int[12];
+            foreach (var doc in docs)
+            {
+                if (DateTime.TryParse(doc.DocumentDate, out var dt))
+                {
+                    if (dt.Month >= 1 && dt.Month <= 12)
+                    {
+                        _monthlyData[dt.Month - 1]++;
+                    }
+                }
+            }
+            _maxMonthlyCount = _monthlyData.Max();
+            if (_maxMonthlyCount == 0) _maxMonthlyCount = 1;
+
+            var primaryCats = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
+
+            var docCountsByPrimaryId = docs
+                .GroupBy(d => d.PrimaryCategoryId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            _categoryBreakdown = primaryCats
+                .GroupBy(pc => pc.Name.Trim())
+                .Select(g => new CategoryStat(
+                    CategoryName: g.Key,
+                    Count: g.Sum(pc => docCountsByPrimaryId.TryGetValue(pc.PrimaryCategoryId, out int cnt) ? cnt : 0)
+                ))
+                .OrderByDescending(c => c.Count)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء تحميل الإحصائيات: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

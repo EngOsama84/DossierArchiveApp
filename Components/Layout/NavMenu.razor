@@ -1,36 +1,52 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">DossierArchiveApp</a>
-    </div>
+﻿@using DossierArchiveApp.Services
+@inject UserSessionService SessionService
+
+<!-- الترويسة العلوية للقائمة: محاذاة لليمين وخلفية زيتية متناسقة -->
+<div class="d-flex align-center justify-start px-3" style="height: 52px; background-color: #13392e; border-bottom: 1px solid rgba(255, 255, 255, 0.1); direction: rtl; text-align: right;">
+    <MudIcon Icon="@Icons.Material.Filled.FolderShared" Size="Size.Small" Style="color: #a5d6a7; margin-left: 8px;" />
+    <span class="fw-bold" style="color: #ffffff; font-size: 0.92rem; white-space: nowrap;">
+        برنامج الأضابير الإلكترونية
+    </span>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+<div class="nav-scrollable" style="direction: rtl; text-align: right;" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+        <!-- الرئيسية والأضابير: متاحة لجميع المستخدمين -->
         <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.FolderShared" Match="NavLinkMatch.Prefix">
-            أضابير الموظفين
+            الرئيسية
         </MudNavLink>
-        <MudNavLink Href="settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Inherit">
-            إعدادات النظام
+
+        <!-- إضافة مستند: تظهر فقط للمدير والمحرر ومدخل البيانات (مخفية عن قارئ البيانات) -->
+        @if (SessionService.CanAdd)
+        {
+            <MudNavLink Href="/add-document" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.NoteAdd">
+                إضافة مستند
+            </MudNavLink>
+        }
+
+        <!-- الإحصائيات: متاحة للجميع بما فيهم قارئ البيانات -->
+        <MudNavLink Href="/statistics" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Analytics">
+            الإحصائيات
         </MudNavLink>
+
+        <!-- إدارة النظام: تظهر لمدير النظام فقط (مخفية عن المحرر، مدخل البيانات، وقارئ البيانات) -->
+        @if (SessionService.CanAccessSettingsOrUsers)
+        {
+            <MudNavLink Href="/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ManageAccounts">
+                المستخدمين
+            </MudNavLink>
+
+            <MudNavLink Href="/audit-logs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">
+                سجل الحركات
+            </MudNavLink>
+
+            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Inherit">
+                إعدادات النظام
+            </MudNavLink>
+        }
+
     </nav>
 </div>
-

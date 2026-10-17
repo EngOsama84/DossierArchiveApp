@@ -1,8 +1,11 @@
 ﻿@using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
 @using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Services
+@inject UserSessionService SessionService
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
+
 
 <MudRTLProvider RightToLeft="true">
     <MudDialog Style="direction: rtl; text-align: right;">
@@ -180,7 +183,12 @@
 
             DbContext.Employees.Add(_newEmployee);
             await DbContext.SaveChangesAsync();
-
+            await SessionService.LogActivityAsync(
+                actionType: "إضافة موظف",
+                entityType: "موظف",
+                entityId: _newEmployee.EmployeeId,
+                description: $"تمت إضافة الموظف ({_newEmployee.EmployeeName}) برقم إضبارة ({_newEmployee.FileNumber})."
+            );
             Snackbar.Add($"تم حفظ الموظف وإنشاء مجلد إضباره بنجاح: {employeeFolderRelPath}", Severity.Success);
             MudDialog.Close(DialogResult.Ok(_newEmployee));
         }

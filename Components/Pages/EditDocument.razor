@@ -1,0 +1,754 @@
+﻿@page "/edit-document/{DocumentId:int}"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+@inject ScannerService ScannerService
+@inject NavigationManager Navigation
+@inject UserSessionService SessionService
+
+<PageTitle>تعديل بيانات ومستند الأضبارة</PageTitle>
+
+<div dir="rtl" class="pa-2 pa-md-4" style="background-color: #f6f7f9; min-height: 90vh; text-align: right;">
+
+    <!-- 1. شريط الإجراءات العائم في أعلى الشاشة (Sticky Header) -->
+    <div class="d-flex flex-wrap justify-space-between align-center gap-2 pa-3 mb-3"
+         style="position: sticky; top: var(--mud-appbar-height, 64px); z-index: 100; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07); border: 1px solid #e0e0e0;">
+        <div>
+            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E; font-size: 1.15rem;">
+                <MudIcon Icon="@Icons.Material.Filled.EditNote" Class="ml-1" Size="Size.Small" /> تعديل بيانات ومستند الأضبارة
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-none d-sm-block">
+                تعديل الموظفين، بيانات الكتاب، أو استبدال الملف المرفق
+            </MudText>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Secondary"
+                       Size="Size.Medium"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => Navigation.NavigateTo("/employees"))"
+                       Style="white-space: nowrap; font-weight: bold; background-color: #fafafa;">
+                رجوع
+            </MudButton>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Medium"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="SaveChanges"
+                       Disabled="@(!CanSave || _isSaving)"
+                       Style="background-color: #1B4D3E; color: white; padding: 6px 24px; font-weight: bold; border-radius: 6px; white-space: nowrap;">
+                @if (_isSaving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-1" />
+                    <span>جارٍ الحفظ...</span>
+                }
+                else
+                {
+                    <span>حفظ التعديلات</span>
+                }
+            </MudButton>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center align-center" style="min-height: 400px;">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else if (_document == null)
+    {
+        <MudAlert Severity="Severity.Error">لم يتم العثور على المستند المطلوب!</MudAlert>
+    }
+    else
+    {
+        <!-- 2. شريط اختيار وتعديل الموظفين المعنيين بالكتاب -->
+        <MudPaper Elevation="1" Class="pa-3 mb-3" Style="background-color: white; border-radius: 8px;">
+            <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-2">
+                <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
+                    الموظفون المعنيون بالكتاب: <span style="font-size: 0.85rem; color: #666;">(تم تحديد: @_selectedEmployeeIds.Count)</span>
+                </MudText>
+                <MudTextField @bind-Value="_employeeSearch"
+                              Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Style="max-width: 260px; min-width: 200px; height: 36px; background: white;" />
+            </div>
+
+            <div style="max-height: 110px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; background-color: #fafafa;">
+                @foreach (var emp in FilteredEmployees)
+                {
+                    bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
+                    <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
+                         @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
+                         style="cursor: pointer; border-radius: 4px; font-size: 0.85rem;">
+                        <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
+                                     ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
+                        <span class="ms-2">@($"{emp.EmployeeId:D3} - {emp.EmployeeName} — {emp.FileNumber}")</span>
+                    </div>
+                }
+            </div>
+        </MudPaper>
+
+        <!-- 3. شبكة العمل الرئيسية المتجاوبة -->
+        <MudGrid Spacing="2">
+
+            <!-- الجهة اليمنى: التصنيفات والبيانات وخيارات الاستبدال -->
+            <MudItem xs="12" lg="5">
+                <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="background-color: white; border-radius: 8px;">
+
+                    <!-- شجرة التصنيفات الهرمية -->
+                    <div class="mb-2">
+                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">التصنيف الرئيسي (نوع الكتاب)</MudText>
+                        <MudSelect T="int?" Value="_selectedMainCatId" ValueChanged="OnMainCategoryChanged"
+                                   Placeholder="اختر نوع الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                            @foreach (var c in _mainCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.MainCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+
+                    <div class="mb-2">
+                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">التصنيف الأولي</MudText>
+                        <MudSelect T="int?" Value="_selectedPrimaryCatId" ValueChanged="OnPrimaryCategoryChanged"
+                                   Disabled="@(!_selectedMainCatId.HasValue)"
+                                   Placeholder="اختر التصنيف الأولي" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                            @foreach (var c in _availablePrimaryCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.PrimaryCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+
+                    <div class="mb-2">
+                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">الفرعي الأول</MudText>
+                        <MudSelect T="int?" Value="_selectedSecondaryCatId" ValueChanged="OnSecondaryCategoryChanged"
+                                   Disabled="@(!_selectedPrimaryCatId.HasValue)"
+                                   Placeholder="اختياري" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
+                            @foreach (var c in _availableSecondaryCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.SecondaryCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+
+                    <div class="mb-3">
+                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">الفرعي الثاني</MudText>
+                        <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
+                                   Disabled="@(!_isTertiaryEnabled)"
+                                   Placeholder="اختياري" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
+                            @foreach (var c in _availableTertiaryCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.TertiaryCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+
+                    <MudDivider Class="my-2" />
+
+                    <!-- بيانات الكتاب الرسمية -->
+                    <div class="mb-2">
+                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">موضوع الكتاب</MudText>
+                        <MudTextField @bind-Value="_subject" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <div class="flex-grow-1" style="min-width: 140px;">
+                            <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">رقم الكتاب</MudText>
+                            <MudTextField @bind-Value="_documentNumber" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                        </div>
+
+                        <div class="flex-grow-1" style="min-width: 140px;">
+                            <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">تاريخ الكتاب</MudText>
+                            <MudDatePicker @bind-Date="_documentDate" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="yyyy/MM/dd" />
+                        </div>
+                    </div>
+
+                    <MudDivider Class="my-2" />
+
+                    <!-- قسم استبدال ملف المستند (اختياري) -->
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2" Style="color: #1B4D3E;">
+                        <MudIcon Icon="@Icons.Material.Filled.PublishedWithChanges" Size="Size.Small" Class="ml-1" />
+                        استبدال المستند بمستند آخر (اختياري)
+                    </MudText>
+
+                    @if (_newReplacementBytes != null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" ShowCloseIcon="true" CloseIconClicked="CancelFileReplacement">
+                            تم اختيار ملف بديل! المعاينة تعرض الملف الجديد.
+                        </MudAlert>
+                    }
+
+                    <!-- بطاقة مسح ضوئي بديل -->
+                    <MudPaper Outlined="true" Class="pa-2 mb-2" Style="background-color: #f1f8f5; border-color: #c8e6c9; border-radius: 6px;">
+                        <div class="d-flex flex-wrap justify-space-between align-center gap-2">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Success"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.DocumentScanner"
+                                       OnClick="StartScannerReplacement"
+                                       Disabled="_isScanning"
+                                       Style="background-color: white; color: #1B4D3E; font-weight: bold; border-color: #1B4D3E;">
+                                @if (_isScanning)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-1" />
+                                    <span>جارٍ المسح...</span>
+                                }
+                                else
+                                {
+                                    <span>إعادة مسح ضوئي</span>
+                                }
+                            </MudButton>
+
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-size: 0.75rem;">سحب ورقة بديلة من السكنر</MudText>
+                        </div>
+                    </MudPaper>
+
+                    <!-- اختيار ملف PDF بديل من الحاسوب -->
+                    <div class="mb-2">
+                        <MudFileUpload T="IBrowserFile" FilesChanged="OnNewPdfSelected" Accept=".pdf">
+                            <ActivatorContent>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Default"
+                                           FullWidth="true"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.UploadFile"
+                                           Style="background-color: white; justify-content: space-between; text-transform: none;">
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">
+                                        @(_replacementFileName ?? "اختيار ملف PDF بديل من الحاسوب")
+                                    </span>
+                                    <span class="mud-chip mud-chip-filled mud-chip-size-small" style="background-color: #e0e0e0;">تغيير الملف</span>
+                                </MudButton>
+                            </ActivatorContent>
+                        </MudFileUpload>
+                    </div>
+
+                    @if (_newReplacementBytes != null)
+                    {
+                        <div class="text-end">
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="CancelFileReplacement">
+                                إلغاء الاستبدال والعودة للملف الأصلي
+                            </MudButton>
+                        </div>
+                    }
+
+                </MudPaper>
+            </MudItem>
+
+            <!-- الجهة اليسرى: منطقة المعاينة المتجاوبة -->
+            <MudItem xs="12" lg="7">
+                <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="background-color: white; border-radius: 8px; min-height: 520px; height: 100%; display: flex; flex-direction: column;">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <div class="text-start">
+                            <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
+                                @(_newReplacementBytes != null ? "معاينة الملف الجديد (البديل)" : "معاينة المستند الحالي")
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @(_newReplacementBytes != null ? "هذا هو الملف الجديد الذي سيتم اعتماده عند الحفظ" : "استعراض الملف المخزن حالياً على السيرفر")
+                            </MudText>
+                        </div>
+
+                        @if (_newReplacementBytes != null)
+                        {
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">ملف بديل غير محفوظ</MudChip>
+                        }
+                    </div>
+
+                    <div class="flex-grow-1 d-flex flex-column align-center justify-center preview-box"
+                         style="border: 2px dashed #cfd8dc; border-radius: 6px; background-color: #fafbfc; position: relative; min-height: 440px;">
+                        @if (!string.IsNullOrEmpty(_previewFileUrl))
+                        {
+                            <iframe src="@_previewFileUrl" style="width: 100%; height: 100%; min-height: 480px; border: none; border-radius: 4px;"></iframe>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Style="font-size: 4rem; color: #b0bec5;" />
+                            <MudText Typo="Typo.body1" Class="fw-bold mt-2" Style="color: #78909c;">لا يمكن تحميل المعاينة</MudText>
+                            <MudText Typo="Typo.caption" Style="color: #90a4ae;">الملف غير موجود بالمسار المحدد.</MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+        </MudGrid>
+    }
+</div>
+
+<style>
+    .employee-select-row:hover {
+        background-color: #f1f7f4;
+    }
+
+    .selected-emp {
+        background-color: #e8f5e9 !important;
+        font-weight: bold;
+    }
+
+    .preview-box {
+        background: repeating-linear-gradient( 45deg, #fafbfc, #fafbfc 10px, #f4f6f8 10px, #f4f6f8 20px );
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int DocumentId { get; set; }
+
+    private Document? _document;
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+
+    private List<Employee> _allEmployees = new();
+    private HashSet<int> _selectedEmployeeIds = new();
+    private HashSet<int> _initialEmployeeIds = new();
+    private string _employeeSearch = string.Empty;
+
+    private List<MainCategory> _mainCategories = new();
+    private List<PrimaryCategory> _allPrimaryCategories = new();
+    private List<PrimaryCategory> _availablePrimaryCategories = new();
+    private List<SecondaryCategory> _allSecondaryCategories = new();
+    private List<SecondaryCategory> _availableSecondaryCategories = new();
+    private List<TertiaryCategory> _allTertiaryCategories = new();
+    private List<TertiaryCategory> _availableTertiaryCategories = new();
+
+    private int? _selectedMainCatId;
+    private int? _selectedPrimaryCatId;
+    private int? _selectedSecondaryCatId;
+    private int? _selectedTertiaryCatId;
+    private bool _isTertiaryEnabled = false;
+
+    private string _subject = string.Empty;
+    private string _documentNumber = string.Empty;
+    private DateTime? _documentDate = DateTime.Today;
+
+    private string _originalPreviewUrl = string.Empty;
+    private string _previewFileUrl = string.Empty;
+    private byte[]? _originalFileBytes;
+    private List<DocumentEmployee> _existingDocEmployees = new();
+    private SystemSetting? _settings;
+
+    private byte[]? _newReplacementBytes;
+    private string? _replacementFileName;
+    private bool _isScanning = false;
+
+    private IEnumerable<Employee> FilteredEmployees =>
+        string.IsNullOrWhiteSpace(_employeeSearch)
+            ? _allEmployees
+            : _allEmployees.Where(e => e.EmployeeName.Contains(_employeeSearch, StringComparison.OrdinalIgnoreCase)
+                                    || e.FileNumber.Contains(_employeeSearch, StringComparison.OrdinalIgnoreCase));
+
+    private bool CanSave => _selectedEmployeeIds.Any()
+                            && !string.IsNullOrWhiteSpace(_subject)
+                            && !string.IsNullOrWhiteSpace(_documentNumber);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+
+            _allEmployees = await DbContext.Employees
+                .Where(e => e.IsActive == 1)
+                .OrderBy(e => e.FileNumber)
+                .ToListAsync();
+
+            _mainCategories = await DbContext.MainCategories.AsNoTracking().ToListAsync();
+            _allPrimaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
+            _allSecondaryCategories = await DbContext.SecondaryCategories.AsNoTracking().ToListAsync();
+            _allTertiaryCategories = await DbContext.TertiaryCategories.AsNoTracking().ToListAsync();
+
+            _document = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == DocumentId);
+            if (_document != null)
+            {
+                _subject = _document.Subject;
+                _documentNumber = _document.DocumentNumber;
+                if (DateTime.TryParse(_document.DocumentDate, out var dt))
+                {
+                    _documentDate = dt;
+                }
+
+                _selectedMainCatId = _document.MainCategoryId > 0 ? _document.MainCategoryId : null;
+                _selectedPrimaryCatId = _document.PrimaryCategoryId > 0 ? _document.PrimaryCategoryId : null;
+                _selectedSecondaryCatId = _document.SecondaryCategoryId;
+                _selectedTertiaryCatId = _document.TertiaryCategoryId;
+
+                if (_selectedMainCatId.HasValue)
+                {
+                    _availablePrimaryCategories = _allPrimaryCategories.Where(p => p.MainCategoryId == _selectedMainCatId.Value).ToList();
+                }
+                if (_selectedPrimaryCatId.HasValue)
+                {
+                    _availableSecondaryCategories = _allSecondaryCategories.Where(s => s.PrimaryCategoryId == _selectedPrimaryCatId.Value).ToList();
+                }
+                if (_selectedSecondaryCatId.HasValue)
+                {
+                    UpdateTertiaryCategories(_selectedSecondaryCatId.Value);
+                }
+
+                _existingDocEmployees = await DbContext.DocumentEmployees
+                    .Where(de => de.DocumentId == _document.DocumentId)
+                    .ToListAsync();
+
+                _selectedEmployeeIds = _existingDocEmployees.Select(de => de.EmployeeId).ToHashSet();
+                _initialEmployeeIds = new HashSet<int>(_selectedEmployeeIds);
+
+                await LoadExistingFile();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"خطأ أثناء تحميل المستند: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadExistingFile()
+    {
+        if (_settings == null || string.IsNullOrWhiteSpace(_settings.BaseFolderPath)) return;
+
+        string? relPath = _existingDocEmployees.FirstOrDefault()?.EmployeeFilePath ?? _document?.FilePath;
+        if (!string.IsNullOrEmpty(relPath))
+        {
+            string fullPath = Path.Combine(_settings.BaseFolderPath, relPath);
+            if (File.Exists(fullPath))
+            {
+                _originalFileBytes = await File.ReadAllBytesAsync(fullPath);
+                string base64 = Convert.ToBase64String(_originalFileBytes);
+                _originalPreviewUrl = $"data:application/pdf;base64,{base64}";
+                _previewFileUrl = _originalPreviewUrl;
+            }
+        }
+    }
+
+    private async Task OnNewPdfSelected(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(ms);
+            _newReplacementBytes = ms.ToArray();
+            _replacementFileName = file.Name;
+
+            string base64 = Convert.ToBase64String(_newReplacementBytes);
+            _previewFileUrl = $"data:application/pdf;base64,{base64}";
+
+            Snackbar.Add("تم تحميل الملف البديل للمعاينة. سيتم استبدال الملف نهائياً عند الضغط على حفظ التعديلات.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"تعذر قراءة الملف البديل: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StartScannerReplacement()
+    {
+        _isScanning = true;
+        try
+        {
+            await Task.Delay(1000);
+            Snackbar.Add("جاري الاتصال بالماسح الضوئي وإعادة سحب الورقة...", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"تعذر إتمام المسح البديل: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isScanning = false;
+        }
+    }
+
+    private void CancelFileReplacement()
+    {
+        _newReplacementBytes = null;
+        _replacementFileName = null;
+        _previewFileUrl = _originalPreviewUrl;
+        Snackbar.Add("تم إلغاء الاستبدال والعودة للمستند الأصلي", Severity.Normal);
+    }
+
+    private void ToggleEmployeeSelection(int empId)
+    {
+        if (_selectedEmployeeIds.Contains(empId))
+            _selectedEmployeeIds.Remove(empId);
+        else
+            _selectedEmployeeIds.Add(empId);
+    }
+
+    private void OnMainCategoryChanged(int? mainId)
+    {
+        _selectedMainCatId = mainId;
+        _selectedPrimaryCatId = null;
+        _selectedSecondaryCatId = null;
+        _selectedTertiaryCatId = null;
+        _isTertiaryEnabled = false;
+
+        _availablePrimaryCategories = mainId.HasValue
+            ? _allPrimaryCategories.Where(p => p.MainCategoryId == mainId.Value).ToList()
+            : new List<PrimaryCategory>();
+
+        _availableSecondaryCategories.Clear();
+        _availableTertiaryCategories.Clear();
+    }
+
+    private void OnPrimaryCategoryChanged(int? primId)
+    {
+        _selectedPrimaryCatId = primId;
+        _selectedSecondaryCatId = null;
+        _selectedTertiaryCatId = null;
+        _isTertiaryEnabled = false;
+
+        _availableSecondaryCategories = primId.HasValue
+            ? _allSecondaryCategories.Where(s => s.PrimaryCategoryId == primId.Value).ToList()
+            : new List<SecondaryCategory>();
+
+        _availableTertiaryCategories.Clear();
+    }
+
+    private void OnSecondaryCategoryChanged(int? secId)
+    {
+        _selectedSecondaryCatId = secId;
+        _selectedTertiaryCatId = null;
+        _availableTertiaryCategories.Clear();
+        _isTertiaryEnabled = false;
+
+        if (secId.HasValue)
+        {
+            UpdateTertiaryCategories(secId.Value);
+        }
+    }
+
+    private void UpdateTertiaryCategories(int secId)
+    {
+        var secCat = _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secId);
+        string secName = secCat?.Name?.Trim() ?? string.Empty;
+
+        string[] conditionalBranches = { "انفكاك", "مباشرة", "احتساب", "إعفاء" };
+        if (conditionalBranches.Contains(secName))
+        {
+            _availableTertiaryCategories = _allTertiaryCategories.Where(t => t.SecondaryCategoryId == secId).ToList();
+            _isTertiaryEnabled = _availableTertiaryCategories.Any();
+        }
+        else if (secName == "لجنة")
+        {
+            var subList = _allTertiaryCategories.Where(t => t.SecondaryCategoryId == secId).ToList();
+            if (subList.Any())
+            {
+                _availableTertiaryCategories = subList;
+            }
+            else
+            {
+                string[] iraqiCommittees = {
+                    "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
+                    "مشتريات واعتدال أسعار", "شطب وإتلاف", "جرد سنوي", "تضمين",
+                    "تثمين وبيع وإيجار أموال الدولة", "احتساب خدمة وتقاعد", "فنية تخصصية", "مقابلة وترقية"
+                };
+                int tempId = 1;
+                _availableTertiaryCategories = iraqiCommittees.Select(c => new TertiaryCategory
+                {
+                    TertiaryCategoryId = tempId++,
+                    SecondaryCategoryId = secId,
+                    Name = c
+                }).ToList();
+            }
+            _isTertiaryEnabled = true;
+        }
+    }
+
+    private string CleanFileSystemName(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        char[] invalidChars = Path.GetInvalidFileNameChars();
+        string clean = string.Concat(input.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).Trim();
+        return clean.Replace('/', '-').Replace('\\', '-');
+    }
+
+    private async Task SaveChanges()
+    {
+        if (!CanSave || _document == null) return;
+
+        _isSaving = true;
+        try
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(_settings.BaseFolderPath))
+            {
+                Snackbar.Add("مسار المجلد الرئيسي غير محدد!", Severity.Error);
+                _isSaving = false;
+                return;
+            }
+
+            string cleanSubj = CleanFileSystemName(_subject);
+            string cleanNum = CleanFileSystemName(_documentNumber);
+            string formattedDate = _documentDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd");
+            string ext = !string.IsNullOrEmpty(_document.FileExtension) ? _document.FileExtension : ".pdf";
+
+            string newFileName = $"{cleanSubj} - {cleanNum} - {formattedDate}{ext}";
+
+            string mainFolder = "عام";
+            if (_selectedMainCatId.HasValue)
+            {
+                var mc = _mainCategories.FirstOrDefault(m => m.MainCategoryId == _selectedMainCatId.Value);
+                if (mc != null) mainFolder = CleanFileSystemName(mc.Name);
+            }
+
+            string primFolder = "كتب عامة";
+            if (_selectedPrimaryCatId.HasValue)
+            {
+                var pc = _allPrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == _selectedPrimaryCatId.Value);
+                if (pc != null) primFolder = CleanFileSystemName(pc.Name);
+            }
+
+            byte[] activeFileBytes = _newReplacementBytes ?? _originalFileBytes ?? Array.Empty<byte>();
+
+            // 1. معالجة الموظفين المحذوفين من الكتاب
+            var removedEmpIds = _initialEmployeeIds.Except(_selectedEmployeeIds).ToList();
+            foreach (var empId in removedEmpIds)
+            {
+                var docEmp = _existingDocEmployees.FirstOrDefault(de => de.EmployeeId == empId);
+                if (docEmp != null)
+                {
+                    if (!string.IsNullOrEmpty(docEmp.EmployeeFilePath))
+                    {
+                        string filePathOnDisk = Path.Combine(_settings.BaseFolderPath, docEmp.EmployeeFilePath);
+                        if (File.Exists(filePathOnDisk))
+                        {
+                            try { File.Delete(filePathOnDisk); } catch { }
+                        }
+                    }
+                    DbContext.DocumentEmployees.Remove(docEmp);
+                }
+            }
+
+            // 2. معالجة الموظفين المستمرين بالكتاب
+            var stayingEmpIds = _initialEmployeeIds.Intersect(_selectedEmployeeIds).ToList();
+            foreach (var empId in stayingEmpIds)
+            {
+                var emp = _allEmployees.FirstOrDefault(e => e.EmployeeId == empId);
+                var docEmp = _existingDocEmployees.FirstOrDefault(de => de.EmployeeId == empId);
+                if (emp == null || docEmp == null || string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)) continue;
+
+                string oldRelPath = docEmp.EmployeeFilePath ?? string.Empty;
+                string oldFullDiskPath = Path.Combine(_settings.BaseFolderPath, oldRelPath);
+
+                string newTargetDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, mainFolder, primFolder);
+                if (!Directory.Exists(newTargetDir))
+                {
+                    Directory.CreateDirectory(newTargetDir);
+                }
+
+                string newFullDiskPath = Path.Combine(newTargetDir, newFileName);
+                string newRelPath = Path.Combine(emp.EmployeeFolderPath, mainFolder, primFolder, newFileName);
+
+                if (_newReplacementBytes != null)
+                {
+                    if (File.Exists(oldFullDiskPath) && !string.Equals(oldFullDiskPath, newFullDiskPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { File.Delete(oldFullDiskPath); } catch { }
+                    }
+                    await File.WriteAllBytesAsync(newFullDiskPath, _newReplacementBytes);
+                }
+                else
+                {
+                    if (File.Exists(oldFullDiskPath))
+                    {
+                        if (!string.Equals(oldFullDiskPath, newFullDiskPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            File.Move(oldFullDiskPath, newFullDiskPath, overwrite: true);
+                        }
+                    }
+                    else if (activeFileBytes.Length > 0)
+                    {
+                        await File.WriteAllBytesAsync(newFullDiskPath, activeFileBytes);
+                    }
+                }
+
+                docEmp.EmployeeFilePath = newRelPath;
+            }
+
+            // 3. معالجة الموظفين الجدد المضافين للكتاب
+            var addedEmpIds = _selectedEmployeeIds.Except(_initialEmployeeIds).ToList();
+            foreach (var empId in addedEmpIds)
+            {
+                var emp = _allEmployees.FirstOrDefault(e => e.EmployeeId == empId);
+                if (emp == null || string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)) continue;
+
+                string newTargetDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, mainFolder, primFolder);
+                if (!Directory.Exists(newTargetDir))
+                {
+                    Directory.CreateDirectory(newTargetDir);
+                }
+
+                string newFullDiskPath = Path.Combine(newTargetDir, newFileName);
+                string newRelPath = Path.Combine(emp.EmployeeFolderPath, mainFolder, primFolder, newFileName);
+
+                if (activeFileBytes.Length > 0)
+                {
+                    await File.WriteAllBytesAsync(newFullDiskPath, activeFileBytes);
+                }
+
+                var newDocEmp = new DocumentEmployee
+                {
+                    DocumentId = _document.DocumentId,
+                    EmployeeId = emp.EmployeeId,
+                    EmployeeFilePath = newRelPath,
+                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                };
+
+                DbContext.DocumentEmployees.Add(newDocEmp);
+            }
+
+            // 4. تحديث سجل المستند الرئيسي
+            _document.Subject = _subject.Trim();
+            _document.DocumentNumber = _documentNumber.Trim();
+            _document.DocumentDate = formattedDate;
+            _document.StoredFileName = newFileName;
+            if (_newReplacementBytes != null && !string.IsNullOrEmpty(_replacementFileName))
+            {
+                _document.OriginalFileName = _replacementFileName;
+            }
+            _document.MainCategoryId = _selectedMainCatId ?? 0;
+            _document.PrimaryCategoryId = _selectedPrimaryCatId ?? 0;
+            _document.SecondaryCategoryId = _selectedSecondaryCatId;
+            _document.TertiaryCategoryId = _selectedTertiaryCatId;
+            _document.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "تعديل مستند",
+                entityType: "مستند",
+                entityId: _document.DocumentId,
+                description: $"تم تعديل بيانات الكتاب ({_document.Subject}) ذي الرقم ({_document.DocumentNumber})."
+            );
+
+            Snackbar.Add(_newReplacementBytes != null
+                ? "تم استبدال ملف المستند وتحديث البيانات وأضابير الموظفين بنجاح!"
+                : "تم حفظ التعديلات وتحديث ملفات الأضابير بنجاح!", Severity.Success);
+
+            Navigation.NavigateTo("/employees");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء حفظ التعديلات: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

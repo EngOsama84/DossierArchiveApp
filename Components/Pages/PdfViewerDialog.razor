@@ -1,0 +1,40 @@
+﻿@using MudBlazor
+
+<MudDialog Style="min-width: 85vw; height: 90vh;">
+    <TitleContent>
+        <div class="d-flex justify-space-between align-center" dir="rtl">
+            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">
+                <MudIcon Icon="@Icons.Custom.FileFormats.FilePdf" Color="Color.Error" Class="ml-2" />
+                @Title
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Default" OnClick="Close" />
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="width: 100%; height: 78vh;">
+            @if (!string.IsNullOrEmpty(PdfDataUrl))
+            {
+                <iframe src="@PdfDataUrl" style="width: 100%; height: 100%; border: none; border-radius: 4px;"></iframe>
+            }
+            else
+            {
+                <div class="d-flex justify-center align-center h-100">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                </div>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string Title { get; set; } = "استعراض المستند";
+
+    [Parameter]
+    public string PdfDataUrl { get; set; } = string.Empty;
+
+    private void Close() => MudDialog.Close();
+}

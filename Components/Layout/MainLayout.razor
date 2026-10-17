@@ -2,7 +2,11 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
+@using DossierArchiveApp.Components.Pages
 @inject AppDbContext DbContext
+@inject UserSessionService SessionService
+@inject IDialogService DialogService
 
 <MudThemeProvider Theme="_customTheme" />
 <MudPopoverProvider />
@@ -10,51 +14,86 @@
 <MudSnackbarProvider />
 
 <MudRTLProvider RightToLeft="true">
-    <MudLayout>
-        <!-- الترويسة العلوية - مدمجة بنظام التخطيط المعياري لـ MudBlazor -->
-        <MudAppBar Elevation="1" Dense="true" Fixed="true" Style="background-color: #1B4D3E; color: white;">
-            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+    @if (!SessionService.IsLoggedIn)
+    {
+        <!-- إجبار تسجيل الدخول عند بدء التشغيل أو بعد تسجيل الخروج -->
+        <LoginOverlay />
+    }
+    else
+    {
+        <MudLayout>
+            <!-- الترويسة العلوية -->
+            <MudAppBar Elevation="1" Dense="true" Fixed="true" Style="background-color: #1B4D3E; color: white;">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
 
-            <!-- شعار المديرية -->
-            @if (!string.IsNullOrEmpty(_settings?.LogoPath))
-            {
-                <img src="@_settings.LogoPath" style="height: 32px; width: 32px; object-fit: contain; margin-left: 10px; border-radius: 4px; background: white; padding: 2px;" alt="شعار" />
-            }
-
-            <!-- اسم المديرية واسم القسم -->
-            <div class="d-flex flex-column mr-2">
-                <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="line-height: 1.2;">
-                    @(!string.IsNullOrEmpty(_settings?.DirectorateName) ? _settings.DirectorateName : "نظام إدارة الأضابير والأرشفة الإلكترونية")
-                </MudText>
-                @if (!string.IsNullOrEmpty(_settings?.DepartmentName))
+                <!-- شعار المديرية -->
+                @if (!string.IsNullOrEmpty(_settings?.LogoPath))
                 {
-                    <MudText Typo="Typo.caption" Style="opacity: 0.85;">
-                        @_settings.DepartmentName
-                    </MudText>
+                    <img src="@_settings.LogoPath" style="height: 32px; width: 32px; object-fit: contain; margin-left: 10px; border-radius: 4px; background: white; padding: 2px;" alt="شعار" />
                 }
-            </div>
 
-            <MudSpacer />
+                <!-- اسم المديرية والقسم -->
+                <div class="d-flex flex-column mr-2">
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="line-height: 1.2;">
+                        @(!string.IsNullOrEmpty(_settings?.DirectorateName) ? _settings.DirectorateName : "نظام إدارة الأضابير والأرشفة الإلكترونية")
+                    </MudText>
+                    @if (!string.IsNullOrEmpty(_settings?.DepartmentName))
+                    {
+                        <MudText Typo="Typo.caption" Style="opacity: 0.85;">
+                            @_settings.DepartmentName
+                        </MudText>
+                    }
+                </div>
 
-            <MudText Typo="Typo.caption" Class="fw-bold" Style="opacity: 0.85;">
-                الأرشفة الإلكترونية
-            </MudText>
-        </MudAppBar>
+                <MudSpacer />
 
-        <!-- القائمة الجانبية -->
-        <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-            <NavMenu />
-        </MudDrawer>
+                <!-- قائمة المستخدم: عند الضغط تفتح خيارات (تغيير كلمة المرور / تسجيل الخروج) -->
+                <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Dense="true">
+                    <ActivatorContent>
+                        <div class="d-flex align-center gap-2 px-3 py-1 rounded" style="cursor: pointer; background-color: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2);">
+                            <MudAvatar Color="Color.Surface" Size="Size.Small" Style="background-color: white; color: #1B4D3E; font-weight: bold; width: 28px; height: 28px; font-size: 0.85rem;">
+                                @(SessionService.CurrentUser?.UserName.FirstOrDefault().ToString().ToUpper() ?? "U")
+                            </MudAvatar>
 
-        <!-- مساحة العمل: معالجة الهامش العلوي (pt-12) لمنع تداخل الـ AppBar مع محتوى الصفحات -->
-        <MudMainContent Class="pt-12 px-2 pb-4">
-            @Body
-        </MudMainContent>
-    </MudLayout>
+                            <div class="d-flex flex-column text-end">
+                                <span class="fw-bold" style="font-size: 0.85rem; line-height: 1.1; color: white;">
+                                    @SessionService.CurrentUser?.UserName
+                                </span>
+                                <span style="font-size: 0.7rem; color: #e0f2f1; opacity: 0.9;">
+                                    @SessionService.RoleName
+                                </span>
+                            </div>
+
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small" Style="color: white;" />
+                        </div>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Icon="@Icons.Material.Filled.LockReset" IconColor="Color.Primary" OnClick="OpenChangePasswordDialog">
+                            تغيير كلمة المرور
+                        </MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" IconColor="Color.Error" OnClick="Logout">
+                            تسجيل الخروج
+                        </MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+
+            </MudAppBar>
+
+            <!-- القائمة الجانبية -->
+            <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Width="210px">
+                <NavMenu />
+            </MudDrawer>
+
+            <!-- مساحة العمل -->
+            <MudMainContent Class="pt-12 px-2 pb-4">
+                @Body
+            </MudMainContent>
+        </MudLayout>
+    }
 </MudRTLProvider>
 
 <style>
-    /* فرض الخط المختار على كامل عناصر الواجهة */
     body, *, .mud-typography, .mud-input, .mud-button-root, .mud-table {
         font-family: '@(_selectedFont)', 'Dubai', 'Segoe UI', Tahoma, sans-serif !important;
     }
@@ -70,6 +109,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SessionService.OnSessionChanged += StateHasChanged;
+
         try
         {
             _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -93,5 +134,25 @@
                 }
             }
         };
+    }
+
+    private async Task OpenChangePasswordDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        await DialogService.ShowAsync<ChangePasswordDialog>("تغيير كلمة المرور", options);
+    }
+
+    private async Task Logout()
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تسجيل الخروج",
+            "هل أنت متأكد من رغبتك في تسجيل الخروج من النظام؟",
+            yesText: "نعم، خروج",
+            cancelText: "إلغاء");
+
+        if (confirm == true)
+        {
+            await SessionService.LogLogoutAsync();
+        }
     }
 }

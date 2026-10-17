@@ -1,0 +1,163 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject ISnackbar Snackbar
+
+<MudDialog DisableSidePadding="true" Style="direction: rtl; text-align: right; min-width: 440px; max-width: 500px; border-radius: 8px;">
+
+    <!-- 1. شريط العنوان النظيف وزر الإغلاق المنفصل تماماً لمنع التداخل -->
+    <!-- شريط العنوان -->
+    <TitleContent>
+        <div class="d-flex align-center gap-2 px-4 pt-3 pb-2" style="border-bottom: 1px solid #e0e0e0;">
+            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Color="Color.Primary" Size="Size.Medium" />
+            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">
+                @(UserToEdit.UserId == 0 ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم")
+            </MudText>
+        </div>
+    </TitleContent>
+
+    <!-- 2. محتوى الحقول مع مسافات مريحة وتنسيق غير متداخل -->
+    <DialogContent>
+        <div class="px-5 py-3">
+
+            <!-- اسم المستخدم -->
+            <div class="mb-3">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">اسم المستخدم *</MudText>
+                <MudTextField @bind-Value="UserToEdit.UserName"
+                              Placeholder="أدخل اسم المستخدم"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true" />
+            </div>
+
+            <!-- كلمة المرور -->
+            <div class="mb-3">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">
+                    @(UserToEdit.UserId == 0 ? "كلمة المرور *" : "كلمة المرور الجديدة")
+                </MudText>
+                <MudTextField @bind-Value="_rawPassword"
+                              Placeholder="@(UserToEdit.UserId == 0 ? "أدخل كلمة المرور" : "اتركها فارغة إذا لا ترغب بالتغيير")"
+                              InputType="InputType.Password"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+            </div>
+
+            <!-- نوع الحساب والصلاحيات الأربعة -->
+            <div class="mb-3">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">نوع الحساب والصلاحية *</MudText>
+                <MudSelect T="int" @bind-Value="UserToEdit.UserTypeId"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem Value="1">
+                        <div class="d-flex flex-column py-1">
+                            <span class="fw-bold" style="color: #1B4D3E;">1. مدير نظام</span>
+                            <span style="font-size: 0.75rem; color: #666;">تحكم كامل بكل إمكانيات النظام والمستخدمين والإعدادات</span>
+                        </div>
+                    </MudSelectItem>
+                    <MudSelectItem Value="2">
+                        <div class="d-flex flex-column py-1">
+                            <span class="fw-bold text-primary">2. محرر بيانات</span>
+                            <span style="font-size: 0.75rem; color: #666;">إضافة، تعديل، وحذف المستندات (بدون وصول للإعدادات والمستخدمين)</span>
+                        </div>
+                    </MudSelectItem>
+                    <MudSelectItem Value="3">
+                        <div class="d-flex flex-column py-1">
+                            <span class="fw-bold text-info">3. مدخل بيانات</span>
+                            <span style="font-size: 0.75rem; color: #666;">إضافة وتعديل المستندات فقط (بدون حذف وبدون وصول للإعدادات)</span>
+                        </div>
+                    </MudSelectItem>
+                    <MudSelectItem Value="4">
+                        <div class="d-flex flex-column py-1">
+                            <span class="fw-bold text-secondary">4. قارئ بيانات</span>
+                            <span style="font-size: 0.75rem; color: #666;">البحث، استعراض المستندات، والاطلاع على الإحصائيات فقط</span>
+                        </div>
+                    </MudSelectItem>
+                </MudSelect>
+            </div>
+
+            <!-- مفتاح تفعيل الحساب -->
+            <div class="d-flex justify-space-between align-center px-3 py-2 rounded" style="background-color: #f8f9fa; border: 1px solid #e9ecef;">
+                <MudText Typo="Typo.body2" Class="fw-bold">حالة الحساب</MudText>
+                <MudSwitch T="bool"
+                           Value="@(UserToEdit.IsActive == 1)"
+                           ValueChanged="@((val) => UserToEdit.IsActive = val ? 1 : 0)"
+                           Color="Color.Success"
+                           Label="@(UserToEdit.IsActive == 1 ? "مفعل" : "معطل")" />
+            </div>
+
+        </div>
+    </DialogContent>
+
+    <!-- 3. أزرار الإجراءات في الأسفل -->
+    <DialogActions>
+        <div class="d-flex justify-end gap-2 px-5 pb-3 w-100">
+            <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Secondary" Style="border-radius: 4px;">إلغاء</MudButton>
+            <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Style="background-color: #1B4D3E; color: white; padding: 6px 28px; border-radius: 4px; font-weight: bold;">
+                حفظ
+            </MudButton>
+        </div>
+    </DialogActions>
+
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public User UserToEdit { get; set; } = new();
+
+    private string _rawPassword = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        // تعيين قيمة افتراضية في حال كانت جديدة
+        if (UserToEdit.UserTypeId == 0)
+        {
+            UserToEdit.UserTypeId = 3; // افتراضياً مدخل بيانات
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(UserToEdit.UserName))
+        {
+            Snackbar.Add("يرجى إدخال اسم المستخدم", Severity.Warning);
+            return;
+        }
+
+        if (UserToEdit.UserId == 0 && string.IsNullOrWhiteSpace(_rawPassword))
+        {
+            Snackbar.Add("يرجى إدخال كلمة مرور للحساب الجديد", Severity.Warning);
+            return;
+        }
+
+        string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+        if (!string.IsNullOrWhiteSpace(_rawPassword))
+        {
+            UserToEdit.PasswordHash = _rawPassword;
+        }
+
+        if (UserToEdit.UserId == 0)
+        {
+            UserToEdit.CreatedAt = now;
+            UserToEdit.UpdatedAt = now;
+            DbContext.Users.Add(UserToEdit);
+        }
+        else
+        {
+            UserToEdit.UpdatedAt = now;
+            DbContext.Users.Update(UserToEdit);
+        }
+
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add("تم حفظ بيانات المستخدم بنجاح", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
