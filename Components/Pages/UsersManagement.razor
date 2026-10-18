@@ -4,9 +4,13 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject UserSessionService SessionService
+
 
 <PageTitle>إدارة المستخدمين</PageTitle>
 
@@ -113,6 +117,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // فحص الأمان والصلاحيات
+        if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
+        {
+            Snackbar.Add("عذراً، إدارة المستخدمين مقتصرة على مدير النظام فقط!", Severity.Error);
+            Navigation.NavigateTo("/employees");
+            return;
+        }
+
         await LoadUsers();
     }
 

@@ -1,13 +1,14 @@
 ﻿@using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
+@inject UserSessionService SessionService
 @inject ISnackbar Snackbar
 
 <MudDialog DisableSidePadding="true" Style="direction: rtl; text-align: right; min-width: 440px; max-width: 500px; border-radius: 8px;">
 
     <!-- 1. شريط العنوان النظيف وزر الإغلاق المنفصل تماماً لمنع التداخل -->
-    <!-- شريط العنوان -->
     <TitleContent>
         <div class="d-flex align-center gap-2 px-4 pt-3 pb-2" style="border-bottom: 1px solid #e0e0e0;">
             <MudIcon Icon="@Icons.Material.Filled.PersonPin" Color="Color.Primary" Size="Size.Medium" />
@@ -131,6 +132,16 @@
             return;
         }
 
+        // التحقق من عدم تكرار اسم المستخدم
+        bool isDuplicate = await DbContext.Users
+            .AnyAsync(u => u.UserName.ToLower() == UserToEdit.UserName.Trim().ToLower() && u.UserId != UserToEdit.UserId);
+
+        if (isDuplicate)
+        {
+            Snackbar.Add("اسم المستخدم موجود مسبقاً، يرجى اختيار اسم آخر!", Severity.Error);
+            return;
+        }
+
         if (UserToEdit.UserId == 0 && string.IsNullOrWhiteSpace(_rawPassword))
         {
             Snackbar.Add("يرجى إدخال كلمة مرور للحساب الجديد", Severity.Warning);
@@ -139,12 +150,15 @@
 
         string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
+        // تشفير كلمة المرور فوراً عبر الدالة المركزية قبل التخزين
         if (!string.IsNullOrWhiteSpace(_rawPassword))
         {
-            UserToEdit.PasswordHash = _rawPassword;
+            UserToEdit.PasswordHash = UserSessionService.HashPassword(_rawPassword);
         }
 
-        if (UserToEdit.UserId == 0)
+        bool isNew = UserToEdit.UserId == 0;
+
+        if (isNew)
         {
             UserToEdit.CreatedAt = now;
             UserToEdit.UpdatedAt = now;
@@ -157,6 +171,17 @@
         }
 
         await DbContext.SaveChangesAsync();
+
+        // توثيق العملية في سجل التدقيق
+        await SessionService.LogActivityAsync(
+            actionType: isNew ? "إضافة مستخدم" : "تعديل مستخدم",
+            entityType: "مستخدم",
+            entityId: UserToEdit.UserId,
+            description: isNew
+                ? $"قام ({SessionService.CurrentUser?.UserName}) بإنشاء حساب جديد للمستخدم ({UserToEdit.UserName}) بصلاحية ({UserToEdit.UserTypeId})."
+                : $"قام ({SessionService.CurrentUser?.UserName}) بتعديل بيانات حساب المستخدم ({UserToEdit.UserName})."
+        );
+
         Snackbar.Add("تم حفظ بيانات المستخدم بنجاح", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));
     }

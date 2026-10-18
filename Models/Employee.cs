@@ -35,6 +35,8 @@ public class Employee
 
     [Column("UpdatedBy")]
     public int? UpdatedBy { get; set; }
+    public int IsDeleted { get; set; } = 0;
+    public string? DeletedAt { get; set; }
 
     // خاصية مساعدة لواجهة المستخدم
     [NotMapped]

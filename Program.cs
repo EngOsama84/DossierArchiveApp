@@ -17,8 +17,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=dossiers.sqlite3"));
 
 //  ”ÃÌ· Œœ„… «·„«”Õ «·÷Ê∆Ì
-builder.Services.AddSingleton<ScannerService>();
+builder.Services.AddScoped<ScannerService>();
 builder.Services.AddScoped<UserSessionService>();
+builder.Services.AddScoped<ExportService>();
 var app = builder.Build();
 
 //  —ﬁÌ… „ƒﬂœ… ·ÃœÊ· «·≈⁄œ«œ«  ›Ì SQLite ⁄‰œ ﬂ· ≈ﬁ·«⁄
@@ -41,6 +42,11 @@ using (var scope = app.Services.CreateScope())
     TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerResolutionDPI INTEGER DEFAULT 200;");
     TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerColorMode TEXT DEFAULT 'Grayscale';");
     TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN PdfCompressionLevel TEXT DEFAULT 'Medium';");
+
+    TryAddColumn("ALTER TABLE TB_Documents ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
+    TryAddColumn("ALTER TABLE TB_Documents ADD COLUMN DeletedAt TEXT NULL;");
+    TryAddColumn("ALTER TABLE TB_Employees ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
+    TryAddColumn("ALTER TABLE TB_Employees ADD COLUMN DeletedAt TEXT NULL;");
 }
 using (var scope = app.Services.CreateScope())
 {

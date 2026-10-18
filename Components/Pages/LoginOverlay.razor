@@ -131,11 +131,28 @@
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "يرجى كتابة كلمة المرور";
+            return;
+        }
+
         _isLoggingIn = true;
         try
         {
-            var user = await DbContext.Users
+            // 1. فحص وجود الحساب وحالته أولاً لإظهار رسالة مناسبة إذا كان معطلاً
+            var account = await DbContext.Users
                 .FirstOrDefaultAsync(u => u.UserName.ToLower() == _userName.Trim().ToLower());
+
+            if (account != null && account.IsActive == 0)
+            {
+                _errorMessage = "هذا الحساب معطل حالياً، يرجى مراجعة الإدارة.";
+                Snackbar.Add(_errorMessage, Severity.Warning);
+                return;
+            }
+
+            // 2. التحقق المشفر من كلمة المرور عبر UserSessionService مع الترقية التلقائية للبصمة
+            var user = await SessionService.ValidateUserCredentialsAsync(_userName.Trim(), _password);
 
             if (user == null)
             {
@@ -144,20 +161,7 @@
                 return;
             }
 
-            if (user.IsActive == 0)
-            {
-                _errorMessage = "هذا الحساب معطل حالياً، يرجى مراجعة الإدارة.";
-                Snackbar.Add(_errorMessage, Severity.Warning);
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(user.PasswordHash) && user.PasswordHash != _password)
-            {
-                _errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة!";
-                Snackbar.Add(_errorMessage, Severity.Error);
-                return;
-            }
-
+            // 3. تحديث آخر تسجيل دخول وتفعيل الجلسة
             user.LastLogin = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             await DbContext.SaveChangesAsync();
 

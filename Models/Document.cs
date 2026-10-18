@@ -60,6 +60,7 @@ public class Document
 
     [Column("IsDeleted")]
     public int IsDeleted { get; set; } = 0;
+    public string? DeletedAt { get; set; }
 }
 
 [Table("TB_DocumentEmployees")]

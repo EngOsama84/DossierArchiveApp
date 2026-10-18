@@ -5,11 +5,14 @@
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
 @using DossierArchiveApp.Services
+@using System.IO
+@using System.IO.Compression
 @inject AppDbContext DbContext
 @inject ScannerService ScannerService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject UserSessionService SessionService
+@inject IDialogService DialogService
 
 <PageTitle>إعدادات النظام العامة</PageTitle>
 
@@ -22,7 +25,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.Settings" Class="ml-2" /> إعدادات النظام الشاملة
             </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                إدارة الهوية الرسمية، الماسح الضوئي، مسارات التخزين، والنسخ الاحتياطي
+                إدارة الهوية الرسمية، الماسح الضوئي، مسارات التخزين، والنسخ الاحتياطي الشامل
             </MudText>
         </div>
         <MudButton Variant="Variant.Filled"
@@ -115,13 +118,13 @@
                 </MudPaper>
             </MudItem>
 
-            <!-- 2. بطاقة الماسح الضوئي (Windows WIA) وجودة PDF -->
+            <!-- 2. بطاقة الماسح الضوئي -->
             <MudItem xs="12" md="6">
                 <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
                     <div class="d-flex align-center justify-space-between mb-3">
                         <div class="d-flex align-center gap-2">
                             <MudIcon Icon="@Icons.Material.Filled.Scanner" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الماسح الضوئي (Windows WIA)</MudText>
+                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الماسح الضوئي (NAPS2 Driver)</MudText>
                         </div>
                         <MudButton Variant="Variant.Outlined"
                                    Size="Size.Small"
@@ -132,7 +135,6 @@
                         </MudButton>
                     </div>
 
-                    <!-- اختيار جهاز السكنر الفعلي المعرف بالحاسوب -->
                     <MudSelect T="string"
                                @bind-Value="_settings.DefaultScannerName"
                                Label="الماسح الضوئي الافتراضي"
@@ -153,14 +155,13 @@
                         }
                     </MudSelect>
 
-                    <!-- مصدر التغذية: فيدر أم سطح زجاجي -->
                     <MudSelect T="string"
                                @bind-Value="_settings.ScanSource"
                                Label="طريقة سحب الأوراق"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
                                Class="mb-3">
-                        <MudSelectItem Value="@("Feeder")">سحب آلي من الفيدر (ADF) - للملفات والأوراق المتعددة</MudSelectItem>
+                        <MudSelectItem Value="@("Feeder")">سحب آلي من الفيدر (ADF) - للملفات المتعددة</MudSelectItem>
                         <MudSelectItem Value="@("Flatbed")">السطح الزجاجي (Flatbed) - للهويات والوثائق الفردية</MudSelectItem>
                     </MudSelect>
 
@@ -215,14 +216,24 @@
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">مسار التخزين ونظام الأضابير</MudText>
                     </div>
 
-                    <MudTextField @bind-Value="_settings.BaseFolderPath"
-                                  Label="المسار الرئيسي لمجلد النظام (Base Folder Path)"
-                                  Placeholder="مثال: D:\DossierArchiveFiles أو مسار شبكي \\Server\Archive"
-                                  HelperText="المجلد الأساسي الذي سيحتوي مجلدات أضابير الموظفين وملفات الكتب"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Immediate="true"
-                                  Class="mb-2" />
+                    <!-- مسار التخزين بمحاذاة أفقية متطابقة -->
+                    <div class="d-flex gap-2 mb-2 align-start">
+                        <MudTextField @bind-Value="_settings.BaseFolderPath"
+                                      Label="المسار الرئيسي لمجلد النظام (Base Folder Path)"
+                                      Placeholder="مثال: D:\DossierArchiveFiles"
+                                      HelperText="المجلد الأساسي الذي يحتوي على كافة ملفات الموظفين المؤرشفة"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="flex-grow-1" />
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.FolderOpen"
+                                   OnClick="BrowseBaseFolder"
+                                   Style="height: 40px; margin-top: 4px;">
+                            استعراض...
+                        </MudButton>
+                    </div>
 
                     <div class="d-flex gap-2 mb-3">
                         <MudButton Variant="Variant.Outlined"
@@ -251,8 +262,8 @@
                                        Label="طريقة استعراض الكتب (PDF)"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense">
-                                <MudSelectItem Value="@("internal")">عارض المستندات المدمج (نافذة داخل التطبيق)</MudSelectItem>
-                                <MudSelectItem Value="@("external")">تطبيق النظام الافتراضي (Adobe Acrobat / قارئ PDF)</MudSelectItem>
+                                <MudSelectItem Value="@("internal")">عارض المستندات المدمج</MudSelectItem>
+                                <MudSelectItem Value="@("external")">تطبيق النظام الافتراضي</MudSelectItem>
                                 <MudSelectItem Value="@("browser")">فتح في تبويب متصفح مستقل</MudSelectItem>
                             </MudSelect>
                         </MudItem>
@@ -260,37 +271,112 @@
                 </MudPaper>
             </MudItem>
 
-            <!-- 4. النسخ الاحتياطي والأمان وسجلات التدقيق -->
+            <!-- 4. النسخ الاحتياطي والاستعادة وخيارات الشمولية -->
             <MudItem xs="12" md="6">
                 <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
-                    <div class="d-flex align-center gap-2 mb-3">
-                        <MudIcon Icon="@Icons.Material.Filled.Backup" Color="Color.Primary" />
-                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">النسخ الاحتياطي وسجلات الأمان</MudText>
+                    <div class="d-flex align-center justify-space-between mb-3">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Backup" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">النسخ الاحتياطي والاستعادة</MudText>
+                        </div>
                     </div>
 
-                    <MudTextField @bind-Value="_settings.BackupFolderPath"
-                                  Label="مسار مجلد النسخ الاحتياطي (Backup Folder)"
-                                  Placeholder="مثال: E:\Backups\DossierArchive"
-                                  HelperText="المسار الذي ستُحفظ فيه النسخ الاحتياطية لقاعدة البيانات"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Immediate="true"
-                                  Class="mb-2" />
+                    <!-- مسار النسخ الاحتياطي بمحاذاة أفقية متطابقة -->
+                    <div class="d-flex gap-2 mb-2 align-start">
+                        <MudTextField @bind-Value="_settings.BackupFolderPath"
+                                      Label="مسار مجلد النسخ الاحتياطي (Backup Folder)"
+                                      Placeholder="مثال: D:\Backups\DossierArchive"
+                                      HelperText="المسار المعتمد لحفظ ملفات النسخ الاحتياطية"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="flex-grow-1" />
 
-                    <MudGrid Spacing="2" Class="mb-2">
-                        <MudItem xs="6">
-                            <MudNumericField @bind-Value="_settings.AutoBackupInterval"
-                                             Label="تكرار النسخ الآلي (بالساعات)"
-                                             Variant="Variant.Outlined"
-                                             Margin="Margin.Dense"
-                                             Min="1" Max="168" />
-                        </MudItem>
-                        <MudItem xs="6" Class="d-flex align-center">
-                            <MudSwitch @bind-Value="_autoBackup"
-                                       Color="Color.Success"
-                                       Label="تفعيل النسخ الآلي" />
-                        </MudItem>
-                    </MudGrid>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.FolderOpen"
+                                   OnClick="BrowseBackupFolder"
+                                   Style="height: 40px; margin-top: 4px;">
+                            استعراض...
+                        </MudButton>
+                    </div>
+
+                    <!-- خيار شمولية النسخ: قاعدة البيانات فقط أم كامل المجلدات -->
+                    <div class="pa-3 mb-3 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
+                        <MudRadioGroup @bind-Value="_backupScope">
+                            <MudRadio Value="@("dbOnly")" Color="Color.Primary" Dense="true">
+                                <span class="fw-bold" style="font-size: 0.85rem;">قاعدة البيانات فقط (.sqlite3)</span>
+                                <span class="d-block text-secondary" style="font-size: 0.75rem;">سريع جداً وصغير الحجم، يشمل الجداول وسجلات الموظفين والربط</span>
+                            </MudRadio>
+                            <MudRadio Value="@("full")" Color="Color.Success" Dense="true" Class="mt-2">
+                                <span class="fw-bold" style="font-size: 0.85rem;">نسخ احتياطي شامل متكامل (.zip)</span>
+                                <span class="d-block text-secondary" style="font-size: 0.75rem;">يجمع قاعدة البيانات مع كافة المجلدات والملفات الممسوحة في أرشيف مضغوط واحد</span>
+                            </MudRadio>
+                        </MudRadioGroup>
+                    </div>
+
+                    <!-- أزرار تنفيذ النسخ الاحتياطي الفوري -->
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Warning"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.CloudSync"
+                                   Disabled="_isBackingUp"
+                                   OnClick="TriggerManualBackup">
+                            @if (_isBackingUp)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
+                                <span>جارٍ إنشاء النسخة...</span>
+                            }
+                            else
+                            {
+                                <span>إنشاء نسخة احتياطية الآن</span>
+                            }
+                        </MudButton>
+
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadBackupFiles">
+                            تحديث قائمة النسخ
+                        </MudButton>
+                    </div>
+
+                    <!-- قائمة النسخ المتوفرة للاستعادة -->
+                    @if (!_backupFiles.Any())
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="my-2" Style="font-size: 0.8rem;">
+                            لا توجد نسخ احتياطية في المسار المحدد حالياً.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <div style="max-height: 140px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px;" class="mb-2">
+                            <MudList T="string" Dense="true">
+                                @foreach (var file in _backupFiles.Take(6))
+                                {
+                                    <MudListItem T="string">
+                                        <div class="d-flex align-center justify-space-between w-100">
+                                            <div class="d-flex flex-column text-right">
+                                                <div class="d-flex align-center gap-1">
+                                                    <MudIcon Icon="@(file.Extension.ToLower() == ".zip" ? Icons.Material.Filled.FolderZip : Icons.Material.Filled.Storage)"
+                                                             Size="Size.Small"
+                                                             Color="@(file.Extension.ToLower() == ".zip" ? Color.Success : Color.Primary)" />
+                                                    <span style="font-size: 0.82rem; font-weight: bold; direction: ltr; text-align: right;">@file.Name</span>
+                                                </div>
+                                                <span style="font-size: 0.72rem; color: #888;">
+                                                    @file.CreationTime.ToString("yyyy-MM-dd hh:mm tt") (@((file.Length / 1024.0 / 1024.0).ToString("F2")) MB)
+                                                </span>
+                                            </div>
+                                            <MudButton Size="Size.Small"
+                                                       Variant="Variant.Filled"
+                                                       Color="Color.Error"
+                                                       StartIcon="@Icons.Material.Filled.SettingsBackupRestore"
+                                                       OnClick="@(() => RestoreFromLocalFile(file.FullName, file.Name))">
+                                                استعادة
+                                            </MudButton>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        </div>
+                    }
 
                     <MudDivider Class="my-2" />
 
@@ -299,13 +385,17 @@
                                    Color="Color.Primary"
                                    Label="تفعيل سجل التدقيق (Audit Log)" />
 
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Warning"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.CloudSync"
-                                   OnClick="TriggerManualBackup">
-                            نسخ احتياطي فوري الآن
-                        </MudButton>
+                        <!-- استعادة من ملف خارجي يتم رفعه -->
+                        <MudFileUpload T="IBrowserFile" FilesChanged="RestoreFromUploadedFile" Accept=".sqlite3, .zip">
+                            <ActivatorContent>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.FileOpen">
+                                    استعادة من ملف خارجي...
+                                </MudButton>
+                            </ActivatorContent>
+                        </MudFileUpload>
                     </div>
                 </MudPaper>
             </MudItem>
@@ -358,13 +448,23 @@
     private SystemSetting _settings = new();
     private bool _loading = true;
     private bool _isSaving = false;
+    private bool _isBackingUp = false;
     private bool _isDuplex = false;
     private bool _autoBackup = false;
     private bool _auditLog = true;
+    private string _backupScope = "dbOnly"; // dbOnly أو full
     private List<ScannerInfo> _availableScanners = new();
+    private List<FileInfo> _backupFiles = new();
 
     protected override async Task OnInitializedAsync()
     {
+        if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
+        {
+            Snackbar.Add("عذراً، لا تمتلك الصلاحية للوصول إلى إعدادات النظام!", Severity.Error);
+            Navigation.NavigateTo("/employees");
+            return;
+        }
+
         await LoadSettings();
     }
 
@@ -387,6 +487,7 @@
             _auditLog = _settings.KeepAuditLog == 1;
 
             RefreshConnectedScanners();
+            LoadBackupFiles();
         }
         catch (Exception ex)
         {
@@ -396,6 +497,61 @@
         {
             _loading = false;
         }
+    }
+
+    // ==========================================
+    // منطق اختيار المجلدات (Browse / Folder Picker)
+    // ==========================================
+
+    private void BrowseBaseFolder()
+    {
+        string? selected = OpenWindowsFolderPicker("اختر المجلد الأساسي لتخزين ملفات الأضابير");
+        if (!string.IsNullOrWhiteSpace(selected))
+        {
+            _settings.BaseFolderPath = selected;
+            StateHasChanged();
+        }
+    }
+
+    private void BrowseBackupFolder()
+    {
+        string? selected = OpenWindowsFolderPicker("اختر مجلد حفظ النسخ الاحتياطية");
+        if (!string.IsNullOrWhiteSpace(selected))
+        {
+            _settings.BackupFolderPath = selected;
+            LoadBackupFiles();
+            StateHasChanged();
+        }
+    }
+
+    private string? OpenWindowsFolderPicker(string title)
+    {
+        try
+        {
+            var script = $@"[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = '{title}'; $f.ShowNewFolderButton = $true; if($f.ShowDialog() -eq 'OK'){{ Write-Output $f.SelectedPath }}";
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -Command \"{script}\"",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process != null)
+            {
+                string output = process.StandardOutput.ReadToEnd().Trim();
+                process.WaitForExit();
+                return string.IsNullOrWhiteSpace(output) ? null : output;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"تعذر فتح نافذة استعراض المجلد: {ex.Message}", Severity.Warning);
+        }
+        return null;
     }
 
     private void RefreshConnectedScanners()
@@ -414,11 +570,30 @@
         }
     }
 
+    private void LoadBackupFiles()
+    {
+        _backupFiles.Clear();
+        try
+        {
+            string backupFolder = _settings.BackupFolderPath?.Trim().Trim('"', '\'') ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(backupFolder) && Directory.Exists(backupFolder))
+            {
+                var dir = new DirectoryInfo(backupFolder);
+                _backupFiles = dir.GetFiles("*.*")
+                                  .Where(f => f.Extension.Equals(".sqlite3", StringComparison.OrdinalIgnoreCase)
+                                           || f.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                                  .OrderByDescending(f => f.CreationTime)
+                                  .ToList();
+            }
+        }
+        catch { }
+    }
+
     private void CheckBaseFolder()
     {
         if (string.IsNullOrWhiteSpace(_settings.BaseFolderPath))
         {
-            Snackbar.Add("يرجى إدخال مسار المجلد الأساسي أولاً", Severity.Warning);
+            Snackbar.Add("يرجى إدخال أو استعراض مسار المجلد الأساسي أولاً", Severity.Warning);
             return;
         }
 
@@ -481,15 +656,15 @@
             DbContext.SystemSettings.Update(_settings);
             await DbContext.SaveChangesAsync();
 
-            // توثيق تعديل الإعدادات في سجل الحركات
             await SessionService.LogActivityAsync(
                 actionType: "تعديل إعدادات",
                 entityType: "إعدادات النظام",
                 entityId: _settings.SettingId,
-                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بتحديث إعدادات النظام وشعار وبيانات المديرية."
+                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بتحديث إعدادات النظام وبيانات المديرية ومسارات النسخ."
             );
 
             Snackbar.Add("تم حفظ كافة الإعدادات بنجاح!", Severity.Success);
+            LoadBackupFiles();
             StateHasChanged();
         }
         catch (Exception ex)
@@ -501,37 +676,240 @@
             _isSaving = false;
         }
     }
+
+    // ==========================================
+    // محرك النسخ الاحتياطي (قاعدة فقط أو شامل مع المجلدات)
+    // ==========================================
+
     private async Task TriggerManualBackup()
     {
-        if (string.IsNullOrWhiteSpace(_settings.BackupFolderPath))
+        string backupFolder = _settings.BackupFolderPath?.Trim().Trim('"', '\'') ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(backupFolder))
         {
-            Snackbar.Add("يرجى تحديد مسار مجلد النسخ الاحتياطي وحفظ الإعدادات أولاً!", Severity.Warning);
+            Snackbar.Add("يرجى اختيار مجلد النسخ الاحتياطي وحفظ الإعدادات أولاً!", Severity.Warning);
             return;
         }
 
+        _isBackingUp = true;
         try
         {
-            if (!Directory.Exists(_settings.BackupFolderPath))
+            if (!Directory.Exists(backupFolder))
             {
-                Directory.CreateDirectory(_settings.BackupFolderPath);
+                Directory.CreateDirectory(backupFolder);
             }
 
-            string sourceDb = "dossiers.sqlite3";
-            if (File.Exists(sourceDb))
+            string sourceDb = Path.Combine(AppContext.BaseDirectory, "dossiers.sqlite3");
+            if (!File.Exists(sourceDb))
             {
-                string backupFileName = $"DossierBackup_{DateTime.Now:yyyyMMdd_HHmmss}.sqlite3";
-                string destPath = Path.Combine(_settings.BackupFolderPath, backupFileName);
-                File.Copy(sourceDb, destPath, true);
-                Snackbar.Add($"تم إنشاء نسخة احتياطية بنجاح: {backupFileName}", Severity.Success);
+                sourceDb = Path.Combine(Directory.GetCurrentDirectory(), "dossiers.sqlite3");
+            }
+
+            if (!File.Exists(sourceDb))
+            {
+                Snackbar.Add("لم يتم العثور على ملف قاعدة البيانات dossiers.sqlite3!", Severity.Error);
+                return;
+            }
+
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+            if (_backupScope == "dbOnly")
+            {
+                string backupFileName = $"DossierDB_{timestamp}.sqlite3";
+                string destPath = Path.Combine(backupFolder, backupFileName);
+
+                File.Copy(sourceDb, destPath, overwrite: true);
+
+                await SessionService.LogActivityAsync(
+                    actionType: "نسخ احتياطي (قاعدة فقط)",
+                    entityType: "قاعدة البيانات",
+                    entityId: null,
+                    description: $"تم إنشاء نسخة احتياطية لقاعدة البيانات باسم: {backupFileName}"
+                );
+
+                Snackbar.Add($"تم إنشاء نسخة قاعدة البيانات بنجاح: {backupFileName}", Severity.Success);
             }
             else
             {
-                Snackbar.Add("لم يتم العثور على ملف قاعدة البيانات لنسخه!", Severity.Error);
+                string zipFileName = $"DossierFullBackup_{timestamp}.zip";
+                string zipFullPath = Path.Combine(backupFolder, zipFileName);
+
+                await Task.Run(() =>
+                {
+                    using (var archive = ZipFile.Open(zipFullPath, ZipArchiveMode.Create))
+                    {
+                        archive.CreateEntryFromFile(sourceDb, "dossiers.sqlite3", CompressionLevel.Optimal);
+
+                        string baseFolder = _settings.BaseFolderPath?.Trim().Trim('"', '\'') ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(baseFolder) && Directory.Exists(baseFolder))
+                        {
+                            var allFiles = Directory.GetFiles(baseFolder, "*.*", SearchOption.AllDirectories);
+                            foreach (var filePath in allFiles)
+                            {
+                                string relativePath = Path.GetRelativePath(baseFolder, filePath);
+                                string entryName = Path.Combine("Files", relativePath).Replace('\\', '/');
+                                archive.CreateEntryFromFile(filePath, entryName, CompressionLevel.Optimal);
+                            }
+                        }
+                    }
+                });
+
+                await SessionService.LogActivityAsync(
+                    actionType: "نسخ احتياطي شامل",
+                    entityType: "النظام والملفات",
+                    entityId: null,
+                    description: $"تم إنشاء نسخة احتياطية شاملة (قاعدة + وثائق) باسم: {zipFileName}"
+                );
+
+                Snackbar.Add($"تم إنشاء النسخة الشاملة بنجاح: {zipFileName}", Severity.Success);
             }
+
+            LoadBackupFiles();
+        }
+        catch (UnauthorizedAccessException uex)
+        {
+            Snackbar.Add($"صلاحيات الوصول مرفوضة في المسار المحدد: {uex.Message}. يرجى اختيار مسار على قرص D أو C مباشرة.", Severity.Error);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"فشل النسخ الاحتياطي: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isBackingUp = false;
+        }
+    }
+
+    // ==========================================
+    // منطق الاستعادة (Database & Full Archive Restore Engine)
+    // ==========================================
+
+    private async Task RestoreFromLocalFile(string filePath, string fileName)
+    {
+        bool isZip = fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد استعادة النسخة الاحتياطية",
+            $"تحذير أمني عالي الأهمية:\nأنت على وشك استعادة النسخة ({fileName}).\n" +
+            (isZip ? "سيتم استبدال قاعدة البيانات واستخراج واستبدال مجلدات الوثائق بالكامل." : "سيتم استبدال قاعدة البيانات الحالية فقط بالبيانات الموجودة في هذه النسخة.") +
+            "\n\nهل ترغب بالمتابعة؟",
+            yesText: "نعم، استعد الآن",
+            cancelText: "إلغاء الأمر");
+
+        if (confirm != true) return;
+
+        await PerformRestoreAsync(filePath, isZip);
+    }
+
+    private async Task RestoreFromUploadedFile(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        bool isZip = file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد استعادة من ملف مخصص",
+            $"تحذير أمني عالي الأهمية:\nأنت على وشك استعادة ({file.Name}).\n" +
+            (isZip ? "سيتم فك ضغط واستعادة قاعدة البيانات والملفات بالكامل." : "سيتم استبدال قاعدة البيانات الحالية.") +
+            "\n\nهل أنت متأكد من سلامة الملف وترغب بالمتابعة؟",
+            yesText: "نعم، استعد هذا الملف",
+            cancelText: "إلغاء");
+
+        if (confirm != true) return;
+
+        string tempPath = Path.Combine(Path.GetTempPath(), $"restore_{Guid.NewGuid():N}_{(isZip ? "archive.zip" : "db.sqlite3")}");
+        try
+        {
+            await using (var stream = file.OpenReadStream(500 * 1024 * 1024))
+            await using (var fileStream = new FileStream(tempPath, FileMode.Create))
+            {
+                await stream.CopyToAsync(fileStream);
+            }
+
+            await PerformRestoreAsync(tempPath, isZip);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"فشل قراءة الملف: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { }
+            }
+        }
+    }
+
+    private async Task PerformRestoreAsync(string sourceBackupFile, bool isZip)
+    {
+        string currentDbPath = Path.Combine(AppContext.BaseDirectory, "dossiers.sqlite3");
+        if (!File.Exists(currentDbPath))
+        {
+            currentDbPath = Path.Combine(Directory.GetCurrentDirectory(), "dossiers.sqlite3");
+        }
+
+        string emergencySafetyBackup = Path.Combine(Directory.GetCurrentDirectory(), $"SafetyRollback_{DateTime.Now:yyyyMMdd_HHmmss}.sqlite3");
+
+        try
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+            if (File.Exists(currentDbPath))
+            {
+                File.Copy(currentDbPath, emergencySafetyBackup, true);
+            }
+
+            if (!isZip)
+            {
+                File.Copy(sourceBackupFile, currentDbPath, true);
+            }
+            else
+            {
+                using (var archive = ZipFile.OpenRead(sourceBackupFile))
+                {
+                    var dbEntry = archive.GetEntry("dossiers.sqlite3");
+                    if (dbEntry != null)
+                    {
+                        dbEntry.ExtractToFile(currentDbPath, overwrite: true);
+                    }
+
+                    string baseFolder = _settings.BaseFolderPath?.Trim().Trim('"', '\'') ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(baseFolder))
+                    {
+                        if (!Directory.Exists(baseFolder)) Directory.CreateDirectory(baseFolder);
+
+                        foreach (var entry in archive.Entries)
+                        {
+                            if (entry.FullName.StartsWith("Files/", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(entry.Name))
+                            {
+                                string relativePath = entry.FullName.Substring("Files/".Length);
+                                string targetFilePath = Path.Combine(baseFolder, relativePath);
+                                string? parentDir = Path.GetDirectoryName(targetFilePath);
+
+                                if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+                                {
+                                    Directory.CreateDirectory(parentDir);
+                                }
+
+                                entry.ExtractToFile(targetFilePath, overwrite: true);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Snackbar.Add("تمت عملية الاستعادة بنجاح! يتم الآن إعادة تحميل النظام...", Severity.Success);
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/settings", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            if (File.Exists(emergencySafetyBackup))
+            {
+                try { File.Copy(emergencySafetyBackup, currentDbPath, true); } catch { }
+            }
+            Snackbar.Add($"فشلت عملية الاستعادة وتم الحفاظ على البيانات: {ex.Message}", Severity.Error);
         }
     }
 }

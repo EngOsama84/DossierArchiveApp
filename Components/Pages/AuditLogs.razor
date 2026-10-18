@@ -1,11 +1,15 @@
 ﻿@page "/audit-logs"
 @rendermode InteractiveServer
 
+@using DossierArchiveApp.Services
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject UserSessionService SessionService
+
 
 <PageTitle>سجل حركات النظام</PageTitle>
 
@@ -131,6 +135,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // فحص الأمان والصلاحيات
+        if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
+        {
+            Snackbar.Add("عذراً، الاطلاع على سجل الحركات والتدقيق مقتصر على مدير النظام فقط!", Severity.Error);
+            Navigation.NavigateTo("/employees");
+            return;
+        }
+
         await LoadLogs();
     }
 

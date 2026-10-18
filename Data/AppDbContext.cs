@@ -19,4 +19,13 @@ public class AppDbContext : DbContext
     public DbSet<DocumentEmployee> DocumentEmployees => Set<DocumentEmployee>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // تصفية السجلات غير المحذوفة فقط بشكل تلقائي على مستوى كامل النظام
+        modelBuilder.Entity<Document>().HasQueryFilter(d => d.IsDeleted == 0);
+        modelBuilder.Entity<Employee>().HasQueryFilter(e => e.IsDeleted == 0);
+    }
 }

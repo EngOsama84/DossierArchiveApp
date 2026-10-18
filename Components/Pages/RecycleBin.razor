@@ -1,0 +1,328 @@
+﻿@page "/recycle-bin"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
+@inject AppDbContext DbContext
+@inject NavigationManager Navigation
+@inject UserSessionService SessionService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<div dir="rtl" class="pa-4">
+    <!-- الترويسة الرئيسية -->
+    <div class="d-flex align-center justify-space-between mb-4 pb-2" style="border-bottom: 2px solid #1B4D3E;">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" Style="font-size: 2.2rem; color: #d32f2f;" />
+            <div>
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">سلة المحذوفات</MudText>
+                <MudText Typo="Typo.caption" Class="text-secondary">إدارة واستعادة أو إتلاف المستندات وإضبارات الموظفين المحذوفة مؤقتاً</MudText>
+            </div>
+        </div>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadDeletedData">
+            تحديث البيانات
+        </MudButton>
+    </div>
+
+    <!-- التبويبات للفرز بين المستندات والموظفين -->
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Color="Color.Primary">
+
+        <!-- تبويب 1: المستندات المحذوفة -->
+        <MudTabPanel Text="المستندات المحذوفة" Icon="@Icons.Material.Filled.Description" BadgeData="@_deletedDocuments.Count" BadgeColor="Color.Error">
+            <MudTable Items="@_deletedDocuments" Dense="true" Hover="true" Striped="true" Filter="new Func<Document, bool>(FilterDocFunc)" Loading="@_isLoading">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة المستندات في السلة</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchDocString" Placeholder="بحث برقم الكتاب أو الموضوع..." Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh>رقم الكتاب</MudTh>
+                    <MudTh>تاريخ الكتاب</MudTh>
+                    <MudTh>الموضوع</MudTh>
+                    <MudTh>تاريخ الحذف</MudTh>
+                    <MudTh Style="text-align: center;">الإجراءات</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="رقم الكتاب" Class="fw-bold">@context.DocumentNumber</MudTd>
+                    <MudTd DataLabel="تاريخ الكتاب">@context.DocumentDate</MudTd>
+                    <MudTd DataLabel="الموضوع">@context.Subject</MudTd>
+                    <MudTd DataLabel="تاريخ الحذف">
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">@context.DeletedAt</MudChip>
+                    </MudTd>
+                    <MudTd Style="text-align: center;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreDocument(context))" Class="me-2">
+                            استعادة
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteDocument(context))">
+                            حذف نهائي
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد مستندات في سلة المحذوفات حالياً.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        <!-- تبويب 2: إضبارات الموظفين المحذوفة -->
+        <MudTabPanel Text="أضابير الموظفين المحذوفة" Icon="@Icons.Material.Filled.Badge" BadgeData="@_deletedEmployees.Count" BadgeColor="Color.Error">
+            <MudTable Items="@_deletedEmployees" Dense="true" Hover="true" Striped="true" Filter="new Func<Employee, bool>(FilterEmpFunc)" Loading="@_isLoading">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة الموظفين في السلة</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchEmpString" Placeholder="بحث باسم الموظف أو رقم الإضبارة..." Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh>رقم الإضبارة</MudTh>
+                    <MudTh>اسم الموظف</MudTh>
+                    <MudTh>تاريخ الحذف</MudTh>
+                    <MudTh Style="text-align: center;">الإجراءات</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="رقم الإضبارة" Class="fw-bold">@context.FileNumber</MudTd>
+                    <MudTd DataLabel="اسم الموظف">@context.EmployeeName</MudTd>
+                    <MudTd DataLabel="تاريخ الحذف">
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">@context.DeletedAt</MudChip>
+                    </MudTd>
+                    <MudTd Style="text-align: center;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreEmployee(context))" Class="me-2">
+                            استعادة
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteEmployee(context))">
+                            حذف نهائي
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد إضبارات موظفين في سلة المحذوفات حالياً.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+    </MudTabs>
+</div>
+
+@code {
+    private List<Document> _deletedDocuments = new();
+    private List<Employee> _deletedEmployees = new();
+    private bool _isLoading = false;
+    private string _searchDocString = string.Empty;
+    private string _searchEmpString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // حماية الصفحة: مقتصرة حصرياً على مدير النظام
+        if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
+        {
+            Snackbar.Add("عذراً، الوصول إلى سلة المحذوفات مقتصر على مدير النظام فقط!", Severity.Error);
+            Navigation.NavigateTo("/employees");
+            return;
+        }
+
+        await LoadDeletedData();
+    }
+
+    private async Task LoadDeletedData()
+    {
+        _isLoading = true;
+        try
+        {
+            // تجاوز الفلتر العام وجلب العناصر المحذوفة فقط
+            _deletedDocuments = await DbContext.Documents
+                .IgnoreQueryFilters()
+                .Where(d => d.IsDeleted == 1)
+                .OrderByDescending(d => d.DeletedAt)
+                .ToListAsync();
+
+            _deletedEmployees = await DbContext.Employees
+                .IgnoreQueryFilters()
+                .Where(e => e.IsDeleted == 1)
+                .OrderByDescending(e => e.DeletedAt)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"تعذر جلب بيانات السلة: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ==========================================
+    // إجراءات المستندات (استعادة / حذف نهائي)
+    // ==========================================
+
+    private async Task RestoreDocument(Document doc)
+    {
+        try
+        {
+            doc.IsDeleted = 0;
+            doc.DeletedAt = null;
+
+            DbContext.Documents.Update(doc);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "استعادة مستند",
+                entityType: "مستند",
+                entityId: doc.DocumentId,
+                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) باستعادة المستند ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) من سلة المحذوفات."
+            );
+
+            _deletedDocuments.Remove(doc);
+            Snackbar.Add("تمت استعادة المستند بنجاح إلى كافة الأضابير المرتبطة به", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"فشلت استعادة المستند: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HardDeleteDocument(Document doc)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "إتلاف وحذف نهائي لا رجعة فيه",
+            $"تحذير أمني: هل أنت متأكد من الحذف النهائي للمستند (رقم: {doc.DocumentNumber} - {doc.Subject})؟\nسيتم مسح الملفات الفيزيائية من القرص وحذف السجلات نهائياً من قاعدة البيانات.",
+            yesText: "نعم، حذف نهائي الآن",
+            cancelText: "إلغاء");
+
+        if (confirm != true) return;
+
+        try
+        {
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            string baseFolder = settings?.BaseFolderPath ?? string.Empty;
+
+            // جلب كافة روابط المستند لمسح ملفاته الفيزيائية من مجلدات الأضابير
+            var links = await DbContext.DocumentEmployees
+                .Where(de => de.DocumentId == doc.DocumentId)
+                .ToListAsync();
+
+            if (!string.IsNullOrWhiteSpace(baseFolder) && Directory.Exists(baseFolder))
+            {
+                foreach (var link in links)
+                {
+                    if (!string.IsNullOrWhiteSpace(link.EmployeeFilePath))
+                    {
+                        string fullPath = Path.Combine(baseFolder, link.EmployeeFilePath);
+                        if (File.Exists(fullPath))
+                        {
+                            try { File.Delete(fullPath); } catch { }
+                        }
+                    }
+                }
+            }
+
+            // حذف سجلات الربط وسجل المستند نهائياً
+            DbContext.DocumentEmployees.RemoveRange(links);
+            DbContext.Documents.Remove(doc);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "إتلاف مستند نهائي",
+                entityType: "مستند",
+                entityId: doc.DocumentId,
+                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) بالحذف والإتلاف النهائي للمستند ({doc.Subject}) وملفاته الفيزيائية."
+            );
+
+            _deletedDocuments.Remove(doc);
+            Snackbar.Add("تم إتلاف المستند وحذف ملفاته نهائياً من القرص والقاعدة", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء الحذف النهائي: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // ==========================================
+    // إجراءات الموظفين (استعادة / حذف نهائي)
+    // ==========================================
+
+    private async Task RestoreEmployee(Employee emp)
+    {
+        try
+        {
+            emp.IsDeleted = 0;
+            emp.DeletedAt = null;
+
+            DbContext.Employees.Update(emp);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "استعادة موظف",
+                entityType: "موظف",
+                entityId: emp.EmployeeId,
+                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) باستعادة إضبارة الموظف ({emp.EmployeeName}) من سلة المحذوفات."
+            );
+
+            _deletedEmployees.Remove(emp);
+            Snackbar.Add($"تمت استعادة إضبارة الموظف ({emp.EmployeeName}) بنجاح", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"فشلت استعادة الموظف: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HardDeleteEmployee(Employee emp)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "إتلاف إضبارة موظف نهائياً",
+            $"تحذير أمني: هل أنت متأكد من الحذف النهائي لإضبارة الموظف ({emp.EmployeeName})؟\nسيتم حذف مجلد الإضبارة الفيزيائي الفارغ وسجله نهائياً.",
+            yesText: "نعم، حذف نهائي الآن",
+            cancelText: "إلغاء");
+
+        if (confirm != true) return;
+
+        try
+        {
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            if (settings != null && !string.IsNullOrWhiteSpace(settings.BaseFolderPath) && !string.IsNullOrWhiteSpace(emp.EmployeeFolderPath))
+            {
+                string employeeFolderFullPath = Path.Combine(settings.BaseFolderPath, emp.EmployeeFolderPath);
+                if (Directory.Exists(employeeFolderFullPath))
+                {
+                    try { Directory.Delete(employeeFolderFullPath, true); } catch { }
+                }
+            }
+
+            DbContext.Employees.Remove(emp);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "إتلاف موظف نهائي",
+                entityType: "موظف",
+                entityId: emp.EmployeeId,
+                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) بحذف إضبارة الموظف ({emp.EmployeeName}) ومجلدها الفيزيائي نهائياً."
+            );
+
+            _deletedEmployees.Remove(emp);
+            Snackbar.Add($"تم إتلاف إضبارة الموظف ({emp.EmployeeName}) ومجلدها نهائياً", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء الحذف النهائي: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // دوال فلترة البحث في الجداول
+    private bool FilterDocFunc(Document doc) => Filter(doc.DocumentNumber, _searchDocString) || Filter(doc.Subject, _searchDocString);
+    private bool FilterEmpFunc(Employee emp) => Filter(emp.EmployeeName, _searchEmpString) || Filter(emp.FileNumber, _searchEmpString);
+
+    private bool Filter(string? field, string search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return true;
+        if (string.IsNullOrWhiteSpace(field)) return false;
+        return field.Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
+}

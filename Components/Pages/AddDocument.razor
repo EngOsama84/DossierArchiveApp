@@ -334,6 +334,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // فحص الأمان والصلاحيات
+        if (SessionService.CurrentUser == null || !SessionService.CanAdd)
+        {
+            Snackbar.Add("عذراً، حسابك لا يمتلك صلاحية إضافة أو أرشفة مستندات!", Severity.Error);
+            Navigation.NavigateTo("/employees");
+            return;
+        }
+
         await LoadSettings();
         await LoadCategories();
         await LoadEmployees();
@@ -343,7 +351,6 @@
             _selectedEmployeeIds.Add(InitialEmployeeId.Value);
         }
     }
-
     private async Task LoadSettings()
     {
         _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -508,11 +515,37 @@
 
     private async Task StartScannerAcquisition()
     {
+        if (_settings == null || string.IsNullOrWhiteSpace(_settings.DefaultScannerName))
+        {
+            Snackbar.Add("يرجى تحديد الماسح الضوئي وحفظه في شاشة الإعدادات أولاً!", Severity.Warning);
+            return;
+        }
+
         _isScanning = true;
         try
         {
-            await Task.Delay(1000);
-            Snackbar.Add("جاري التواصل مع الماسح الضوئي وسحب الصفحات...", Severity.Info);
+            Snackbar.Add("جارٍ الاتصال بالماسح وسحب المستند...", Severity.Info);
+
+            // استدعاء السحب الفعلي
+            var pdfBytes = await ScannerService.ScanDocumentAsync(
+                _settings.DefaultScannerName,
+                _settings.ScanSource ?? "Flatbed",
+                "Color",
+                150
+            );
+
+            if (pdfBytes != null && pdfBytes.Length > 0)
+            {
+                _documentBytes = pdfBytes;
+                _finalExtension = ".pdf";
+                _selectedFile = null; // إفراغ الملف اليدوي لأن السحب تم عبر السكنر
+
+                // توليد رابط المعاينة الفوري للـ PDF المسحوب
+                string base64 = Convert.ToBase64String(_documentBytes);
+                _previewFileUrl = $"data:application/pdf;base64,{base64}";
+
+                Snackbar.Add("تم سحب المستند ومعاينته بنجاح!", Severity.Success);
+            }
         }
         catch (Exception ex)
         {
@@ -521,9 +554,9 @@
         finally
         {
             _isScanning = false;
+            StateHasChanged();
         }
     }
-
     private string CleanFileSystemName(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return string.Empty;

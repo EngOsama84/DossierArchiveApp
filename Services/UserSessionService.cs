@@ -1,6 +1,9 @@
 ﻿using DossierArchiveApp.Data;
 using DossierArchiveApp.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace DossierArchiveApp.Services;
 
@@ -20,7 +23,7 @@ public class UserSessionService
     public UserSessionService(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory;
-        CurrentUser = null; // يبدأ فارغاً لإجبار المستخدم على تسجيل الدخول أولاً
+        CurrentUser = null;
     }
 
     // المسمى الوصفي للصلاحية
@@ -39,10 +42,60 @@ public class UserSessionService
     public bool CanEdit => CurrentUser?.UserTypeId is 1 or 2 or 3;
     public bool CanDelete => CurrentUser?.UserTypeId is 1 or 2;
     public bool CanAccessSettingsOrUsers => CurrentUser?.UserTypeId == 1;
+
     // صلاحيات إدارة الموظفين
     public bool CanAddEmployee => CurrentUser?.UserTypeId is 1 or 2 or 3;
     public bool CanEditEmployee => CurrentUser?.UserTypeId is 1 or 2 or 3;
     public bool CanDeleteEmployee => CurrentUser?.UserTypeId is 1 or 2;
+
+    /// <summary>
+    /// دالة تشفير النصوص الثابتة باستخدام SHA-256
+    /// </summary>
+    public static string HashPassword(string password)
+    {
+        if (string.IsNullOrEmpty(password)) return string.Empty;
+
+        using var sha256 = SHA256.Create();
+        byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+        var builder = new StringBuilder();
+        foreach (var b in bytes)
+        {
+            builder.Append(b.ToString("x2"));
+        }
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// التحقق الذكي من كلمة المرور مع ترقية الحسابات القديمة تلقائياً إلى مشفرة
+    /// </summary>
+    public async Task<User?> ValidateUserCredentialsAsync(string username, string password)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserName == username && u.IsActive == 1);
+        if (user == null) return null;
+
+        string hashedInput = HashPassword(password);
+        bool isValid = false;
+
+        // 1. فحص هل كلمة المرور في القاعدة مشفرة وتطابق المدخل
+        if (user.PasswordHash == hashedInput)
+        {
+            isValid = true;
+        }
+        // 2. التوافق العكسي: إذا كانت الكلمة القديمة غير مشفرة وطابقت النص الصريح
+        else if (user.PasswordHash == password)
+        {
+            isValid = true;
+            // ترقية كلمة المرور وحفظها مشفرة في القاعدة فوراً
+            user.PasswordHash = hashedInput;
+            await db.SaveChangesAsync();
+        }
+
+        return isValid ? user : null;
+    }
+
     // تسجيل دخول المستخدم وتفعيل الجلسة
     public async Task SetUserAsync(User user)
     {
@@ -85,7 +138,7 @@ public class UserSessionService
         }
         catch
         {
-            // تجاوز الخطأ لتفادي تعطيل تنفيذ العمليات الرئيسية في حال تعثر كتابة السجل
+            // تجاوز الخطأ لتفادي تعطيل تنفيذ العمليات الرئيسية
         }
     }
 }

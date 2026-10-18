@@ -6,12 +6,14 @@
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
 @using DossierArchiveApp.Services
+@using DossierArchiveApp.Components.Dialogs
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject UserSessionService SessionService
+@inject ExportService ExportService
 
 <PageTitle>أضابير الموظفين والأرشيف</PageTitle>
 
@@ -44,8 +46,38 @@
             </MudSelect>
         </div>
 
-        <!-- زر إضافة مستند -->
-        <div>
+        <!-- أزرار الإجراءات (طباعة الفهرس + تصدير Excel + إضافة مستند) -->
+        <div class="d-flex align-center gap-2">
+            @if (_selectedEmployee != null && _documents.Any())
+            {
+                <!-- زر طباعة الفهرس الرسمي A4 -->
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Print"
+                           OnClick="OpenPrintDialog"
+                           Style="border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap; background-color: white;">
+                    طباعة الفهرس
+                </MudButton>
+
+                <!-- زر تصدير الإكسل -->
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Success"
+                           StartIcon="@Icons.Custom.FileFormats.FileExcel"
+                           OnClick="ExportToExcel"
+                           Disabled="_isExporting"
+                           Style="border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap; background-color: white;">
+                    @if (_isExporting)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
+                        <span>جارٍ التصدير...</span>
+                    }
+                    else
+                    {
+                        <span>تصدير إلى Excel</span>
+                    }
+                </MudButton>
+            }
+
             @if (_selectedEmployee != null && SessionService.CanAdd)
             {
                 <MudButton Variant="Variant.Filled"
@@ -375,6 +407,7 @@
     private List<SecondaryCategory> _secondaryCategories = new();
     private List<TertiaryCategory> _tertiaryCategories = new();
     private bool _loadingDocs = false;
+    private bool _isExporting = false;
 
     private readonly List<string> _iraqiCommittees = new()
     {
@@ -678,16 +711,16 @@
         if (hasDocuments)
         {
             await DialogService.ShowMessageBox(
-                "لا يمكن حذف الإضبارة",
-                $"الموظف ({_selectedEmployee.EmployeeName}) يحتوي على كتب ووثائق رسمية مؤرشفة في إضباره.\nلحماية البيانات والوثائق الإدارية، يمنع حذف الموظف نهائياً. يمكنك تعديل حالته إلى (غير فعال) بدلاً من الحذف.",
+                "لا يمكن نقل الإضبارة إلى سلة المحذوفات",
+                $"الموظف ({_selectedEmployee.EmployeeName}) يحتوي على كتب ووثائق رسمية مؤرشفة في إضباره.\nلحماية البيانات، يرجى حذف أو فك ارتباط المستندات أولاً، أو تعديل حالة الموظف إلى (غير فعال).",
                 yesText: "حسناً");
             return;
         }
 
         bool? confirm = await DialogService.ShowMessageBox(
-            "تأكيد حذف الموظف",
-            $"هل أنت متأكد من حذف إضبارة الموظف: ({_selectedEmployee.EmployeeName})؟\nسيتم حذف سجله ومجلده نهائياً من النظام.",
-            yesText: "نعم، حذف نهائي",
+            "تأكيد نقل الموظف إلى سلة المحذوفات",
+            $"هل أنت متأكد من حذف إضبارة الموظف: ({_selectedEmployee.EmployeeName})؟\nسيتم نقله إلى سلة المحذوفات مع إمكانية استعادته لاحقاً بواسطة مدير النظام.",
+            yesText: "نعم، نقل للسلة",
             cancelText: "إلغاء");
 
         if (confirm != true) return;
@@ -698,28 +731,19 @@
 
         try
         {
-            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
-            if (settings != null && !string.IsNullOrWhiteSpace(settings.BaseFolderPath) && !string.IsNullOrWhiteSpace(_selectedEmployee.EmployeeFolderPath))
-            {
-                string employeeFolderFullPath = Path.Combine(settings.BaseFolderPath, _selectedEmployee.EmployeeFolderPath);
-
-                if (Directory.Exists(employeeFolderFullPath))
-                {
-                    Directory.Delete(employeeFolderFullPath, true);
-                }
-            }
-
             var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == deletedEmpId);
             if (empDb != null)
             {
-                DbContext.Employees.Remove(empDb);
+                empDb.IsDeleted = 1;
+                empDb.DeletedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                DbContext.Employees.Update(empDb);
                 await DbContext.SaveChangesAsync();
 
                 await SessionService.LogActivityAsync(
-                    actionType: "حذف موظف",
+                    actionType: "حذف موظف (سلة المحذوفات)",
                     entityType: "موظف",
                     entityId: deletedEmpId,
-                    description: $"تم حذف إضبارة الموظف ({deletedEmpName}) ذات رقم الإضبارة ({deletedFileNum}) ومجلدها الفيزيائي الفارغ."
+                    description: $"تم نقل إضبارة الموظف ({deletedEmpName}) ذات رقم الإضبارة ({deletedFileNum}) إلى سلة المحذوفات."
                 );
             }
 
@@ -735,11 +759,11 @@
                 _documents.Clear();
             }
 
-            Snackbar.Add("تم حذف الموظف ومجلده بنجاح", Severity.Success);
+            Snackbar.Add($"تم نقل إضبارة الموظف ({deletedEmpName}) إلى سلة المحذوفات بنجاح", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"حدث خطأ أثناء عملية الحذف: {ex.Message}", Severity.Error);
+            Snackbar.Add($"حدث خطأ أثناء نقل الموظف للسلة: {ex.Message}", Severity.Error);
         }
     }
 
@@ -865,7 +889,7 @@
                 {
                     ["ContentText"] = $"الكتاب (رقم: {doc.DocumentNumber} - {doc.Subject}) مشترك ومؤرشف في أضابير ({linkedEmployeesCount}) موظفين.\nكيف ترغب في إتمام عملية الحذف؟",
                     ["Button1Text"] = "حذف من الموظف الحالي فقط",
-                    ["Button2Text"] = "حذف من جميع الموظفين نهائياً",
+                    ["Button2Text"] = "نقل إلى سلة المحذوفات للجميع",
                     ["CancelText"] = "إلغاء الأمر"
                 };
 
@@ -884,8 +908,8 @@
             else
             {
                 bool? confirm = await DialogService.ShowMessageBox(
-                    "تأكيد حذف المستند",
-                    $"هل أنت متأكد من حذف المستند (رقم: {doc.DocumentNumber} - {doc.Subject})؟\nسيتم حذف الملف نهائياً من مجلد إضبارة الموظف وقاعدة البيانات.",
+                    "تأكيد نقل المستند إلى سلة المحذوفات",
+                    $"هل أنت متأكد من حذف المستند (رقم: {doc.DocumentNumber} - {doc.Subject})؟\nسيتم نقله إلى سلة المحذوفات مع إمكانية استعادته لاحقاً.",
                     yesText: "نعم، حذف",
                     cancelText: "إلغاء");
 
@@ -895,54 +919,29 @@
 
             if (deleteAll)
             {
-                if (!string.IsNullOrWhiteSpace(baseFolder) && Directory.Exists(baseFolder))
-                {
-                    foreach (var link in allLinks)
-                    {
-                        if (!string.IsNullOrWhiteSpace(link.EmployeeFilePath))
-                        {
-                            string fullPath = Path.Combine(baseFolder, link.EmployeeFilePath);
-                            if (File.Exists(fullPath))
-                            {
-                                try { File.Delete(fullPath); } catch { }
-                            }
-                        }
-                    }
-                }
-
-                DbContext.DocumentEmployees.RemoveRange(allLinks);
-
                 var docDb = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == doc.DocumentId);
                 if (docDb != null)
                 {
-                    DbContext.Documents.Remove(docDb);
+                    docDb.IsDeleted = 1;
+                    docDb.DeletedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                    DbContext.Documents.Update(docDb);
+                    await DbContext.SaveChangesAsync();
                 }
 
-                await DbContext.SaveChangesAsync();
-
                 await SessionService.LogActivityAsync(
-                    actionType: "حذف مستند نهائي",
+                    actionType: "حذف مستند (سلة المحذوفات)",
                     entityType: "مستند",
                     entityId: doc.DocumentId,
-                    description: $"تم حذف كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) نهائياً من كافة الأضابير مع ملفاته الفيزيائية."
+                    description: $"تم نقل كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) إلى سلة المحذوفات."
                 );
 
-                Snackbar.Add("تم حذف المستند وملفاته من كافة الأضابير بنجاح", Severity.Success);
+                Snackbar.Add("تم نقل المستند إلى سلة المحذوفات بنجاح", Severity.Success);
             }
             else
             {
                 var currentLink = allLinks.FirstOrDefault(de => de.EmployeeId == _selectedEmployee.EmployeeId);
                 if (currentLink != null)
                 {
-                    if (!string.IsNullOrWhiteSpace(baseFolder) && !string.IsNullOrWhiteSpace(currentLink.EmployeeFilePath))
-                    {
-                        string fullPath = Path.Combine(baseFolder, currentLink.EmployeeFilePath);
-                        if (File.Exists(fullPath))
-                        {
-                            try { File.Delete(fullPath); } catch { }
-                        }
-                    }
-
                     DbContext.DocumentEmployees.Remove(currentLink);
                     await DbContext.SaveChangesAsync();
 
@@ -953,7 +952,7 @@
                         description: $"تمت إزالة كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) من إضبارة الموظف ({_selectedEmployee.EmployeeName}) فقط."
                     );
 
-                    Snackbar.Add($"تمت إزالة المستند وملفه من إضبارة ({_selectedEmployee.EmployeeName}) فقط", Severity.Success);
+                    Snackbar.Add($"تمت إزالة المستند من إضبارة ({_selectedEmployee.EmployeeName}) فقط", Severity.Success);
                 }
             }
 
@@ -964,5 +963,90 @@
         {
             Snackbar.Add($"حدث خطأ أثناء تنفيذ الحذف: {ex.Message}", Severity.Error);
         }
+    }
+
+    private async Task ExportToExcel()
+    {
+        if (_selectedEmployee == null || !_documents.Any())
+        {
+            Snackbar.Add("لا توجد مستندات لتصديرها لهذا الموظف!", Severity.Warning);
+            return;
+        }
+
+        _isExporting = true;
+        try
+        {
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+
+            var docsToExport = FilteredDocuments.ToList();
+            if (!docsToExport.Any())
+            {
+                docsToExport = _documents;
+            }
+
+            byte[] fileBytes = ExportService.ExportEmployeeDocumentsToExcel(_selectedEmployee, docsToExport, settings);
+            string base64 = Convert.ToBase64String(fileBytes);
+
+            string safeEmpName = string.Join("_", _selectedEmployee.EmployeeName.Split(Path.GetInvalidFileNameChars()));
+            string fileName = $"اضبارة_{safeEmpName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromStream", fileName, base64);
+
+            await SessionService.LogActivityAsync(
+                actionType: "تصدير Excel",
+                entityType: "إضبارة موظف",
+                entityId: _selectedEmployee.EmployeeId,
+                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بتصدير فهرس كتب الموظف ({_selectedEmployee.EmployeeName}) إلى ملف Excel يحتوي ({docsToExport.Count}) كتاباً."
+            );
+
+            Snackbar.Add("تم تصدير ملف الإكسل بنجاح!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء تصدير الإكسل: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isExporting = false;
+        }
+    }
+
+    private async Task OpenPrintDialog()
+    {
+        if (_selectedEmployee == null || !_documents.Any()) return;
+
+        var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+
+        var docsToPrint = FilteredDocuments.ToList();
+        if (!docsToPrint.Any())
+        {
+            docsToPrint = _documents;
+        }
+
+        var parameters = new DialogParameters
+        {
+            ["Employee"] = _selectedEmployee,
+            ["Documents"] = docsToPrint,
+            ["Settings"] = settings,
+            ["MainCategories"] = _mainCategories,
+            ["PrimaryCategories"] = _primaryCategories
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true,
+            NoHeader = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<PrintDossierDialog>(string.Empty, parameters, options);
+
+        await SessionService.LogActivityAsync(
+            actionType: "طباعة فهرس إضبارة",
+            entityType: "إضبارة موظف",
+            entityId: _selectedEmployee.EmployeeId,
+            description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بمعاينة وطباعة فهرس إضبارة الموظف ({_selectedEmployee.EmployeeName})."
+        );
     }
 }
