@@ -1,0 +1,412 @@
+﻿@page "/print-activity-logs"
+@layout EmptyPrintLayout
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>طباعة سجل تتبع الحركات والنشاطات</PageTitle>
+
+<!-- شريط التحكم العلوي -->
+<div class="no-print d-flex justify-space-between align-center px-4 py-2"
+     style="background-color: #1B4D3E; color: white; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+    <div style="font-size: 14px; font-weight: bold;">
+        معاينة تقرير سجل تدقيق وتتبع حركات النظام
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn-print" onclick="window.print()">
+            🖨️ طباعة / حفظ كـ PDF
+        </button>
+        <button type="button" class="btn-close-tab" onclick="window.close()">
+            إغلاق
+        </button>
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="d-flex flex-column align-center justify-center p-5" style="min-height: 50vh;">
+        <div style="color: #1B4D3E; font-weight: bold; font-size: 15px;">جارٍ استخراج وتجهيز سجل الحركات...</div>
+    </div>
+}
+else
+{
+    <div class="preview-area">
+        <div class="a4-sheet" dir="rtl">
+
+            <!-- الجزء العلوي: الترويسة والبيانات والجداول -->
+            <div class="page-top-content">
+                <!-- 1. الترويسة الرسمية -->
+                <div class="header-section">
+                    <div style="text-align: right; min-width: 190px;">
+                        <div style="font-size: 12pt; font-weight: bold; color: #1B4D3E;">ديوان الوقف الشيعي</div>
+                        <div style="font-size: 10.5pt; font-weight: bold;">@(_settings?.DirectorateName ?? "مديرية الوقف الشيعي في ديالى")</div>
+                        <div style="font-size: 9.5pt; color: #444;">@(_settings?.DepartmentName ?? "شعبة تكنولوجيا المعلومات")</div>
+                    </div>
+
+                    <div style="text-align: center;">
+                        @if (!string.IsNullOrWhiteSpace(_settings?.LogoPath))
+                        {
+                            <img src="@_settings.LogoPath" style="height: 65px; width: 65px; object-fit: contain;" alt="شعار المؤسسة" />
+                        }
+                </div>
+
+                <div style="text-align: left; min-width: 190px; direction: ltr;">
+                    <div style="font-size: 8.5pt;"><strong>تاريخ الاستخراج:</strong> @DateTime.Now.ToString("yyyy/MM/dd")</div>
+                    <div style="font-size: 8.5pt;"><strong>وقت الاستخراج:</strong> @DateTime.Now.ToString("hh:mm tt")</div>
+                    <div style="font-size: 8pt; color: #555; font-family: monospace;">رمز التقرير: #LOGS-@DateTime.Now.ToString("yyMMdd")</div>
+                </div>
+            </div>
+
+            <!-- 2. عنوان التقرير -->
+            <div class="text-center my-2">
+                <span class="report-title">تقرير تتبع الحركات والنشاطات الإدارية</span>
+            </div>
+
+            <!-- 3. جدول ملخص محددات وفلاتر التقرير مع التواريخ -->
+            <table class="summary-table mb-2">
+                <tr>
+                    <td class="lbl">نوع الإجراء:</td>
+                    <td class="val">@(!string.IsNullOrWhiteSpace(_actionTypeFilter) ? _actionTypeFilter : "كافة الإجراءات")</td>
+                    <td class="lbl">نص البحث:</td>
+                    <td class="val">@(!string.IsNullOrWhiteSpace(_searchFilter) ? _searchFilter : "الكل")</td>
+                </tr>
+                <tr>
+                    <td class="lbl">الفترة المحددة:</td>
+                    <td class="val">
+                        @(string.IsNullOrWhiteSpace(_dateFromFilter) && string.IsNullOrWhiteSpace(_dateToFilter)
+                                                ? "جميع التواريخ المسجلة"
+                                                : $"من: {(_dateFromFilter ?? "البداية")}  إلى: {(_dateToFilter ?? "تاريخ اليوم")}")
+                    </td>
+                    <td class="lbl">إجمالي الحركات المدرجة:</td>
+                    <td class="val fw-bold" style="color: #1B4D3E;">@_logs.Count حركة مسجلة</td>
+                </tr>
+            </table>
+
+                <!-- 4. جدول سجل الحركات والعمليات (مساحة أوسع بدون تواقيع) -->
+                <table class="logs-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">ت</th>
+                            <th style="width: 14%;">المستخدم</th>
+                            <th style="width: 15%;">نوع الإجراء</th>
+                            <th style="width: 15%;">الكيان المستهدف</th>
+                            <th style="width: 33%;">تفاصيل النشاط</th>
+                            <th style="width: 18%;">التاريخ والوقت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @if (!_logs.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-4" style="color: #666; font-size: 9.5pt;">
+                                    لا توجد حركات مسجلة مطابقة لمحددات البحث والفترة المحددة.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            int idx = 1;
+                            @foreach (var log in _logs)
+                            {
+                                <tr>
+                                    <td class="text-center">@(idx++)</td>
+                                    <td class="text-center fw-bold">@log.UserName</td>
+                                    <td class="text-center">
+                                        <span class="action-tag">@log.ActionType</span>
+                                    </td>
+                                    <td class="text-center">@(log.EntityType ?? "نظام")</td>
+                                    <td class="desc-cell">@log.Description</td>
+                                    <td class="text-center date-cell">@log.CreatedAt</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 5. التذييل الأمني والإحصائي فقط (بدون أي خانات تواقيع) -->
+            <div class="footer-container">
+                <div class="security-note">
+                    <div>* وثيقة رسمية صادرة آلياً من قاعدة بيانات الأرشفة الإلكترونية - للاستخدام والتدقيق الإداري الداخلي.</div>
+                    <div class="fw-bold" style="color: #1B4D3E; font-size: 8pt;">
+                        إجمالي السجلات المطبوعة: (@_logs.Count) حركة
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: #525659;
+        font-family: 'Dubai', 'Segoe UI', Tahoma, sans-serif;
+    }
+
+    .btn-print {
+        background-color: #ffc107;
+        color: #000;
+        font-weight: bold;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 16px;
+        cursor: pointer;
+    }
+
+    .btn-close-tab {
+        background-color: #fff;
+        color: #333;
+        font-weight: bold;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 14px;
+        cursor: pointer;
+    }
+
+    .preview-area {
+        padding: 20px 0;
+        display: flex;
+        justify-content: center;
+    }
+
+    .a4-sheet {
+        background-color: white;
+        width: 210mm;
+        min-height: 282mm;
+        padding: 10mm 14mm 8mm 14mm;
+        box-sizing: border-box;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+        color: #111;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .header-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #1B4D3E;
+        padding-bottom: 5px;
+        margin-bottom: 8px;
+    }
+
+    .report-title {
+        display: inline-block;
+        font-size: 12.5pt;
+        font-weight: bold;
+        color: #1B4D3E;
+        background-color: #f1f8f5;
+        border: 1.5px solid #1B4D3E;
+        border-radius: 4px;
+        padding: 3px 25px;
+    }
+
+    .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #c8e6c9;
+    }
+
+        .summary-table td {
+            padding: 5px 8px;
+            font-size: 9pt;
+            border: 1px solid #dcdcdc;
+        }
+
+    .lbl {
+        width: 16%;
+        font-weight: bold;
+        background-color: #f0f6f3;
+        color: #2c3e50;
+    }
+
+    .val {
+        width: 34%;
+    }
+
+    .logs-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .logs-table th, .logs-table td {
+            border: 1px solid #222;
+            padding: 5px 6px;
+            font-size: 8.5pt;
+        }
+
+        .logs-table th {
+            background-color: #1B4D3E !important;
+            color: white !important;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .logs-table tr:nth-child(even) td {
+            background-color: #fbfbfb;
+        }
+
+    .action-tag {
+        font-weight: bold;
+        color: #1B4D3E;
+    }
+
+    .desc-cell {
+        line-height: 1.35;
+        font-size: 8pt;
+    }
+
+    .date-cell {
+        direction: ltr;
+        white-space: nowrap;
+        font-family: monospace;
+        font-size: 8pt;
+    }
+
+    .footer-container {
+        margin-top: auto;
+        padding-top: 15px;
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .security-note {
+        padding-top: 8px;
+        border-top: 1px dashed #aaa;
+        display: flex;
+        justify-content: space-between;
+        font-size: 7.5pt;
+        color: #555;
+    }
+
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        body, html {
+            background-color: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .preview-area {
+            padding: 0 !important;
+        }
+
+        .a4-sheet {
+            box-shadow: none !important;
+            width: 100% !important;
+            min-height: 275mm !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        @@page {
+            size: A4 portrait;
+            margin: 8mm 12mm 8mm 12mm;
+        }
+
+        .logs-table th {
+            background-color: #1B4D3E !important;
+            color: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+
+@code {
+    public record AuditLogPrintItem(int LogId, string UserName, string ActionType, string? EntityType, string Description, string CreatedAt);
+
+    [SupplyParameterFromQuery(Name = "action")]
+    public string? _actionTypeFilter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? _searchFilter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "from")]
+    public string? _dateFromFilter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "to")]
+    public string? _dateToFilter { get; set; }
+
+    private List<AuditLogPrintItem> _logs = new();
+    private SystemSetting? _settings;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+
+            var query = DbContext.AuditLogs.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(_actionTypeFilter) && _actionTypeFilter != "الكل")
+            {
+                query = query.Where(l => l.ActionType.Contains(_actionTypeFilter));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_searchFilter))
+            {
+                query = query.Where(l =>
+                    l.Description.Contains(_searchFilter) ||
+                    (l.EntityType != null && l.EntityType.Contains(_searchFilter)));
+            }
+
+            // تطبيق فلترة التاريخ
+            if (!string.IsNullOrWhiteSpace(_dateFromFilter) && DateTime.TryParse(_dateFromFilter, out var fromDate))
+            {
+                string fromStr = fromDate.ToString("yyyy-MM-dd 00:00:00");
+                query = query.Where(l => string.Compare(l.CreatedAt, fromStr) >= 0);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_dateToFilter) && DateTime.TryParse(_dateToFilter, out var toDate))
+            {
+                string toStr = toDate.ToString("yyyy-MM-dd 23:59:59");
+                query = query.Where(l => string.Compare(l.CreatedAt, toStr) <= 0);
+            }
+
+            // أخذ ما يصل إلى 35 سجلاً لتعبئة صفحة A4 بدون تواقيع
+            var rawLogs = await query
+                .OrderByDescending(l => l.LogId)
+                .Take(35)
+                .ToListAsync();
+
+            var users = await DbContext.Users.AsNoTracking().ToListAsync();
+            var userMap = users.ToDictionary(u => u.UserId, u => u.UserName);
+
+            _logs = rawLogs.Select(l => new AuditLogPrintItem(
+                l.LogId,
+                l.UserId.HasValue && userMap.ContainsKey(l.UserId.Value) ? userMap[l.UserId.Value] : "المسؤول",
+                l.ActionType,
+                l.EntityType,
+                l.Description,
+                l.CreatedAt
+            )).ToList();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
+
+@code {
+    public class EmptyPrintLayout : LayoutComponentBase
+    {
+        protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+        {
+            builder.AddContent(0, Body);
+        }
+    }
+}

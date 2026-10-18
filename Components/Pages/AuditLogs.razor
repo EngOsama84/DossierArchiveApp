@@ -9,13 +9,13 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject UserSessionService SessionService
-
+@inject IJSRuntime JS
 
 <PageTitle>سجل حركات النظام</PageTitle>
 
 <div dir="rtl" class="pa-4" style="background-color: #f8f9fa; min-height: 90vh; text-align: right;">
 
-    <!-- العنوان وشريط التحديث -->
+    <!-- العنوان وشريط الإجراءات -->
     <div class="d-flex justify-space-between align-center mb-4">
         <div>
             <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">
@@ -26,19 +26,31 @@
             </MudText>
         </div>
 
-        <MudButton Variant="Variant.Outlined"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Refresh"
-                   OnClick="LoadLogs"
-                   Disabled="_isLoading">
-            تحديث السجل
-        </MudButton>
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Print"
+                       OnClick="OpenPrintLogs"
+                       Disabled="_isLoading || !_logs.Any()"
+                       Style="background-color: #1B4D3E; color: white; font-weight: bold; border-radius: 6px;">
+                طباعة التقرير
+            </MudButton>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadLogs"
+                       Disabled="_isLoading"
+                       Style="background-color: white; border-radius: 6px; font-weight: bold;">
+                تحديث السجل
+            </MudButton>
+        </div>
     </div>
 
-    <!-- شريط البحث والفلترة -->
+    <!-- شريط البحث والفلترة مع محددات التاريخ -->
     <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background-color: white; border: 1px solid #e0e0e0; border-radius: 6px;">
         <MudGrid Spacing="2" Class="align-center">
-            <MudItem xs="12" sm="5">
+            <MudItem xs="12" sm="4">
                 <MudTextField @bind-Value="_searchString"
                               Placeholder="بحث في الوصف، اسم المستخدم، أو نوع الكيان..."
                               Variant="Variant.Outlined"
@@ -48,7 +60,7 @@
                               AdornmentIcon="@Icons.Material.Filled.Search" />
             </MudItem>
 
-            <MudItem xs="12" sm="4">
+            <MudItem xs="12" sm="3">
                 <MudSelect T="string" @bind-Value="_selectedActionType"
                            Label="نوع الإجراء"
                            Variant="Variant.Outlined"
@@ -62,6 +74,31 @@
                     <MudSelectItem Value="@("استعراض")">استعراض / فتح</MudSelectItem>
                     <MudSelectItem Value="@("دخول")">تسجيل دخول</MudSelectItem>
                 </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" sm="2">
+                <MudDatePicker @bind-Date="_dateFrom"
+                               Label="من تاريخ"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="yyyy-MM-dd"
+                               Clearable="true" />
+            </MudItem>
+
+            <MudItem xs="12" sm="2">
+                <MudDatePicker @bind-Date="_dateTo"
+                               Label="إلى تاريخ"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="yyyy-MM-dd"
+                               Clearable="true" />
+            </MudItem>
+
+            <MudItem xs="12" sm="1" Class="d-flex justify-center">
+                <MudIconButton Icon="@Icons.Material.Filled.ClearAll"
+                               Title="إعادة تعيين الفلاتر"
+                               Color="Color.Default"
+                               OnClick="ResetFilters" />
             </MudItem>
         </MudGrid>
     </MudPaper>
@@ -108,7 +145,7 @@
                 <MudTd DataLabel="تفاصيل العملية">@context.Description</MudTd>
             </RowTemplate>
             <NoRecordsContent>
-                <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد حركات مسجلة حالياً في السجل.</MudText>
+                <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد حركات مسجلة حالياً تطابق خيارات التصفية.</MudText>
             </NoRecordsContent>
             <PagerContent>
                 <MudTablePager RowsPerPageString="عدد الأسطر:" InfoFormat="{first_item}-{last_item} من {all_items}" />
@@ -119,23 +156,26 @@
 </div>
 
 @code {
-    private record AuditLogView(int LogId, string UserName, string ActionType, string? EntityType, int? EntityId, string Description, string CreatedAt);
+    public record AuditLogView(int LogId, string UserName, string ActionType, string? EntityType, int? EntityId, string Description, string CreatedAt);
 
     private List<AuditLogView> _logs = new();
     private bool _isLoading = true;
     private string _searchString = string.Empty;
     private string _selectedActionType = "الكل";
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
 
     private IEnumerable<AuditLogView> FilteredLogs => _logs.Where(l =>
         (_selectedActionType == "الكل" || string.IsNullOrEmpty(_selectedActionType) || l.ActionType.Contains(_selectedActionType)) &&
         (string.IsNullOrWhiteSpace(_searchString) ||
          l.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
          l.UserName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
-         (l.EntityType != null && l.EntityType.Contains(_searchString, StringComparison.OrdinalIgnoreCase))));
+         (l.EntityType != null && l.EntityType.Contains(_searchString, StringComparison.OrdinalIgnoreCase))) &&
+        (!_dateFrom.HasValue || (DateTime.TryParse(l.CreatedAt, out var dtFrom) && dtFrom.Date >= _dateFrom.Value.Date)) &&
+        (!_dateTo.HasValue || (DateTime.TryParse(l.CreatedAt, out var dtTo) && dtTo.Date <= _dateTo.Value.Date)));
 
     protected override async Task OnInitializedAsync()
     {
-        // فحص الأمان والصلاحيات
         if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
         {
             Snackbar.Add("عذراً، الاطلاع على سجل الحركات والتدقيق مقتصر على مدير النظام فقط!", Severity.Error);
@@ -178,5 +218,41 @@
         {
             _isLoading = false;
         }
+    }
+
+    private void ResetFilters()
+    {
+        _searchString = string.Empty;
+        _selectedActionType = "الكل";
+        _dateFrom = null;
+        _dateTo = null;
+    }
+
+    private async Task OpenPrintLogs()
+    {
+        var queryParams = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_selectedActionType) && _selectedActionType != "الكل")
+            queryParams.Add($"action={Uri.EscapeDataString(_selectedActionType)}");
+
+        if (!string.IsNullOrWhiteSpace(_searchString))
+            queryParams.Add($"search={Uri.EscapeDataString(_searchString)}");
+
+        if (_dateFrom.HasValue)
+            queryParams.Add($"from={_dateFrom.Value:yyyy-MM-dd}");
+
+        if (_dateTo.HasValue)
+            queryParams.Add($"to={_dateTo.Value:yyyy-MM-dd}");
+
+        string queryString = queryParams.Any() ? "?" + string.Join("&", queryParams) : "";
+
+        await JS.InvokeVoidAsync("open", $"/print-activity-logs{queryString}", "_blank");
+
+        await SessionService.LogActivityAsync(
+            actionType: "طباعة تقرير",
+            entityType: "سجل التدقيق",
+            entityId: null,
+            description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بفتح ومعاينة تقرير طباعة سجل حركات النظام للفترة: {(_dateFrom?.ToString("yyyy-MM-dd") ?? "البداية")} إلى {(_dateTo?.ToString("yyyy-MM-dd") ?? "اليوم")}."
+        );
     }
 }

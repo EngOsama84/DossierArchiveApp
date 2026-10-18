@@ -1,0 +1,480 @@
+﻿@page "/print-dossier/{EmployeeId:int}"
+@layout EmptyPrintLayout
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>طباعة استمارة إضبارة - @(_employee?.EmployeeName ?? "")</PageTitle>
+
+<!-- شريط تحكم علوي يظهر على الشاشة فقط ويختفي تماماً عند الطباعة -->
+<div class="no-print d-flex justify-space-between align-center px-4 py-2"
+     style="background-color: #1B4D3E; color: white; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+    <div style="font-size: 14px; font-weight: bold;">
+        معاينة استمارة فهرس إضبارة: @(_employee?.EmployeeName)
+        <span class="badge bg-light text-dark ms-2" style="font-size: 12px;">(@_pages.Count صفحة)</span>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn-print" onclick="window.print()">
+            🖨️ طباعة / حفظ كـ PDF
+        </button>
+        <button type="button" class="btn-close-tab" onclick="window.close()">
+            إغلاق
+        </button>
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="d-flex flex-column align-center justify-center p-5" style="min-height: 50vh;">
+        <div style="color: #1B4D3E; font-weight: bold; font-size: 15px;">جارٍ تجهيز وتقسيم صفحات الاستمارة...</div>
+    </div>
+}
+else if (_employee != null)
+{
+    <div class="preview-area">
+        @for (int pageIndex = 0; pageIndex < _pages.Count; pageIndex++)
+        {
+            var currentPageDocs = _pages[pageIndex];
+            bool isFirstPage = (pageIndex == 0);
+            bool isLastPage = (pageIndex == _pages.Count - 1);
+            int pageNumber = pageIndex + 1;
+            int totalPages = _pages.Count;
+
+            <div class="a4-sheet" dir="rtl">
+
+                <!-- المحتوى العلوي -->
+                <div class="page-top-content">
+
+                    <!-- الترويسة الرسمية (تتكرر في كل صفحة لضمان الرسمية) -->
+                    <div class="header-section">
+                        <div style="text-align: right; min-width: 190px;">
+                            <div style="font-size: 12pt; font-weight: bold; color: #1B4D3E;">ديوان الوقف الشيعي</div>
+                            <div style="font-size: 10.5pt; font-weight: bold;">@(_settings?.DirectorateName ?? "مديرية الوقف الشيعي في ديالى")</div>
+                            <div style="font-size: 9.5pt; color: #444;">@(_settings?.DepartmentName ?? "شعبة تكنولوجيا المعلومات")</div>
+                        </div>
+
+                        <div style="text-align: center;">
+                            @if (!string.IsNullOrWhiteSpace(_settings?.LogoPath))
+                            {
+                                <img src="@_settings.LogoPath" style="height: 60px; width: 60px; object-fit: contain;" alt="شعار المؤسسة" />
+                            }
+                        </div>
+
+                        <div style="text-align: left; min-width: 190px; direction: ltr;">
+                            <div style="font-size: 8.5pt;"><strong>تاريخ الاستخراج:</strong> @DateTime.Now.ToString("yyyy/MM/dd")</div>
+                            <div style="font-size: 8.5pt;"><strong>رمز الأرشفة:</strong> #@_employee.FileNumber-@DateTime.Now.ToString("yyMMdd")</div>
+                            <div style="font-size: 8.5pt; font-weight: bold; color: #1B4D3E;">صفحة (@pageNumber) من (@totalPages)</div>
+                        </div>
+                    </div>
+
+                    <!-- عنوان الاستمارة -->
+                    <div class="text-center my-2">
+                        <span class="report-title">
+                            فهرس محتويات إضبارة الموظف @(!isFirstPage ? $"(تابع - {pageNumber})" : "")
+                        </span>
+                    </div>
+
+                    <!-- جدول معلومات الموظف (يظهر في الصفحة الأولى فقط لتوفير المساحة) -->
+                    @if (isFirstPage)
+                    {
+                        <table class="emp-table mb-2">
+                            <tr>
+                                <td class="lbl">اسم الموظف:</td>
+                                <td class="val" style="font-weight: bold; color: #1B4D3E;">@_employee.EmployeeName</td>
+                                <td class="lbl">رقم الإضبارة:</td>
+                                <td class="val" style="font-weight: bold;">@_employee.FileNumber</td>
+                            </tr>
+                            <tr>
+                                <td class="lbl">الحالة الوظيفية:</td>
+                                <td class="val">@(_employee.IsActive == 1 ? "فعال مستمر بالخدمة" : "غير فعال / متوقف")</td>
+                                <td class="lbl">إجمالي الكتب المسجلة:</td>
+                                <td class="val fw-bold" style="color: #1B4D3E;">@_allDocuments.Count كتاباً</td>
+                            </tr>
+                        </table>
+                    }
+
+                    <!-- جدول المستندات المخصص لهذه الصفحة -->
+                    <table class="docs-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%;">ت</th>
+                                <th style="width: 17%;">رقم الكتاب</th>
+                                <th style="width: 15%;">تاريخ الكتاب</th>
+                                <th style="width: 41%;">الموضوع</th>
+                                <th style="width: 22%;">التصنيف الإداري</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in currentPageDocs)
+                            {
+                                <tr>
+                                    <td class="text-center">@item.GlobalIndex</td>
+                                    <td class="text-center fw-bold">@item.Doc.DocumentNumber</td>
+                                    <td class="text-center">@item.Doc.DocumentDate</td>
+                                    <td style="font-weight: 500;">@item.Doc.Subject</td>
+                                    <td>@GetCategoryName(item.Doc)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- تذييل الصفحة -->
+                <div class="footer-container">
+                    @if (isLastPage)
+                    {
+                        <!-- قسم التواقيع الرسمية يظهر فقط في الصفحة الأخيرة -->
+                        <div class="signatures-grid">
+                            <div class="sig-box">
+                                <div class="sig-head">منظم الفهرس</div>
+                                <div class="sig-sub">توقيع واسم الموظف المختص</div>
+                                <div class="sig-dots">...........................................</div>
+                            </div>
+                            <div class="sig-box">
+                                <div class="sig-head">مسؤول الشعبة / القسم</div>
+                                <div class="sig-sub">التوقيع والمصادقة</div>
+                                <div class="sig-dots">...........................................</div>
+                            </div>
+                            <div class="sig-box">
+                                <div class="sig-head">السيد المدير</div>
+                                <div class="sig-sub">مدير المديرية المحترم</div>
+                                <div class="sig-dots">...........................................</div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="security-note @(!isLastPage ? "mt-auto" : "")">
+                        <div>* وثيقة رسمية صادرة من نظام الأرشفة الإلكتروني - لا يعتد بها في حال الكشط أو الحك أو التحريف.</div>
+                        <div class="fw-bold" style="color: #1B4D3E;">
+                            @if (isLastPage)
+                            {
+                                <span>ختام الفهرس: (@_allDocuments.Count) وثيقة مسجلة</span>
+                            }
+                            else
+                            {
+                                <span>يتبع في الصفحة التالية...</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        }
+    </div>
+}
+
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: #525659;
+        font-family: 'Dubai', 'Segoe UI', Tahoma, sans-serif;
+    }
+
+    .btn-print {
+        background-color: #ffc107;
+        color: #000;
+        font-weight: bold;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 16px;
+        cursor: pointer;
+    }
+
+    .btn-close-tab {
+        background-color: #fff;
+        color: #333;
+        font-weight: bold;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 14px;
+        cursor: pointer;
+    }
+
+    .preview-area {
+        padding: 20px 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 25px; /* مسافة واضحة بين الصفحات في وضع المعاينة */
+    }
+
+    /* مواصفات صفحة A4 القياسية */
+    .a4-sheet {
+        background-color: white;
+        width: 210mm;
+        height: 282mm;
+        padding: 10mm 14mm 8mm 14mm;
+        box-sizing: border-box;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+        color: #111;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        page-break-after: always;
+        break-after: page;
+    }
+
+    .header-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #1B4D3E;
+        padding-bottom: 5px;
+        margin-bottom: 8px;
+    }
+
+    .report-title {
+        display: inline-block;
+        font-size: 12.5pt;
+        font-weight: bold;
+        color: #1B4D3E;
+        background-color: #f1f8f5;
+        border: 1.5px solid #1B4D3E;
+        border-radius: 4px;
+        padding: 3px 25px;
+    }
+
+    .emp-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #c8e6c9;
+    }
+
+        .emp-table td {
+            padding: 5px 8px;
+            font-size: 9pt;
+            border: 1px solid #dcdcdc;
+        }
+
+    .lbl {
+        width: 18%;
+        font-weight: bold;
+        background-color: #f0f6f3;
+        color: #2c3e50;
+    }
+
+    .val {
+        width: 32%;
+    }
+
+    .docs-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .docs-table th, .docs-table td {
+            border: 1px solid #222;
+            padding: 5px 7px;
+            font-size: 9pt;
+        }
+
+        .docs-table th {
+            background-color: #1B4D3E !important;
+            color: white !important;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .docs-table tr:nth-child(even) td {
+            background-color: #fbfbfb;
+        }
+
+    .footer-container {
+        margin-top: auto;
+        padding-top: 10px;
+    }
+
+    .signatures-grid {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-bottom: 8px;
+    }
+
+    .sig-box {
+        text-align: center;
+        width: 31%;
+    }
+
+    .sig-head {
+        font-size: 10.5pt;
+        font-weight: bold;
+    }
+
+    .sig-sub {
+        font-size: 8pt;
+        color: #555;
+        margin-top: 1px;
+    }
+
+    .sig-dots {
+        margin-top: 14px;
+        color: #777;
+        font-size: 8.5pt;
+        letter-spacing: 1px;
+    }
+
+    .security-note {
+        padding-top: 6px;
+        border-top: 1px dashed #aaa;
+        display: flex;
+        justify-content: space-between;
+        font-size: 7.5pt;
+        color: #555;
+    }
+
+    /* قواعد الطباعة الصارمة */
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        body, html {
+            background-color: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .preview-area {
+            padding: 0 !important;
+            gap: 0 !important;
+        }
+
+        .a4-sheet {
+            box-shadow: none !important;
+            width: 100% !important;
+            height: 278mm !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            page-break-after: always !important;
+            break-after: page !important;
+        }
+
+            .a4-sheet:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+
+        @@page {
+            size: A4 portrait;
+            margin: 8mm 12mm 8mm 12mm;
+        }
+
+        .docs-table th {
+            background-color: #1B4D3E !important;
+            color: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+
+@code {
+    public record IndexedDoc(int GlobalIndex, Document Doc);
+
+    [Parameter]
+    public int EmployeeId { get; set; }
+
+    private Employee? _employee;
+    private List<Document> _allDocuments = new();
+    private List<List<IndexedDoc>> _pages = new();
+    private SystemSetting? _settings;
+    private List<MainCategory> _mainCategories = new();
+    private List<PrimaryCategory> _primaryCategories = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _employee = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == EmployeeId);
+            if (_employee != null)
+            {
+                var docIds = await DbContext.DocumentEmployees
+                    .Where(de => de.EmployeeId == EmployeeId)
+                    .Select(de => de.DocumentId)
+                    .ToListAsync();
+
+                _allDocuments = await DbContext.Documents
+                    .Where(d => docIds.Contains(d.DocumentId) && d.IsDeleted == 0)
+                    .OrderByDescending(d => d.DocumentDate)
+                    .ToListAsync();
+
+                _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+                _mainCategories = await DbContext.MainCategories.ToListAsync();
+                _primaryCategories = await DbContext.PrimaryCategories.ToListAsync();
+
+                PaginateDocuments();
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void PaginateDocuments()
+    {
+        _pages.Clear();
+
+        if (!_allDocuments.Any())
+        {
+            _pages.Add(new List<IndexedDoc>());
+            return;
+        }
+
+        // الصفحة الأولى تتسع لـ 12 كتاباً مع الترويسة وجدول معلومات الموظف والتواقيع
+        // الصفحات اللاحقة تتسع لـ 18 كتاباً
+        const int firstPageSize = 12;
+        const int subsequentPageSize = 18;
+
+        int currentGlobalIndex = 1;
+        int processedCount = 0;
+
+        // الصفحة الأولى
+        var firstPageDocs = _allDocuments
+            .Take(firstPageSize)
+            .Select(d => new IndexedDoc(currentGlobalIndex++, d))
+            .ToList();
+
+        _pages.Add(firstPageDocs);
+        processedCount += firstPageDocs.Count;
+
+        // باقي الصفحات
+        while (processedCount < _allDocuments.Count)
+        {
+            var nextPageDocs = _allDocuments
+                .Skip(processedCount)
+                .Take(subsequentPageSize)
+                .Select(d => new IndexedDoc(currentGlobalIndex++, d))
+                .ToList();
+
+            _pages.Add(nextPageDocs);
+            processedCount += nextPageDocs.Count;
+        }
+    }
+
+    private string GetCategoryName(Document doc)
+    {
+        var main = _mainCategories.FirstOrDefault(c => c.MainCategoryId == doc.MainCategoryId)?.Name;
+        var prim = _primaryCategories.FirstOrDefault(c => c.PrimaryCategoryId == doc.PrimaryCategoryId)?.Name;
+        if (!string.IsNullOrEmpty(main) && !string.IsNullOrEmpty(prim))
+            return $"{main} / {prim}";
+        return main ?? prim ?? "-";
+    }
+}
+
+@code {
+    public class EmptyPrintLayout : LayoutComponentBase
+    {
+        protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+        {
+            builder.AddContent(0, Body);
+        }
+    }
+}

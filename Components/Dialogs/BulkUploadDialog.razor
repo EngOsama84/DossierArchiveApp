@@ -1,0 +1,642 @@
+﻿@rendermode InteractiveServer
+
+@using System.IO
+@using System.Globalization
+@using System.Text.RegularExpressions
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
+@inject AppDbContext DbContext
+@inject IWebHostEnvironment Environment
+@inject ISnackbar Snackbar
+@inject UserSessionService SessionService
+
+<MudDialog MaxWidth="MaxWidth.ExtraLarge" FullWidth="true">
+    <TitleContent>
+        <div class="d-flex align-center justify-space-between w-100" style="color: #1B4D3E;">
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Size="Size.Large" />
+                <MudText Typo="Typo.h6" Class="fw-bold">
+                    الأرشفة المجمعة الذكية (سحب وإفلات مع التحليل التلقائي)
+                </MudText>
+            </div>
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                الموظف: @Employee.EmployeeName (إضبارة: @Employee.FileNumber)
+            </MudChip>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div dir="rtl" class="pa-2">
+
+            <MudAlert Severity="Severity.Normal" Variant="Variant.Text" Class="mb-3" Dense="true">
+                💡 <strong>قواعد التسمية الذكية المدعومة للملفات:</strong>
+                <span class="mr-2">• مقطع واحد (<code>345</code>) ⬅️ يعتبر رقم الكتاب.</span>
+                <span class="mr-2">• مقطعان (<code>أمر مباشرة - 345</code> أو <code>345 - أمر مباشرة</code>) ⬅️ رقم وموضوع.</span>
+                <span class="mr-2">• 3 مقاطع (<code>009 - استمارة - 13-12-2020</code>) ⬅️ يستخرج الرقم والموضوع والتاريخ تلقائياً.</span>
+            </MudAlert>
+
+            <!-- شريط التصنيف الجماعي لكافة المستويات الشجرية الأربعة (بدون تكرار) -->
+            <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-3" Style="background-color: #fcfdfc; border-color: #c8e6c9;">
+                <div class="d-flex align-center gap-2 flex-wrap">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E; min-width: 105px;">
+                        تطبيق تصنيف عام:
+                    </MudText>
+
+                    <!-- 1. نوع الكتاب -->
+                    <MudSelect T="int?" Value="_bulkMainCatId"
+                               ValueChanged="OnBulkMainCatChanged"
+                               Label="نوع الكتاب"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Clearable="true"
+                               Style="min-width: 140px; background-color: white;">
+                        @foreach (var cat in DistinctMainCategories)
+                        {
+                            <MudSelectItem Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <!-- 2. التصنيف الرئيسي -->
+                    <MudSelect T="int?" Value="_bulkPrimaryCatId"
+                               ValueChanged="OnBulkPrimaryCatChanged"
+                               Label="التصنيف الرئيسي"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Clearable="true"
+                               Disabled="@(!AvailableBulkPrimaryCategories.Any())"
+                               Style="min-width: 140px; background-color: white;">
+                        @foreach (var pCat in AvailableBulkPrimaryCategories)
+                        {
+                            <MudSelectItem Value="@((int?)pCat.PrimaryCategoryId)">@pCat.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <!-- 3. الفرعي الأول -->
+                    <MudSelect T="int?" Value="_bulkSecondaryCatId"
+                               ValueChanged="OnBulkSecondaryCatChanged"
+                               Label="الفرعي الأول"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Clearable="true"
+                               Disabled="@(!AvailableBulkSecondaryCategories.Any())"
+                               Style="min-width: 140px; background-color: white;">
+                        @foreach (var sCat in AvailableBulkSecondaryCategories)
+                        {
+                            <MudSelectItem Value="@((int?)sCat.SecondaryCategoryId)">@sCat.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <!-- 4. الفرعي الثاني -->
+                    <MudSelect T="int?" @bind-Value="_bulkTertiaryCatId"
+                               Label="الفرعي الثاني"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Clearable="true"
+                               Disabled="@(!AvailableBulkTertiaryCategories.Any())"
+                               Style="min-width: 140px; background-color: white;">
+                        @foreach (var tCat in AvailableBulkTertiaryCategories)
+                        {
+                            <MudSelectItem Value="@((int?)tCat.TertiaryCategoryId)">@tCat.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Success"
+                               Size="Size.Small"
+                               OnClick="ApplyBulkCategoryToAll"
+                               Disabled="!_items.Any()"
+                               StartIcon="@Icons.Material.Filled.DoneAll">
+                        تطبيق على الجميع
+                    </MudButton>
+                </div>
+            </MudPaper>
+
+            <!-- منطقة السحب والإفلات -->
+            <MudFileUpload T="IReadOnlyList<IBrowserFile>"
+                           FilesChanged="OnFilesDropped"
+                           AppendMultipleFiles="true"
+                           Accept=".pdf,.jpg,.jpeg,.png">
+                <ActivatorContent>
+                    <div class="drop-zone">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Style="font-size: 3rem; color: #1B4D3E;" />
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold mt-1">
+                            اسحب وأفلت ملفات الكتب هنا دفعة واحدة
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            أو انقر لتحديد ملفات الـ PDF أو الصور من الحاسبة
+                        </MudText>
+                    </div>
+                </ActivatorContent>
+            </MudFileUpload>
+
+            <!-- جدول المعاينة والإدخال السريع قبل الحفظ -->
+            @if (_items.Any())
+            {
+                <div class="d-flex justify-space-between align-center mt-4 mb-2">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
+                        الكتب المستخرجة جاهزة للمراجعة والحفظ (@_items.Count كتاباً):
+                    </MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="_items.Clear">
+                        تفريغ القائمة
+                    </MudButton>
+                </div>
+
+                <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #dcdcdc; border-radius: 6px;">
+                    <MudSimpleTable Dense="true" Hover="true" Striped="true" Style="background-color: white; min-width: 1050px;">
+                        <thead>
+                            <tr style="background-color: #1B4D3E; color: white;">
+                                <th style="width: 4%; text-align: center;">ت</th>
+                                <th style="width: 13%;">رقم الكتاب</th>
+                                <th style="width: 14%;">تاريخ الكتاب</th>
+                                <th style="width: 21%;">الموضوع</th>
+                                <th style="width: 12%;">نوع الكتاب</th>
+                                <th style="width: 12%;">الرئيسي</th>
+                                <th style="width: 11%;">الفرعي الأول</th>
+                                <th style="width: 10%;">الفرعي الثاني</th>
+                                <th style="width: 3%; text-align: center;">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                int rowIdx = 1;
+                            }
+                            @foreach (var item in _items)
+                            {
+                                <tr>
+                                    <td style="text-align: center; font-weight: bold;">@(rowIdx++)</td>
+
+                                    <!-- رقم الكتاب -->
+                                    <td>
+                                        <MudTextField @bind-Value="item.DocumentNumber"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Required="true" />
+                                    </td>
+
+                                    <!-- تاريخ الكتاب -->
+                                    <td>
+                                        <MudDatePicker @bind-Date="item.DocumentDate"
+                                                       Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense"
+                                                       DateFormat="yyyy-MM-dd" />
+                                    </td>
+
+                                    <!-- موضوع الكتاب -->
+                                    <td>
+                                        <MudTextField @bind-Value="item.Subject"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Placeholder="موضوع الكتاب..."
+                                                      Required="true" />
+                                    </td>
+
+                                    <!-- 1. نوع الكتاب -->
+                                    <td>
+                                        <MudSelect T="int?" Value="item.MainCategoryId"
+                                                   ValueChanged="@((int? val) => OnRowMainCatChanged(item, val))"
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   Dense="true">
+                                            @foreach (var cat in DistinctMainCategories)
+                                            {
+                                                <MudSelectItem Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </td>
+
+                                    <!-- 2. التصنيف الرئيسي -->
+                                    <td>
+                                        <MudSelect T="int?" Value="item.PrimaryCategoryId"
+                                                   ValueChanged="@((int? val) => OnRowPrimaryCatChanged(item, val))"
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   Dense="true"
+                                                   Disabled="@(!GetFilteredPrimaryCategories(item.MainCategoryId).Any())">
+                                            @foreach (var pCat in GetFilteredPrimaryCategories(item.MainCategoryId))
+                                            {
+                                                <MudSelectItem Value="@((int?)pCat.PrimaryCategoryId)">@pCat.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </td>
+
+                                    <!-- 3. الفرعي الأول -->
+                                    <td>
+                                        <MudSelect T="int?" Value="item.SecondaryCategoryId"
+                                                   ValueChanged="@((int? val) => OnRowSecondaryCatChanged(item, val))"
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   Dense="true"
+                                                   Disabled="@(!GetFilteredSecondaryCategories(item.PrimaryCategoryId).Any())">
+                                            @foreach (var sCat in GetFilteredSecondaryCategories(item.PrimaryCategoryId))
+                                            {
+                                                <MudSelectItem Value="@((int?)sCat.SecondaryCategoryId)">@sCat.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </td>
+
+                                    <!-- 4. الفرعي الثاني -->
+                                    <td>
+                                        <MudSelect T="int?" @bind-Value="item.TertiaryCategoryId"
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   Dense="true"
+                                                   Disabled="@(!GetFilteredTertiaryCategories(item.SecondaryCategoryId).Any())">
+                                            @foreach (var tCat in GetFilteredTertiaryCategories(item.SecondaryCategoryId))
+                                            {
+                                                <MudSelectItem Value="@((int?)tCat.TertiaryCategoryId)">@tCat.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </td>
+
+                                    <!-- حذف السطر -->
+                                    <td style="text-align: center;">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       OnClick="() => RemoveItem(item)" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            }
+
+            @if (_isProcessing)
+            {
+                <div class="mt-3">
+                    <MudProgressLinear Color="Color.Success" Value="_progressPercentage" Class="my-2" />
+                    <MudText Typo="Typo.caption" Class="text-center d-block fw-bold" Style="color: #1B4D3E;">
+                        جارٍ حفظ المستندات وتخزين الملفات: @_processedCount من @_items.Count...
+                    </MudText>
+                </div>
+            }
+
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" OnClick="Cancel" Disabled="_isProcessing">
+            إلغاء
+        </MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveAllAsync"
+                   Disabled="_isProcessing || !_items.Any()"
+                   StartIcon="@Icons.Material.Filled.Save"
+                   Style="background-color: #1B4D3E; font-weight: bold; color: white;">
+            تأكيد وحفظ الكل في الإضبارة
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .drop-zone {
+        border: 2px dashed #1B4D3E;
+        border-radius: 8px;
+        background-color: #f7faf8;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: background-color 0.2s, border-color 0.2s;
+    }
+
+        .drop-zone:hover {
+            background-color: #ebf3ef;
+            border-color: #143a2f;
+        }
+</style>
+
+@code {
+    public class BulkDocumentItem
+    {
+        public IBrowserFile File { get; set; } = default!;
+        public string DocumentNumber { get; set; } = string.Empty;
+        public string Subject { get; set; } = string.Empty;
+        public DateTime? DocumentDate { get; set; } = DateTime.Today;
+        public int? MainCategoryId { get; set; }
+        public int? PrimaryCategoryId { get; set; }
+        public int? SecondaryCategoryId { get; set; }
+        public int? TertiaryCategoryId { get; set; }
+    }
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Employee Employee { get; set; } = default!;
+
+    [Parameter]
+    public List<MainCategory> MainCategories { get; set; } = new();
+
+    [Parameter]
+    public List<PrimaryCategory> PrimaryCategories { get; set; } = new();
+
+    [Parameter]
+    public List<SecondaryCategory> SecondaryCategories { get; set; } = new();
+
+    [Parameter]
+    public List<TertiaryCategory> TertiaryCategories { get; set; } = new();
+
+    private List<BulkDocumentItem> _items = new();
+
+    // قيم التصنيف الجماعي
+    private int? _bulkMainCatId;
+    private int? _bulkPrimaryCatId;
+    private int? _bulkSecondaryCatId;
+    private int? _bulkTertiaryCatId;
+
+    private bool _isProcessing = false;
+    private int _processedCount = 0;
+    private double _progressPercentage => _items.Count == 0 ? 0 : (_processedCount * 100.0) / _items.Count;
+
+    // إزالة التكرار بدقة باستخدام GroupBy
+    private IEnumerable<MainCategory> DistinctMainCategories =>
+        MainCategories.GroupBy(c => c.Name.Trim()).Select(g => g.First());
+
+    // ربط القوائم الشجرية للشريط الموحد
+    private IEnumerable<PrimaryCategory> AvailableBulkPrimaryCategories =>
+        _bulkMainCatId.HasValue
+            ? PrimaryCategories.Where(p => p.MainCategoryId == _bulkMainCatId.Value)
+                               .GroupBy(p => p.Name.Trim()).Select(g => g.First())
+            : Enumerable.Empty<PrimaryCategory>();
+
+    private IEnumerable<SecondaryCategory> AvailableBulkSecondaryCategories =>
+        _bulkPrimaryCatId.HasValue
+            ? SecondaryCategories.Where(s => s.PrimaryCategoryId == _bulkPrimaryCatId.Value)
+                                 .GroupBy(s => s.Name.Trim()).Select(g => g.First())
+            : Enumerable.Empty<SecondaryCategory>();
+
+    private IEnumerable<TertiaryCategory> AvailableBulkTertiaryCategories =>
+        _bulkSecondaryCatId.HasValue
+            ? TertiaryCategories.Where(t => t.SecondaryCategoryId == _bulkSecondaryCatId.Value)
+                                .GroupBy(t => t.Name.Trim()).Select(g => g.First())
+            : Enumerable.Empty<TertiaryCategory>();
+
+    private void OnBulkMainCatChanged(int? val)
+    {
+        _bulkMainCatId = val;
+        _bulkPrimaryCatId = null;
+        _bulkSecondaryCatId = null;
+        _bulkTertiaryCatId = null;
+    }
+
+    private void OnBulkPrimaryCatChanged(int? val)
+    {
+        _bulkPrimaryCatId = val;
+        _bulkSecondaryCatId = null;
+        _bulkTertiaryCatId = null;
+    }
+
+    private void OnBulkSecondaryCatChanged(int? val)
+    {
+        _bulkSecondaryCatId = val;
+        _bulkTertiaryCatId = null;
+    }
+
+    // ربط القوائم الشجرية لكل سطر
+    private IEnumerable<PrimaryCategory> GetFilteredPrimaryCategories(int? mainCatId) =>
+        mainCatId.HasValue
+            ? PrimaryCategories.Where(p => p.MainCategoryId == mainCatId.Value)
+                               .GroupBy(p => p.Name.Trim()).Select(g => g.First())
+            : Enumerable.Empty<PrimaryCategory>();
+
+    private IEnumerable<SecondaryCategory> GetFilteredSecondaryCategories(int? primaryCatId) =>
+        primaryCatId.HasValue
+            ? SecondaryCategories.Where(s => s.PrimaryCategoryId == primaryCatId.Value)
+                                 .GroupBy(s => s.Name.Trim()).Select(g => g.First())
+            : Enumerable.Empty<SecondaryCategory>();
+
+    private IEnumerable<TertiaryCategory> GetFilteredTertiaryCategories(int? secondaryCatId) =>
+        secondaryCatId.HasValue
+            ? TertiaryCategories.Where(t => t.SecondaryCategoryId == secondaryCatId.Value)
+                                .GroupBy(t => t.Name.Trim()).Select(g => g.First())
+            : Enumerable.Empty<TertiaryCategory>();
+
+    private void OnRowMainCatChanged(BulkDocumentItem item, int? val)
+    {
+        item.MainCategoryId = val;
+        item.PrimaryCategoryId = null;
+        item.SecondaryCategoryId = null;
+        item.TertiaryCategoryId = null;
+    }
+
+    private void OnRowPrimaryCatChanged(BulkDocumentItem item, int? val)
+    {
+        item.PrimaryCategoryId = val;
+        item.SecondaryCategoryId = null;
+        item.TertiaryCategoryId = null;
+    }
+
+    private void OnRowSecondaryCatChanged(BulkDocumentItem item, int? val)
+    {
+        item.SecondaryCategoryId = val;
+        item.TertiaryCategoryId = null;
+    }
+
+    private void ApplyBulkCategoryToAll()
+    {
+        foreach (var item in _items)
+        {
+            if (_bulkMainCatId.HasValue) item.MainCategoryId = _bulkMainCatId;
+            if (_bulkPrimaryCatId.HasValue) item.PrimaryCategoryId = _bulkPrimaryCatId;
+            if (_bulkSecondaryCatId.HasValue) item.SecondaryCategoryId = _bulkSecondaryCatId;
+            if (_bulkTertiaryCatId.HasValue) item.TertiaryCategoryId = _bulkTertiaryCatId;
+        }
+    }
+
+    private void OnFilesDropped(IReadOnlyList<IBrowserFile> files)
+    {
+        foreach (var file in files)
+        {
+            if (_items.Any(i => i.File.Name == file.Name)) continue;
+
+            string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
+            var parsed = ParseFileNameAdvanced(fileNameWithoutExt);
+
+            _items.Add(new BulkDocumentItem
+            {
+                File = file,
+                DocumentNumber = parsed.DocNum,
+                Subject = parsed.Subject,
+                DocumentDate = parsed.DocDate ?? DateTime.Today,
+                MainCategoryId = _bulkMainCatId,
+                PrimaryCategoryId = _bulkPrimaryCatId,
+                SecondaryCategoryId = _bulkSecondaryCatId,
+                TertiaryCategoryId = _bulkTertiaryCatId
+            });
+        }
+    }
+
+    // الخوارزمية المحسنة لاستشعار التاريخ بدقة (13-12-2020 أو 20 - 2 - 2020 أو 12-1-2026)
+    private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameAdvanced(string rawName)
+    {
+        string name = rawName.Trim();
+        DateTime? detectedDate = null;
+
+        // 1. استشعار التاريخ بواسطة Regular Expression يعالج المسافات حول الشرطات
+        var dateRegex = new Regex(@"(\b\d{1,4}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*\d{1,4}\b)");
+        var dateMatch = dateRegex.Match(name);
+
+        if (dateMatch.Success)
+        {
+            string dateStr = dateMatch.Value;
+            // إزالة كافة المسافات لتصبح مثلاً "20-2-2020"
+            string cleanDate = Regex.Replace(dateStr, @"\s+", "");
+            cleanDate = cleanDate.Replace('/', '-').Replace('.', '-');
+
+            string[] formats = {
+                "d-M-yyyy", "dd-MM-yyyy", "yyyy-M-d", "yyyy-MM-dd",
+                "d-M-yy", "dd-MM-yy"
+            };
+
+            if (DateTime.TryParseExact(cleanDate, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                detectedDate = dt;
+            }
+            else if (DateTime.TryParse(cleanDate, out var dtFallback))
+            {
+                detectedDate = dtFallback;
+            }
+
+            // إزالة التاريخ من السلسلة ليتبقى رقم الكتاب والموضوع
+            name = name.Remove(dateMatch.Index, dateMatch.Length);
+        }
+
+        // 2. تقسيم ما تبقى بواسطة الشرطة
+        var parts = name.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+
+        string docNum = string.Empty;
+        string subject = string.Empty;
+
+        if (parts.Count == 0)
+        {
+            docNum = "غير محدد";
+        }
+        else if (parts.Count == 1)
+        {
+            if (Regex.IsMatch(parts[0], @"^\d+$"))
+            {
+                docNum = parts[0];
+            }
+            else
+            {
+                subject = parts[0];
+                docNum = "1";
+            }
+        }
+        else
+        {
+            // إن وجد مقطع رقمي صريح يكون هو رقم الكتاب
+            var numPart = parts.FirstOrDefault(p => Regex.IsMatch(p, @"^\d+$"));
+            if (numPart != null)
+            {
+                docNum = numPart;
+                subject = string.Join(" - ", parts.Where(p => p != numPart));
+            }
+            else
+            {
+                docNum = parts[0];
+                subject = string.Join(" - ", parts.Skip(1));
+            }
+        }
+
+        return (docNum.Trim(), subject.Trim(), detectedDate ?? DateTime.Today);
+    }
+
+    private void RemoveItem(BulkDocumentItem item)
+    {
+        _items.Remove(item);
+    }
+
+    private async Task SaveAllAsync()
+    {
+        if (!_items.Any()) return;
+
+        if (_items.Any(i => string.IsNullOrWhiteSpace(i.DocumentNumber)))
+        {
+            Snackbar.Add("يرجى التأكد من ملء رقم الكتاب لجميع الأسطر!", Severity.Warning);
+            return;
+        }
+
+        _isProcessing = true;
+        _processedCount = 0;
+
+        string uploadsFolder = Path.Combine(Environment.WebRootPath, "uploads", "documents");
+        if (!Directory.Exists(uploadsFolder))
+        {
+            Directory.CreateDirectory(uploadsFolder);
+        }
+
+        try
+        {
+            foreach (var item in _items)
+            {
+                string extension = Path.GetExtension(item.File.Name);
+                string uniqueFileName = $"{Guid.NewGuid()}{extension}";
+                string physicalPath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                await using (var fileStream = new FileStream(physicalPath, FileMode.Create))
+                {
+                    await item.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(fileStream);
+                }
+
+                var newDoc = new Document
+                {
+                    DocumentNumber = item.DocumentNumber.Trim(),
+                    DocumentDate = item.DocumentDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"),
+                    Subject = string.IsNullOrWhiteSpace(item.Subject) ? $"كتاب رقم {item.DocumentNumber}" : item.Subject.Trim(),
+                    FilePath = $"/uploads/documents/{uniqueFileName}",
+                    MainCategoryId = item.MainCategoryId ?? 0,
+                    PrimaryCategoryId = item.PrimaryCategoryId ?? 0,
+                    SecondaryCategoryId = item.SecondaryCategoryId,
+                    TertiaryCategoryId = item.TertiaryCategoryId,
+                    IsDeleted = 0
+                };
+
+                DbContext.Documents.Add(newDoc);
+                await DbContext.SaveChangesAsync();
+
+                var docEmployee = new DocumentEmployee
+                {
+                    DocumentId = newDoc.DocumentId,
+                    EmployeeId = Employee.EmployeeId
+                };
+
+                DbContext.DocumentEmployees.Add(docEmployee);
+                await DbContext.SaveChangesAsync();
+
+                _processedCount++;
+                StateHasChanged();
+            }
+
+            await SessionService.LogActivityAsync(
+                actionType: "أرشفة ذكية مجمعة",
+                entityType: "إضبارة موظف",
+                entityId: Employee.EmployeeId,
+                description: $"أرشفة مجمعة لعدد ({_items.Count}) مستند في إضبارة ({Employee.EmployeeName})."
+            );
+
+            Snackbar.Add($"تم حفظ وفهرسة {_items.Count} كتاباً بنجاح في الإضبارة!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء الحفظ: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

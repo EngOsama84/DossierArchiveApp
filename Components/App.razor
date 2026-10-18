@@ -21,7 +21,6 @@
 
     <script>
         window.openPdfFromBase64 = function (base64Data) {
-            // تحويل الـ Base64 إلى Blob لكي يفتحه المتصفح كملف حقيقي ولا يظهر صفحة بيضاء
             const byteCharacters = atob(base64Data);
             const byteNumbers = new Array(byteCharacters.length);
             for (let i = 0; i < byteCharacters.length; i++) {
@@ -32,8 +31,7 @@
             const blobUrl = URL.createObjectURL(blob);
             window.open(blobUrl, '_blank');
         };
-    </script>
-    <script>
+
         window.downloadFileFromStream = async (fileName, byteBase64) => {
             const link = document.createElement('a');
             link.download = fileName;

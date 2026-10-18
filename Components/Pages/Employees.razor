@@ -46,8 +46,8 @@
             </MudSelect>
         </div>
 
-        <!-- أزرار الإجراءات (طباعة الفهرس + تصدير Excel + إضافة مستند) -->
-        <div class="d-flex align-center gap-2">
+        <!-- أزرار الإجراءات (طباعة الفهرس + تصدير Excel + أرشفة مجمعة + إضافة مستند) -->
+        <div class="d-flex align-center gap-2 flex-wrap">
             @if (_selectedEmployee != null && _documents.Any())
             {
                 <!-- زر طباعة الفهرس الرسمي A4 -->
@@ -80,6 +80,16 @@
 
             @if (_selectedEmployee != null && SessionService.CanAdd)
             {
+                <!-- زر الأرشفة الذكية المجمعة (سحب وإفلات) -->
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Tertiary"
+                           StartIcon="@Icons.Material.Filled.AutoFixHigh"
+                           OnClick="OpenBulkUploadDialog"
+                           Style="background-color: #2E7D32; color: white; border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap;">
+                    أرشفة ذكية مجمعة
+                </MudButton>
+
+                <!-- زر إضافة مستند فردي -->
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.NoteAdd"
@@ -779,6 +789,36 @@
         }
     }
 
+    private async Task OpenBulkUploadDialog()
+    {
+        if (_selectedEmployee == null) return;
+
+        var parameters = new DialogParameters
+        {
+            ["Employee"] = _selectedEmployee,
+            ["MainCategories"] = _mainCategories,
+            ["PrimaryCategories"] = _primaryCategories,
+            ["SecondaryCategories"] = _secondaryCategories,
+            ["TertiaryCategories"] = _tertiaryCategories
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.ExtraLarge,
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        var dialog = await DialogService.ShowAsync<BulkUploadDialog>("الأرشفة المجمعة الذكية", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadEmployeeDocuments(_selectedEmployee.EmployeeId);
+            StateHasChanged();
+        }
+    }
+
     private void OpenEditDocumentDialog(Document doc)
     {
         Navigation.NavigateTo($"/edit-document/{doc.DocumentId}");
@@ -1015,38 +1055,13 @@
     {
         if (_selectedEmployee == null || !_documents.Any()) return;
 
-        var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
-
-        var docsToPrint = FilteredDocuments.ToList();
-        if (!docsToPrint.Any())
-        {
-            docsToPrint = _documents;
-        }
-
-        var parameters = new DialogParameters
-        {
-            ["Employee"] = _selectedEmployee,
-            ["Documents"] = docsToPrint,
-            ["Settings"] = settings,
-            ["MainCategories"] = _mainCategories,
-            ["PrimaryCategories"] = _primaryCategories
-        };
-
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Large,
-            FullWidth = true,
-            NoHeader = true,
-            CloseOnEscapeKey = true
-        };
-
-        await DialogService.ShowAsync<PrintDossierDialog>(string.Empty, parameters, options);
+        await JS.InvokeVoidAsync("open", $"/print-dossier/{_selectedEmployee.EmployeeId}", "_blank");
 
         await SessionService.LogActivityAsync(
             actionType: "طباعة فهرس إضبارة",
             entityType: "إضبارة موظف",
             entityId: _selectedEmployee.EmployeeId,
-            description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بمعاينة وطباعة فهرس إضبارة الموظف ({_selectedEmployee.EmployeeName})."
+            description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بفتح وطباعة فهرس إضبارة الموظف ({_selectedEmployee.EmployeeName})."
         );
     }
 }
