@@ -31,12 +31,6 @@
     <DialogContent>
         <div dir="rtl" class="pa-2">
 
-            <MudAlert Severity="Severity.Normal" Variant="Variant.Text" Class="mb-3" Dense="true">
-                💡 <strong>قواعد التسمية الذكية والكتب المشتركة:</strong>
-                <span class="mr-2">• يدعم تلقائياً صيغ: (<code>كشف - 0098 - 11-1-2025</code>) أو (<code>تسوية 258 - 1-9-2020</code>).</span>
-                <span class="mr-2">• يمكنك ربط أي كتاب بأكثر من موظف عبر زر "مشاركة الكتاب" في كل سطر.</span>
-            </MudAlert>
-
             <!-- شريط التصنيف الجماعي لكافة المستويات الشجرية الأربعة -->
             <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-3" Style="background-color: #fcfdfc; border-color: #c8e6c9;">
                 <div class="d-flex align-center gap-2 flex-wrap">
@@ -47,6 +41,7 @@
                     <!-- 1. نوع الكتاب -->
                     <MudSelect T="int?" Value="_bulkMainCatId"
                                ValueChanged="OnBulkMainCatChanged"
+                               ToStringFunc="GetMainCatName"
                                Label="نوع الكتاب"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
@@ -62,6 +57,7 @@
                     <!-- 2. التصنيف الرئيسي -->
                     <MudSelect T="int?" Value="_bulkPrimaryCatId"
                                ValueChanged="OnBulkPrimaryCatChanged"
+                               ToStringFunc="GetPrimaryCatName"
                                Label="التصنيف الرئيسي"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
@@ -78,6 +74,7 @@
                     <!-- 3. الفرعي الأول -->
                     <MudSelect T="int?" Value="_bulkSecondaryCatId"
                                ValueChanged="OnBulkSecondaryCatChanged"
+                               ToStringFunc="GetSecondaryCatName"
                                Label="الفرعي الأول"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
@@ -93,6 +90,7 @@
 
                     <!-- 4. الفرعي الثاني -->
                     <MudSelect T="int?" @bind-Value="_bulkTertiaryCatId"
+                               ToStringFunc="GetTertiaryCatName"
                                Label="الفرعي الثاني"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
@@ -135,7 +133,7 @@
                 </ActivatorContent>
             </MudFileUpload>
 
-            <!-- جدول المعاينة والإدخال السريع قبل الحفظ -->
+            <!-- جدول المعاينة والإدخال السريع قبل الحفظ (مع توسيع الارتفاع إلى 520px) -->
             @if (_items.Any())
             {
                 <div class="d-flex justify-space-between align-center mt-4 mb-2">
@@ -147,7 +145,7 @@
                     </MudButton>
                 </div>
 
-                <div style="max-height: 420px; overflow-y: auto; overflow-x: auto; border: 1px solid #dcdcdc; border-radius: 6px;">
+                <div style="max-height: 520px; overflow-y: auto; overflow-x: auto; border: 1px solid #dcdcdc; border-radius: 6px;">
                     <MudSimpleTable Dense="true" Hover="true" Striped="true" Style="background-color: white; min-width: 1100px;">
                         <thead>
                             <tr style="background-color: #1B4D3E; color: white;">
@@ -201,6 +199,7 @@
                                     <td>
                                         <MudSelect T="int?" Value="item.MainCategoryId"
                                                    ValueChanged="@((int? val) => OnRowMainCatChanged(item, val))"
+                                                   ToStringFunc="GetMainCatName"
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true">
@@ -215,6 +214,7 @@
                                     <td>
                                         <MudSelect T="int?" Value="item.PrimaryCategoryId"
                                                    ValueChanged="@((int? val) => OnRowPrimaryCatChanged(item, val))"
+                                                   ToStringFunc="GetPrimaryCatName"
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true"
@@ -230,6 +230,7 @@
                                     <td>
                                         <MudSelect T="int?" Value="item.SecondaryCategoryId"
                                                    ValueChanged="@((int? val) => OnRowSecondaryCatChanged(item, val))"
+                                                   ToStringFunc="GetSecondaryCatName"
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true"
@@ -244,6 +245,7 @@
                                     <!-- 4. الفرعي الثاني -->
                                     <td>
                                         <MudSelect T="int?" @bind-Value="item.TertiaryCategoryId"
+                                                   ToStringFunc="GetTertiaryCatName"
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true"
@@ -379,9 +381,51 @@
     private int? _bulkSecondaryCatId;
     private int? _bulkTertiaryCatId;
 
+    private readonly List<string> _iraqiCommittees = new()
+    {
+        "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
+        "مشتريات واعتدال أسعار", "شطب وإتلاف", "جرد سنوي", "تضمين",
+        "تثمين وبيع وإيجار أموال الدولة", "احتساب خدمة وتقاعد", "فنية تخصصية", "مقابلة وترقية"
+    };
+
     private bool _isProcessing = false;
     private int _processedCount = 0;
     private double _progressPercentage => _items.Count == 0 ? 0 : (_processedCount * 100.0) / _items.Count;
+
+    private string GetMainCatName(int? id)
+    {
+        if (!id.HasValue) return string.Empty;
+        return MainCategories.FirstOrDefault(c => c.MainCategoryId == id.Value)?.Name ?? string.Empty;
+    }
+
+    private string GetPrimaryCatName(int? id)
+    {
+        if (!id.HasValue) return string.Empty;
+        return PrimaryCategories.FirstOrDefault(c => c.PrimaryCategoryId == id.Value)?.Name ?? string.Empty;
+    }
+
+    private string GetSecondaryCatName(int? id)
+    {
+        if (!id.HasValue) return string.Empty;
+        return SecondaryCategories.FirstOrDefault(c => c.SecondaryCategoryId == id.Value)?.Name ?? string.Empty;
+    }
+
+    private string GetTertiaryCatName(int? id)
+    {
+        if (!id.HasValue) return string.Empty;
+        var tert = TertiaryCategories.FirstOrDefault(c => c.TertiaryCategoryId == id.Value);
+        if (tert != null) return tert.Name;
+
+        if (id.Value < 0)
+        {
+            int index = (-id.Value) - 100;
+            if (index >= 0 && index < _iraqiCommittees.Count)
+            {
+                return _iraqiCommittees[index];
+            }
+        }
+        return string.Empty;
+    }
 
     private IEnumerable<MainCategory> DistinctMainCategories =>
         MainCategories.GroupBy(c => c.Name.Trim()).Select(g => g.First());
@@ -399,10 +443,7 @@
             : Enumerable.Empty<SecondaryCategory>();
 
     private IEnumerable<TertiaryCategory> AvailableBulkTertiaryCategories =>
-        _bulkSecondaryCatId.HasValue
-            ? TertiaryCategories.Where(t => t.SecondaryCategoryId == _bulkSecondaryCatId.Value)
-                                .GroupBy(t => t.Name.Trim()).Select(g => g.First())
-            : Enumerable.Empty<TertiaryCategory>();
+        GetFilteredTertiaryCategories(_bulkSecondaryCatId);
 
     private void OnBulkMainCatChanged(int? val)
     {
@@ -437,11 +478,29 @@
                                  .GroupBy(s => s.Name.Trim()).Select(g => g.First())
             : Enumerable.Empty<SecondaryCategory>();
 
-    private IEnumerable<TertiaryCategory> GetFilteredTertiaryCategories(int? secondaryCatId) =>
-        secondaryCatId.HasValue
-            ? TertiaryCategories.Where(t => t.SecondaryCategoryId == secondaryCatId.Value)
-                                .GroupBy(t => t.Name.Trim()).Select(g => g.First())
-            : Enumerable.Empty<TertiaryCategory>();
+    private IEnumerable<TertiaryCategory> GetFilteredTertiaryCategories(int? secondaryCatId)
+    {
+        if (!secondaryCatId.HasValue) return Enumerable.Empty<TertiaryCategory>();
+
+        var list = TertiaryCategories.Where(t => t.SecondaryCategoryId == secondaryCatId.Value)
+                                     .GroupBy(t => t.Name.Trim()).Select(g => g.First()).ToList();
+
+        if (list.Any()) return list;
+
+        var sec = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secondaryCatId.Value);
+        if (sec != null && sec.Name.Contains("لجنة"))
+        {
+            int virtualId = -100;
+            return _iraqiCommittees.Select(c => new TertiaryCategory
+            {
+                TertiaryCategoryId = virtualId--,
+                SecondaryCategoryId = secondaryCatId.Value,
+                Name = c
+            }).ToList();
+        }
+
+        return Enumerable.Empty<TertiaryCategory>();
+    }
 
     private void OnRowMainCatChanged(BulkDocumentItem item, int? val)
     {
@@ -468,11 +527,12 @@
     {
         foreach (var item in _items)
         {
-            if (_bulkMainCatId.HasValue) item.MainCategoryId = _bulkMainCatId;
-            if (_bulkPrimaryCatId.HasValue) item.PrimaryCategoryId = _bulkPrimaryCatId;
-            if (_bulkSecondaryCatId.HasValue) item.SecondaryCategoryId = _bulkSecondaryCatId;
-            if (_bulkTertiaryCatId.HasValue) item.TertiaryCategoryId = _bulkTertiaryCatId;
+            item.MainCategoryId = _bulkMainCatId;
+            item.PrimaryCategoryId = _bulkPrimaryCatId;
+            item.SecondaryCategoryId = _bulkSecondaryCatId;
+            item.TertiaryCategoryId = _bulkTertiaryCatId;
         }
+        StateHasChanged();
     }
 
     private void OnFilesDropped(IReadOnlyList<IBrowserFile> files)
@@ -498,7 +558,6 @@
         }
     }
 
-    // فتح نافذة اختيار الموظفين المشتركين
     private async Task OpenShareDialog(BulkDocumentItem item)
     {
         var parameters = new DialogParameters
@@ -648,13 +707,11 @@
 
             char[] invalidChars = Path.GetInvalidFileNameChars();
 
-            // تجهيز بيانات الموظفين المشتركين مسبقاً لتقليل الاستعلامات
             var allTargetEmployeeIds = _items.SelectMany(i => i.SharedEmployeeIds).Distinct().ToList();
             var sharedEmployeesMap = await DbContext.Employees
                 .Where(e => allTargetEmployeeIds.Contains(e.EmployeeId))
                 .ToDictionaryAsync(e => e.EmployeeId, e => e);
 
-            // مجلد الموظف الأساسي
             string cleanEmpName = string.Concat(Employee.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
             string cleanEmpFile = string.Concat(Employee.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
             string employeeFolderRelPath = !string.IsNullOrWhiteSpace(Employee.EmployeeFolderPath)
@@ -666,7 +723,6 @@
 
             foreach (var item in _items)
             {
-                // 1. تحديد الفروع والتصنيفات
                 var mainCat = MainCategories.FirstOrDefault(c => c.MainCategoryId == item.MainCategoryId);
                 string mainName = mainCat?.Name?.Trim() ?? "";
                 string branchName = mainName.Contains("وارد") ? "الوارد" : "الصادر";
@@ -677,7 +733,6 @@
                 string cleanBranch = string.Concat(branchName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                 string cleanPri = string.Concat(priName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
 
-                // مجلد حفظ الملف للموظف الأساسي
                 string primaryTargetDir = Path.Combine(employeeRootFullPath, cleanBranch, cleanPri);
                 if (item.SecondaryCategoryId.HasValue)
                 {
@@ -690,7 +745,6 @@
                 }
                 if (!Directory.Exists(primaryTargetDir)) Directory.CreateDirectory(primaryTargetDir);
 
-                // تسمية الملف: (الموضوع - الرقم - التاريخ)
                 string cleanSubject = string.Concat((string.IsNullOrWhiteSpace(item.Subject) ? "مستند" : item.Subject.Trim()).Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                 string cleanDocNum = string.Concat(item.DocumentNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                 string docDateStr = item.DocumentDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd");
@@ -707,7 +761,6 @@
                     physicalFilePath = Path.Combine(primaryTargetDir, fileName);
                 }
 
-                // حفظ الملف الفعلي للموظف الأساسي
                 await using (var fileStream = new FileStream(physicalFilePath, FileMode.Create))
                 {
                     await item.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(fileStream);
@@ -715,7 +768,10 @@
 
                 string relativeFilePath = Path.GetRelativePath(baseFolder, physicalFilePath);
 
-                // 2. إنشاء سجل المستند الرئيسي مرة واحدة فقط
+                int? actualTertiaryId = (item.TertiaryCategoryId.HasValue && item.TertiaryCategoryId.Value < 0)
+                    ? null
+                    : item.TertiaryCategoryId;
+
                 var newDoc = new Document
                 {
                     DocumentNumber = item.DocumentNumber.Trim(),
@@ -725,14 +781,13 @@
                     MainCategoryId = item.MainCategoryId ?? 0,
                     PrimaryCategoryId = item.PrimaryCategoryId ?? 0,
                     SecondaryCategoryId = item.SecondaryCategoryId,
-                    TertiaryCategoryId = item.TertiaryCategoryId,
+                    TertiaryCategoryId = actualTertiaryId,
                     IsDeleted = 0
                 };
 
                 DbContext.Documents.Add(newDoc);
                 await DbContext.SaveChangesAsync();
 
-                // 3. ربط الموظف الأساسي
                 var docEmployee = new DocumentEmployee
                 {
                     DocumentId = newDoc.DocumentId,
@@ -741,7 +796,6 @@
                 };
                 DbContext.DocumentEmployees.Add(docEmployee);
 
-                // 4. معالجة الموظفين المشتركين: نسخ الملف فيزيائياً لمجلد كل موظف وربطه
                 foreach (var sharedEmpId in item.SharedEmployeeIds)
                 {
                     if (sharedEmployeesMap.TryGetValue(sharedEmpId, out var sharedEmp))
@@ -769,11 +823,9 @@
                             sPhysicalFilePath = Path.Combine(sEmpTargetDir, sAltName);
                         }
 
-                        // نسخ الملف فيزيائياً
                         File.Copy(physicalFilePath, sPhysicalFilePath, overwrite: true);
                         string sRelativeFilePath = Path.GetRelativePath(baseFolder, sPhysicalFilePath);
 
-                        // إضافة قيد الربط للموظف المشترك
                         DbContext.DocumentEmployees.Add(new DocumentEmployee
                         {
                             DocumentId = newDoc.DocumentId,

@@ -59,13 +59,15 @@
             </MudAlert>
         }
 
-        <!-- حقل اسم المستخدم -->
+        <!-- حقل اسم المستخدم مع التركيز المباشر -->
         <div class="mb-3">
             <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">اسم المستخدم *</MudText>
-            <MudTextField @bind-Value="_userName"
+            <MudTextField @ref="_userNameField"
+                          @bind-Value="_userName"
                           Placeholder="أدخل اسم المستخدم"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
+                          AutoFocus="true"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Person"
                           Immediate="true" />
@@ -84,13 +86,13 @@
                           OnKeyDown="@(async (e) => { if (e.Key == "Enter") await AttemptLogin(); })" />
         </div>
 
-        <!-- زر الدخول -->
+        <!-- زر الدخول مع تأثير التحويم والتركيز بزر Tab -->
         <MudButton Variant="Variant.Filled"
                    FullWidth="true"
                    Size="Size.Large"
                    OnClick="AttemptLogin"
                    Disabled="_isLoggingIn"
-                   Style="background-color: #1B4D3E; color: white; font-weight: bold; border-radius: 6px; padding: 10px;">
+                   Class="login-submit-btn">
             @if (_isLoggingIn)
             {
                 <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
@@ -105,12 +107,43 @@
     </MudPaper>
 </div>
 
+<style>
+    /* زر تسجيل الدخول وتأثير مرور الماوس والتركيز بالـ Tab */
+    .login-submit-btn {
+        background-color: #1B4D3E !important;
+        color: #ffffff !important;
+        font-weight: bold !important;
+        border-radius: 6px !important;
+        padding: 10px !important;
+        transition: all 0.25s ease-in-out !important;
+        box-shadow: 0 4px 10px rgba(27, 77, 62, 0.25) !important;
+        outline: none !important;
+    }
+
+        /* اللون الذهبي الوقفي الفاخر مع تأثير الارتفاع عند التحويم (Hover) أو التركيز بزر Tab (Focus) */
+        .login-submit-btn:hover:not(:disabled),
+        .login-submit-btn:focus:not(:disabled),
+        .login-submit-btn:focus-visible:not(:disabled) {
+            background-color: #C5A059 !important;
+            color: #ffffff !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(197, 160, 89, 0.45) !important;
+            outline: 2px solid #8e6c28 !important; /* إطار تركيز أنيق يؤكد استقرار الـ Tab عليه */
+            outline-offset: 2px !important;
+        }
+
+        .login-submit-btn:active:not(:disabled) {
+            transform: translateY(0) !important;
+        }
+</style>
+
 @code {
     private string _userName = string.Empty;
     private string _password = string.Empty;
     private string? _errorMessage;
     private bool _isLoggingIn = false;
     private SystemSetting? _settings;
+    private MudTextField<string>? _userNameField;
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,6 +152,15 @@
             _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
         }
         catch { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _userNameField != null)
+        {
+            // تركيز المؤشر مباشرة داخل حقل اسم المستخدم فور تحميل الشاشة
+            await _userNameField.FocusAsync();
+        }
     }
 
     private async Task AttemptLogin()

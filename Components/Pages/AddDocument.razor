@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
+@using System.Globalization
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
@@ -60,131 +61,146 @@
         </div>
     </div>
 
-    <!-- 2. شريط اختيار الموظفين المعنيين بالكتاب -->
-    <MudPaper Elevation="1" Class="pa-3 mb-3" Style="background-color: white; border-radius: 8px;">
-        <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-2">
-            <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
-                الموظفون المعنيون بالكتاب: <span style="font-size: 0.85rem; color: #666;">(تم تحديد: @_selectedEmployeeIds.Count)</span>
-            </MudText>
-            <MudTextField @bind-Value="_employeeSearch"
-                          Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Immediate="true"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          Style="max-width: 260px; min-width: 200px; height: 36px; background: white;" />
-        </div>
-
-        <div style="max-height: 155px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; background-color: #fafafa;">
-            @if (_loadingEmployees)
-            {
-                <div class="d-flex justify-center pa-2">
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
-                </div>
-            }
-            else
-            {
-                @foreach (var emp in FilteredEmployees)
-                {
-                    bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
-                    <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
-                         @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
-                         style="cursor: pointer; border-radius: 4px; font-size: 0.88rem; min-height: 34px;">
-                        <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
-                                     ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
-                        <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
-                    </div>
-                }
-            }
-        </div>
-    </MudPaper>
-
-    <!-- 3. شبكة العمل الرئيسية -->
+    <!-- 2. شبكة العمل المتناسقة (تمت زيادة مساحة الحقول إلى lg="5" وتقليص العارض إلى lg="7") -->
     <MudGrid Spacing="2">
 
-        <!-- القسم الأول: إدخال البيانات والتصنيفات والسكنر -->
+        <!-- القسم الأيمن: قائمة الموظفين + التصنيفات والبيانات (عرض مريح lg="5") -->
         <MudItem xs="12" lg="5">
+
+            <!-- شريط اختيار الموظفين المعنيين -->
+            <MudPaper Elevation="1" Class="pa-3 mb-2" Style="background-color: white; border-radius: 8px;">
+                <div class="d-flex align-center justify-space-between gap-2 mb-2">
+                    <MudTextField @bind-Value="_employeeSearch"
+                                  Placeholder="بحث باسم الموظف أو رقمه..."
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Style="flex: 1; height: 34px; background: white;" />
+
+                    <MudText Typo="Typo.body2" Class="fw-bold" Style="color: #1B4D3E; white-space: nowrap; font-size: 0.86rem;">
+                        (تم تحديد: @_selectedEmployeeIds.Count)
+                    </MudText>
+                </div>
+
+                <div style="max-height: 135px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 3px; background-color: #fafafa;">
+                    @if (_loadingEmployees)
+                    {
+                        <div class="d-flex justify-center pa-2">
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var emp in FilteredEmployees)
+                        {
+                            bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
+                            <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
+                                 @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
+                                 style="cursor: pointer; border-radius: 4px; font-size: 0.86rem; min-height: 32px;">
+                                <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
+                                             ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
+                                <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </MudPaper>
+
+            <!-- بطاقة البيانات والتصنيفات والسكنر (كافة الحقول متطابقة في الارتفاع والعرض) -->
             <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="background-color: white; border-radius: 8px;">
 
-                <!-- شجرة التصنيفات الهرمية -->
-                <div class="mb-2">
-                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">التصنيف الرئيسي (نوع الكتاب)</MudText>
-                    <MudSelect T="int?" Value="_selectedMainCatId" ValueChanged="OnMainCategoryChanged"
-                               Placeholder="اختر نوع الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                        @foreach (var c in _mainCategories)
-                        {
-                            <MudSelectItem Value="@((int?)c.MainCategoryId)">@c.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </div>
+                <!-- السطر الأول للتصنيفات: نوع الكتاب (sm="6") والتصنيف الرئيسي (sm="6") -->
+                <MudGrid Spacing="2" Class="mb-2">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int?" Value="_selectedMainCatId" ValueChanged="OnMainCategoryChanged"
+                                   Label="نوع الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                   Class="form-field-style">
+                            @foreach (var c in _mainCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.MainCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
 
-                <div class="mb-2">
-                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">التصنيف الأولي</MudText>
-                    <MudSelect T="int?" Value="_selectedPrimaryCatId" ValueChanged="OnPrimaryCategoryChanged"
-                               Disabled="@(!_selectedMainCatId.HasValue)"
-                               Placeholder="اختر التصنيف الأولي" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                        @foreach (var c in _availablePrimaryCategories)
-                        {
-                            <MudSelectItem Value="@((int?)c.PrimaryCategoryId)">@c.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </div>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int?" Value="_selectedPrimaryCatId" ValueChanged="OnPrimaryCategoryChanged"
+                                   Disabled="@(!_selectedMainCatId.HasValue)"
+                                   Label="التصنيف الرئيسي" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                   Class="form-field-style">
+                            @foreach (var c in _availablePrimaryCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.PrimaryCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
 
-                <div class="mb-2">
-                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">الفرعي الأول</MudText>
-                    <MudSelect T="int?" Value="_selectedSecondaryCatId" ValueChanged="OnSecondaryCategoryChanged"
-                               Disabled="@(!_selectedPrimaryCatId.HasValue)"
-                               Placeholder="اختياري" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
-                        @foreach (var c in _availableSecondaryCategories)
-                        {
-                            <MudSelectItem Value="@((int?)c.SecondaryCategoryId)">@c.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </div>
+                <!-- السطر الثاني للتصنيفات: الفرعي الأول (sm="6") والفرعي الثاني (sm="6") -->
+                <MudGrid Spacing="2" Class="mb-3">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int?" Value="_selectedSecondaryCatId" ValueChanged="OnSecondaryCategoryChanged"
+                                   Disabled="@(!_selectedPrimaryCatId.HasValue)"
+                                   Label="الفرعي الأول" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true"
+                                   Class="form-field-style">
+                            @foreach (var c in _availableSecondaryCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.SecondaryCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
 
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
+                                   Disabled="@(!_isTertiaryEnabled)"
+                                   Label="الفرعي الثاني" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true"
+                                   Class="form-field-style">
+                            @foreach (var c in _availableTertiaryCategories)
+                            {
+                                <MudSelectItem Value="@((int?)c.TertiaryCategoryId)">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                <MudDivider Class="my-3" />
+
+                <!-- موضوع الكتاب (كامل العرض بنفس الارتفاع الموحد 36px) -->
                 <div class="mb-3">
-                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">الفرعي الثاني</MudText>
-                    <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
-                               Disabled="@(!_isTertiaryEnabled)"
-                               Placeholder="اختياري" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
-                        @foreach (var c in _availableTertiaryCategories)
-                        {
-                            <MudSelectItem Value="@((int?)c.TertiaryCategoryId)">@c.Name</MudSelectItem>
-                        }
-                    </MudSelect>
+                    <MudTextField @bind-Value="_subject" Label="موضوع الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                                  Class="form-field-style" />
                 </div>
 
-                <MudDivider Class="my-2" />
+                <!-- سطر رقم الكتاب وتاريخ الكتاب: بنفس قياس التصنيفات تماماً (sm="6" و sm="6") -->
+                <MudGrid Spacing="2" Class="mb-3">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_documentNumber" Label="رقم الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                                      Class="form-field-style" />
+                    </MudItem>
 
-                <!-- بيانات الكتاب الرسمية -->
-                <div class="mb-2">
-                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">موضوع الكتاب</MudText>
-                    <MudTextField @bind-Value="_subject" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-                </div>
-
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <div class="flex-grow-1" style="min-width: 140px;">
-                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">رقم الكتاب</MudText>
-                        <MudTextField @bind-Value="_documentNumber" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-                    </div>
-
-                    <div class="flex-grow-1" style="min-width: 140px;">
-                        <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">تاريخ الكتاب</MudText>
-                        <MudDatePicker @bind-Date="_documentDate" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="yyyy/MM/dd" />
-                    </div>
-                </div>
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="_documentDate"
+                                       Label="تاريخ الكتاب"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DateFormat="yyyy/MM/dd"
+                                       Editable="false"
+                                       ShowToolbar="false"
+                                       Class="form-field-style" />
+                    </MudItem>
+                </MudGrid>
 
                 <!-- بطاقة المسح الضوئي المباشر -->
-                <MudPaper Outlined="true" Class="pa-3 mb-3" Style="background-color: #f1f8f5; border-color: #c8e6c9; border-radius: 6px;">
-                    <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-2">
+                <MudPaper Outlined="true" Class="pa-2 mb-3" Style="background-color: #f1f8f5; border-color: #c8e6c9; border-radius: 6px;">
+                    <div class="d-flex align-center justify-space-between gap-2">
                         <MudButton Variant="Variant.Outlined"
                                    Color="Color.Success"
                                    Size="Size.Small"
                                    StartIcon="@Icons.Material.Filled.DocumentScanner"
                                    OnClick="StartScannerAcquisition"
                                    Disabled="_isScanning"
-                                   Style="background-color: white; color: #1B4D3E; font-weight: bold; border-color: #1B4D3E;">
+                                   Style="background-color: white; color: #1B4D3E; font-weight: bold; border-color: #1B4D3E; white-space: nowrap; height: 34px; padding: 0 12px;">
                             @if (_isScanning)
                             {
                                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-1" />
@@ -196,24 +212,19 @@
                             }
                         </MudButton>
 
-                        <div class="text-end">
-                            <MudText Typo="Typo.caption" Class="fw-bold d-block" Style="color: #1B4D3E;">المسح الضوئي (WIA)</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-size: 0.75rem;">الجهاز المعتمد في الإعدادات</MudText>
+                        <div class="flex-grow-1 text-center py-1 px-2" style="background-color: #e8f5e9; border-radius: 4px; min-width: 0;">
+                            <MudText Typo="Typo.caption" Style="color: #2e7d32; font-size: 0.76rem; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                @(!string.IsNullOrEmpty(_settings?.DefaultScannerName)
+                                                                ? $"{_settings.DefaultScannerName} ({(_settings.ScanSource == "Feeder" ? "فيدر" : "سطح زجاجي")})"
+                                                                : "اختر الماسح من الإعدادات")
+                            </MudText>
                         </div>
                     </div>
-
-                    <MudPaper Elevation="0" Class="pa-1 text-center" Style="background-color: #e8f5e9; border-radius: 4px;">
-                        <MudText Typo="Typo.caption" Style="color: #2e7d32; font-size: 0.75rem;">
-                            @(!string.IsNullOrEmpty(_settings?.DefaultScannerName)
-                                                        ? $"جاهز: {_settings.DefaultScannerName} ({(_settings.ScanSource == "Feeder" ? "فيدر" : "سطح زجاجي")})"
-                                                        : "اختر جهاز الماسح من شاشة الإعدادات أولاً.")
-                        </MudText>
-                    </MudPaper>
                 </MudPaper>
 
                 <!-- رفع ملف PDF من الحاسوب -->
                 <div>
-                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block">أو اختر ملف PDF من الحاسوب</MudText>
+                    <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block" Style="color: #555;">أو اختر ملف PDF من الحاسوب</MudText>
                     <MudFileUpload T="IBrowserFile" FilesChanged="OnPdfFileSelected" Accept=".pdf">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Outlined"
@@ -221,8 +232,8 @@
                                        FullWidth="true"
                                        Size="Size.Small"
                                        StartIcon="@Icons.Material.Filled.AttachFile"
-                                       Style="background-color: white; justify-content: space-between; text-transform: none;">
-                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">
+                                       Style="background-color: white; justify-content: space-between; text-transform: none; height: 34px;">
+                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; font-size: 0.88rem;">
                                     @(_selectedFile != null ? _selectedFile.Name : "لم يتم اختيار ملف")
                                 </span>
                                 <span class="mud-chip mud-chip-filled mud-chip-size-small" style="background-color: #e0e0e0;">استعراض</span>
@@ -234,30 +245,14 @@
             </MudPaper>
         </MudItem>
 
-        <!-- القسم الثاني: منطقة المعاينة قبل الحفظ -->
+        <!-- القسم الأيسر: منطقة المعاينة (lg="7") -->
         <MudItem xs="12" lg="7">
-            <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="background-color: white; border-radius: 8px; min-height: 520px; height: 100%; display: flex; flex-direction: column;">
-                <div class="d-flex justify-space-between align-center mb-2">
-                    <div class="text-start">
-                        <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">معاينة الكتاب قبل الحفظ</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">تظهر صفحات الكتاب هنا مباشرة بعد المسح أو الاختيار.</MudText>
-                    </div>
-
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Default"
-                               Size="Size.Small"
-                               OnClick="ClearPreview"
-                               Disabled="@(string.IsNullOrEmpty(_previewFileUrl))">
-                        إزالة المعاينة
-                    </MudButton>
-                </div>
-
-                <!-- مساحة العرض التفاعلية -->
+            <MudPaper Elevation="1" Class="pa-2" Style="background-color: white; border-radius: 8px; height: 100%; min-height: 620px; display: flex; flex-direction: column;">
                 <div class="flex-grow-1 d-flex flex-column align-center justify-center preview-box"
-                     style="border: 2px dashed #cfd8dc; border-radius: 6px; background-color: #fafbfc; position: relative; min-height: 440px;">
+                     style="border: 2px dashed #cfd8dc; border-radius: 6px; background-color: #fafbfc; position: relative; height: 100%; min-height: 600px;">
                     @if (!string.IsNullOrEmpty(_previewFileUrl))
                     {
-                        <iframe src="@_previewFileUrl" style="width: 100%; height: 100%; min-height: 480px; border: none; border-radius: 4px;"></iframe>
+                        <iframe src="@_previewFileUrl" style="width: 100%; height: 100%; min-height: 600px; border: none; border-radius: 4px;"></iframe>
                     }
                     else
                     {
@@ -285,6 +280,57 @@
     .preview-box {
         background: repeating-linear-gradient( 45deg, #fafbfc, #fafbfc 10px, #f4f6f8 10px, #f4f6f8 20px );
     }
+
+    /* توحيد الارتفاع (36px) والشكل الخارجي لكافة حقول الإدخال بدون أي اختلاف */
+    .form-field-style .mud-input-root-outlined {
+        height: 36px !important;
+        min-height: 36px !important;
+        background-color: #ffffff;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    /* ضبط محتوى ونصوص الحقول بالكامل لتكون موحدة ومحاذية لليمين وواضحة */
+    .form-field-style input,
+    .form-field-style .mud-select-input {
+        font-size: 0.90rem !important;
+        font-weight: 600 !important;
+        color: #1a1a1a !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        height: 34px !important;
+        line-height: 34px !important;
+        display: flex !important;
+        align-items: center !important;
+        direction: rtl !important;
+        text-align: right !important;
+    }
+
+    /* ضبط موضع الأيقونات السهم والتقويم */
+    .form-field-style .mud-input-adornment {
+        margin-top: 0 !important;
+        align-self: center !important;
+    }
+
+    /* تسمية الحقول (Labels) عند النقر والفراغ */
+    .form-field-style .mud-input-label-outlined {
+        transform: translate(-14px, 9px) scale(1) !important;
+        font-size: 0.85rem !important;
+        font-weight: normal !important;
+        color: #777777 !important;
+    }
+
+        /* تسمية الحقول بعد صعودها واستقرارها في أعلى الإطار */
+        .form-field-style .mud-input-label-outlined.mud-input-label-inputcontrol {
+            transform: translate(-14px, -8px) scale(0.80) !important;
+            font-size: 0.88rem !important;
+            font-weight: 500 !important;
+            color: #555555 !important;
+            background-color: #ffffff !important;
+            padding: 0 4px !important;
+        }
 </style>
 
 @code {
