@@ -10,6 +10,7 @@
 @inject AppDbContext DbContext
 @inject IWebHostEnvironment Environment
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject UserSessionService SessionService
 
 <MudDialog MaxWidth="MaxWidth.ExtraLarge" FullWidth="true">
@@ -18,7 +19,7 @@
             <div class="d-flex align-center gap-2">
                 <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Size="Size.Large" />
                 <MudText Typo="Typo.h6" Class="fw-bold">
-                    الأرشفة المجمعة الذكية (سحب وإفلات مع التحليل التلقائي)
+                    الأرشفة المجمعة الذكية (سحب وإفلات مع التحليل والمشاركة)
                 </MudText>
             </div>
             <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
@@ -31,13 +32,12 @@
         <div dir="rtl" class="pa-2">
 
             <MudAlert Severity="Severity.Normal" Variant="Variant.Text" Class="mb-3" Dense="true">
-                💡 <strong>قواعد التسمية الذكية المدعومة للملفات:</strong>
-                <span class="mr-2">• مقطع واحد (<code>345</code>) ⬅️ يعتبر رقم الكتاب.</span>
-                <span class="mr-2">• مقطعان (<code>أمر مباشرة - 345</code> أو <code>345 - أمر مباشرة</code>) ⬅️ رقم وموضوع.</span>
-                <span class="mr-2">• 3 مقاطع (<code>009 - استمارة - 13-12-2020</code>) ⬅️ يستخرج الرقم والموضوع والتاريخ تلقائياً.</span>
+                💡 <strong>قواعد التسمية الذكية والكتب المشتركة:</strong>
+                <span class="mr-2">• يدعم تلقائياً صيغ: (<code>كشف - 0098 - 11-1-2025</code>) أو (<code>تسوية 258 - 1-9-2020</code>).</span>
+                <span class="mr-2">• يمكنك ربط أي كتاب بأكثر من موظف عبر زر "مشاركة الكتاب" في كل سطر.</span>
             </MudAlert>
 
-            <!-- شريط التصنيف الجماعي لكافة المستويات الشجرية الأربعة (بدون تكرار) -->
+            <!-- شريط التصنيف الجماعي لكافة المستويات الشجرية الأربعة -->
             <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-3" Style="background-color: #fcfdfc; border-color: #c8e6c9;">
                 <div class="d-flex align-center gap-2 flex-wrap">
                     <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E; min-width: 105px;">
@@ -147,18 +147,19 @@
                     </MudButton>
                 </div>
 
-                <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #dcdcdc; border-radius: 6px;">
-                    <MudSimpleTable Dense="true" Hover="true" Striped="true" Style="background-color: white; min-width: 1050px;">
+                <div style="max-height: 420px; overflow-y: auto; overflow-x: auto; border: 1px solid #dcdcdc; border-radius: 6px;">
+                    <MudSimpleTable Dense="true" Hover="true" Striped="true" Style="background-color: white; min-width: 1100px;">
                         <thead>
                             <tr style="background-color: #1B4D3E; color: white;">
-                                <th style="width: 4%; text-align: center;">ت</th>
-                                <th style="width: 13%;">رقم الكتاب</th>
-                                <th style="width: 14%;">تاريخ الكتاب</th>
-                                <th style="width: 21%;">الموضوع</th>
-                                <th style="width: 12%;">نوع الكتاب</th>
-                                <th style="width: 12%;">الرئيسي</th>
+                                <th style="width: 3%; text-align: center;">ت</th>
+                                <th style="width: 12%;">رقم الكتاب</th>
+                                <th style="width: 13%;">تاريخ الكتاب</th>
+                                <th style="width: 18%;">الموضوع</th>
+                                <th style="width: 11%;">نوع الكتاب</th>
+                                <th style="width: 11%;">الرئيسي</th>
                                 <th style="width: 11%;">الفرعي الأول</th>
-                                <th style="width: 10%;">الفرعي الثاني</th>
+                                <th style="width: 9%;">الفرعي الثاني</th>
+                                <th style="width: 9%; text-align: center;">المشاركة</th>
                                 <th style="width: 3%; text-align: center;">حذف</th>
                             </tr>
                         </thead>
@@ -254,6 +255,32 @@
                                         </MudSelect>
                                     </td>
 
+                                    <!-- زر مشاركة الكتاب مع موظفين آخرين -->
+                                    <td style="text-align: center;">
+                                        @if (item.SharedEmployeeIds.Any())
+                                        {
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.Group"
+                                                       OnClick="@(() => OpenShareDialog(item))"
+                                                       Style="border-radius: 6px; font-weight: bold; font-size: 0.75rem;">
+                                                مشترك (@item.SharedEmployeeIds.Count)
+                                            </MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Default"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                                                       OnClick="@(() => OpenShareDialog(item))"
+                                                       Style="border-radius: 6px; font-size: 0.75rem;">
+                                                مشاركة
+                                            </MudButton>
+                                        }
+                                    </td>
+
                                     <!-- حذف السطر -->
                                     <td style="text-align: center;">
                                         <MudIconButton Icon="@Icons.Material.Filled.Delete"
@@ -273,7 +300,7 @@
                 <div class="mt-3">
                     <MudProgressLinear Color="Color.Success" Value="_progressPercentage" Class="my-2" />
                     <MudText Typo="Typo.caption" Class="text-center d-block fw-bold" Style="color: #1B4D3E;">
-                        جارٍ حفظ المستندات وتخزين الملفات: @_processedCount من @_items.Count...
+                        جارٍ حفظ المستندات ونسخها في أضابير الموظفين المشتركين: @_processedCount من @_items.Count...
                     </MudText>
                 </div>
             }
@@ -291,7 +318,7 @@
                    Disabled="_isProcessing || !_items.Any()"
                    StartIcon="@Icons.Material.Filled.Save"
                    Style="background-color: #1B4D3E; font-weight: bold; color: white;">
-            تأكيد وحفظ الكل في الإضبارة
+            تأكيد وحفظ الكل في الأضابير
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -324,6 +351,7 @@
         public int? PrimaryCategoryId { get; set; }
         public int? SecondaryCategoryId { get; set; }
         public int? TertiaryCategoryId { get; set; }
+        public List<int> SharedEmployeeIds { get; set; } = new();
     }
 
     [CascadingParameter]
@@ -346,7 +374,6 @@
 
     private List<BulkDocumentItem> _items = new();
 
-    // قيم التصنيف الجماعي
     private int? _bulkMainCatId;
     private int? _bulkPrimaryCatId;
     private int? _bulkSecondaryCatId;
@@ -356,11 +383,9 @@
     private int _processedCount = 0;
     private double _progressPercentage => _items.Count == 0 ? 0 : (_processedCount * 100.0) / _items.Count;
 
-    // إزالة التكرار بدقة باستخدام GroupBy
     private IEnumerable<MainCategory> DistinctMainCategories =>
         MainCategories.GroupBy(c => c.Name.Trim()).Select(g => g.First());
 
-    // ربط القوائم الشجرية للشريط الموحد
     private IEnumerable<PrimaryCategory> AvailableBulkPrimaryCategories =>
         _bulkMainCatId.HasValue
             ? PrimaryCategories.Where(p => p.MainCategoryId == _bulkMainCatId.Value)
@@ -400,7 +425,6 @@
         _bulkTertiaryCatId = null;
     }
 
-    // ربط القوائم الشجرية لكل سطر
     private IEnumerable<PrimaryCategory> GetFilteredPrimaryCategories(int? mainCatId) =>
         mainCatId.HasValue
             ? PrimaryCategories.Where(p => p.MainCategoryId == mainCatId.Value)
@@ -458,7 +482,7 @@
             if (_items.Any(i => i.File.Name == file.Name)) continue;
 
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
-            var parsed = ParseFileNameAdvanced(fileNameWithoutExt);
+            var parsed = ParseFileNameUltra(fileNameWithoutExt);
 
             _items.Add(new BulkDocumentItem
             {
@@ -474,80 +498,121 @@
         }
     }
 
-    // الخوارزمية المحسنة لاستشعار التاريخ بدقة (13-12-2020 أو 20 - 2 - 2020 أو 12-1-2026)
-    private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameAdvanced(string rawName)
+    // فتح نافذة اختيار الموظفين المشتركين
+    private async Task OpenShareDialog(BulkDocumentItem item)
+    {
+        var parameters = new DialogParameters
+        {
+            ["PrimaryEmployee"] = Employee,
+            ["InitialSelectedIds"] = item.SharedEmployeeIds.ToList()
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SelectSharedEmployeesDialog>("مشاركة الكتاب", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is List<int> selectedIds)
+        {
+            item.SharedEmployeeIds = selectedIds;
+            StateHasChanged();
+        }
+    }
+
+    private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameUltra(string rawName)
     {
         string name = rawName.Trim();
         DateTime? detectedDate = null;
 
-        // 1. استشعار التاريخ بواسطة Regular Expression يعالج المسافات حول الشرطات
-        var dateRegex = new Regex(@"(\b\d{1,4}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*\d{1,4}\b)");
-        var dateMatch = dateRegex.Match(name);
+        var dateRegex = new Regex(@"(?:^|[\s\-_])(\d{1,2}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*(?:19|20)\d{2})(?:$|[\s\-_])");
+        var match = dateRegex.Match(name);
 
-        if (dateMatch.Success)
+        if (match.Success)
         {
-            string dateStr = dateMatch.Value;
-            // إزالة كافة المسافات لتصبح مثلاً "20-2-2020"
-            string cleanDate = Regex.Replace(dateStr, @"\s+", "");
-            cleanDate = cleanDate.Replace('/', '-').Replace('.', '-');
-
-            string[] formats = {
-                "d-M-yyyy", "dd-MM-yyyy", "yyyy-M-d", "yyyy-MM-dd",
-                "d-M-yy", "dd-MM-yy"
-            };
+            string rawDateStr = match.Groups[1].Value;
+            string cleanDate = Regex.Replace(rawDateStr, @"\s+", "").Replace('/', '-').Replace('.', '-');
+            string[] formats = { "d-M-yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd-M-yyyy", "d-MM-yyyy" };
 
             if (DateTime.TryParseExact(cleanDate, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
             {
                 detectedDate = dt;
             }
-            else if (DateTime.TryParse(cleanDate, out var dtFallback))
-            {
-                detectedDate = dtFallback;
-            }
 
-            // إزالة التاريخ من السلسلة ليتبقى رقم الكتاب والموضوع
-            name = name.Remove(dateMatch.Index, dateMatch.Length);
+            name = name.Remove(match.Index, match.Length).Trim();
+        }
+        else
+        {
+            var isoRegex = new Regex(@"(?:^|[\s\-_])((?:19|20)\d{2}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*\d{1,2})(?:$|[\s\-_])");
+            var isoMatch = isoRegex.Match(name);
+            if (isoMatch.Success)
+            {
+                string rawDateStr = isoMatch.Groups[1].Value;
+                string cleanDate = Regex.Replace(rawDateStr, @"\s+", "").Replace('/', '-').Replace('.', '-');
+                if (DateTime.TryParseExact(cleanDate, new[] { "yyyy-M-d", "yyyy-MM-dd" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtIso))
+                {
+                    detectedDate = dtIso;
+                }
+                name = name.Remove(isoMatch.Index, isoMatch.Length).Trim();
+            }
         }
 
-        // 2. تقسيم ما تبقى بواسطة الشرطة
-        var parts = name.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                        .Where(p => !string.IsNullOrWhiteSpace(p))
-                        .ToList();
+        name = name.Trim('-', '_', ' ');
 
         string docNum = string.Empty;
         string subject = string.Empty;
 
+        var parts = name.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+
         if (parts.Count == 0)
         {
-            docNum = "غير محدد";
+            docNum = "1";
+            subject = "مستند";
         }
         else if (parts.Count == 1)
         {
-            if (Regex.IsMatch(parts[0], @"^\d+$"))
+            string single = parts[0];
+            var numMatch = Regex.Match(single, @"\b\d+\b");
+            if (numMatch.Success)
             {
-                docNum = parts[0];
+                docNum = numMatch.Value;
+                subject = single.Replace(numMatch.Value, "").Trim();
             }
             else
             {
-                subject = parts[0];
+                subject = single;
                 docNum = "1";
             }
         }
         else
         {
-            // إن وجد مقطع رقمي صريح يكون هو رقم الكتاب
-            var numPart = parts.FirstOrDefault(p => Regex.IsMatch(p, @"^\d+$"));
-            if (numPart != null)
+            int numIndex = parts.FindIndex(p => Regex.IsMatch(p, @"^\d+$"));
+            if (numIndex != -1)
             {
-                docNum = numPart;
-                subject = string.Join(" - ", parts.Where(p => p != numPart));
+                docNum = parts[numIndex];
+                var subParts = parts.Where((p, i) => i != numIndex);
+                subject = string.Join(" - ", subParts);
             }
             else
             {
-                docNum = parts[0];
-                subject = string.Join(" - ", parts.Skip(1));
+                int mixedIndex = parts.FindIndex(p => Regex.IsMatch(p, @"\d+"));
+                if (mixedIndex != -1)
+                {
+                    var m = Regex.Match(parts[mixedIndex], @"\d+");
+                    docNum = m.Value;
+                    parts[mixedIndex] = parts[mixedIndex].Replace(docNum, "").Trim();
+                    subject = string.Join(" - ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+                }
+                else
+                {
+                    docNum = parts[0];
+                    subject = string.Join(" - ", parts.Skip(1));
+                }
             }
         }
+
+        if (string.IsNullOrWhiteSpace(subject)) subject = "مستند مؤرشف";
+        if (string.IsNullOrWhiteSpace(docNum)) docNum = "1";
 
         return (docNum.Trim(), subject.Trim(), detectedDate ?? DateTime.Today);
     }
@@ -570,31 +635,93 @@
         _isProcessing = true;
         _processedCount = 0;
 
-        string uploadsFolder = Path.Combine(Environment.WebRootPath, "uploads", "documents");
-        if (!Directory.Exists(uploadsFolder))
-        {
-            Directory.CreateDirectory(uploadsFolder);
-        }
-
         try
         {
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            string baseFolder = settings?.BaseFolderPath ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(baseFolder) || !Directory.Exists(baseFolder))
+            {
+                Snackbar.Add("مسار التخزين الأساسي (BaseFolderPath) غير معرّف أو غير موجود على القرص!", Severity.Error);
+                return;
+            }
+
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+
+            // تجهيز بيانات الموظفين المشتركين مسبقاً لتقليل الاستعلامات
+            var allTargetEmployeeIds = _items.SelectMany(i => i.SharedEmployeeIds).Distinct().ToList();
+            var sharedEmployeesMap = await DbContext.Employees
+                .Where(e => allTargetEmployeeIds.Contains(e.EmployeeId))
+                .ToDictionaryAsync(e => e.EmployeeId, e => e);
+
+            // مجلد الموظف الأساسي
+            string cleanEmpName = string.Concat(Employee.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            string cleanEmpFile = string.Concat(Employee.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            string employeeFolderRelPath = !string.IsNullOrWhiteSpace(Employee.EmployeeFolderPath)
+                ? Employee.EmployeeFolderPath
+                : $"{cleanEmpFile}_{cleanEmpName}";
+
+            string employeeRootFullPath = Path.Combine(baseFolder, employeeFolderRelPath);
+            if (!Directory.Exists(employeeRootFullPath)) Directory.CreateDirectory(employeeRootFullPath);
+
             foreach (var item in _items)
             {
-                string extension = Path.GetExtension(item.File.Name);
-                string uniqueFileName = $"{Guid.NewGuid()}{extension}";
-                string physicalPath = Path.Combine(uploadsFolder, uniqueFileName);
+                // 1. تحديد الفروع والتصنيفات
+                var mainCat = MainCategories.FirstOrDefault(c => c.MainCategoryId == item.MainCategoryId);
+                string mainName = mainCat?.Name?.Trim() ?? "";
+                string branchName = mainName.Contains("وارد") ? "الوارد" : "الصادر";
 
-                await using (var fileStream = new FileStream(physicalPath, FileMode.Create))
+                var priCat = PrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == item.PrimaryCategoryId);
+                string priName = priCat?.Name?.Trim() ?? "عام";
+
+                string cleanBranch = string.Concat(branchName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                string cleanPri = string.Concat(priName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+                // مجلد حفظ الملف للموظف الأساسي
+                string primaryTargetDir = Path.Combine(employeeRootFullPath, cleanBranch, cleanPri);
+                if (item.SecondaryCategoryId.HasValue)
+                {
+                    var secCat = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == item.SecondaryCategoryId.Value);
+                    if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
+                    {
+                        string cleanSec = string.Concat(secCat.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                        primaryTargetDir = Path.Combine(primaryTargetDir, cleanSec);
+                    }
+                }
+                if (!Directory.Exists(primaryTargetDir)) Directory.CreateDirectory(primaryTargetDir);
+
+                // تسمية الملف: (الموضوع - الرقم - التاريخ)
+                string cleanSubject = string.Concat((string.IsNullOrWhiteSpace(item.Subject) ? "مستند" : item.Subject.Trim()).Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                string cleanDocNum = string.Concat(item.DocumentNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                string docDateStr = item.DocumentDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd");
+
+                string extension = Path.GetExtension(item.File.Name);
+                if (string.IsNullOrWhiteSpace(extension)) extension = ".pdf";
+
+                string fileName = $"{cleanSubject} - {cleanDocNum} - {docDateStr}{extension}";
+                string physicalFilePath = Path.Combine(primaryTargetDir, fileName);
+
+                if (File.Exists(physicalFilePath))
+                {
+                    fileName = $"{cleanSubject} - {cleanDocNum} - {docDateStr}_{Guid.NewGuid().ToString()[..4]}{extension}";
+                    physicalFilePath = Path.Combine(primaryTargetDir, fileName);
+                }
+
+                // حفظ الملف الفعلي للموظف الأساسي
+                await using (var fileStream = new FileStream(physicalFilePath, FileMode.Create))
                 {
                     await item.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(fileStream);
                 }
 
+                string relativeFilePath = Path.GetRelativePath(baseFolder, physicalFilePath);
+
+                // 2. إنشاء سجل المستند الرئيسي مرة واحدة فقط
                 var newDoc = new Document
                 {
                     DocumentNumber = item.DocumentNumber.Trim(),
-                    DocumentDate = item.DocumentDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"),
+                    DocumentDate = docDateStr,
                     Subject = string.IsNullOrWhiteSpace(item.Subject) ? $"كتاب رقم {item.DocumentNumber}" : item.Subject.Trim(),
-                    FilePath = $"/uploads/documents/{uniqueFileName}",
+                    FilePath = relativeFilePath,
                     MainCategoryId = item.MainCategoryId ?? 0,
                     PrimaryCategoryId = item.PrimaryCategoryId ?? 0,
                     SecondaryCategoryId = item.SecondaryCategoryId,
@@ -605,32 +732,75 @@
                 DbContext.Documents.Add(newDoc);
                 await DbContext.SaveChangesAsync();
 
+                // 3. ربط الموظف الأساسي
                 var docEmployee = new DocumentEmployee
                 {
                     DocumentId = newDoc.DocumentId,
-                    EmployeeId = Employee.EmployeeId
+                    EmployeeId = Employee.EmployeeId,
+                    EmployeeFilePath = relativeFilePath
                 };
-
                 DbContext.DocumentEmployees.Add(docEmployee);
-                await DbContext.SaveChangesAsync();
 
+                // 4. معالجة الموظفين المشتركين: نسخ الملف فيزيائياً لمجلد كل موظف وربطه
+                foreach (var sharedEmpId in item.SharedEmployeeIds)
+                {
+                    if (sharedEmployeesMap.TryGetValue(sharedEmpId, out var sharedEmp))
+                    {
+                        string sCleanName = string.Concat(sharedEmp.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                        string sCleanFile = string.Concat(sharedEmp.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                        string sEmpFolderRel = !string.IsNullOrWhiteSpace(sharedEmp.EmployeeFolderPath) ? sharedEmp.EmployeeFolderPath : $"{sCleanFile}_{sCleanName}";
+
+                        string sEmpTargetDir = Path.Combine(baseFolder, sEmpFolderRel, cleanBranch, cleanPri);
+                        if (item.SecondaryCategoryId.HasValue)
+                        {
+                            var secCat = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == item.SecondaryCategoryId.Value);
+                            if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
+                            {
+                                string cleanSec = string.Concat(secCat.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                                sEmpTargetDir = Path.Combine(sEmpTargetDir, cleanSec);
+                            }
+                        }
+                        if (!Directory.Exists(sEmpTargetDir)) Directory.CreateDirectory(sEmpTargetDir);
+
+                        string sPhysicalFilePath = Path.Combine(sEmpTargetDir, fileName);
+                        if (File.Exists(sPhysicalFilePath))
+                        {
+                            string sAltName = $"{cleanSubject} - {cleanDocNum} - {docDateStr}_{Guid.NewGuid().ToString()[..4]}{extension}";
+                            sPhysicalFilePath = Path.Combine(sEmpTargetDir, sAltName);
+                        }
+
+                        // نسخ الملف فيزيائياً
+                        File.Copy(physicalFilePath, sPhysicalFilePath, overwrite: true);
+                        string sRelativeFilePath = Path.GetRelativePath(baseFolder, sPhysicalFilePath);
+
+                        // إضافة قيد الربط للموظف المشترك
+                        DbContext.DocumentEmployees.Add(new DocumentEmployee
+                        {
+                            DocumentId = newDoc.DocumentId,
+                            EmployeeId = sharedEmp.EmployeeId,
+                            EmployeeFilePath = sRelativeFilePath
+                        });
+                    }
+                }
+
+                await DbContext.SaveChangesAsync();
                 _processedCount++;
                 StateHasChanged();
             }
 
             await SessionService.LogActivityAsync(
-                actionType: "أرشفة ذكية مجمعة",
+                actionType: "أرشفة ذكية مجمعة ومشاركة",
                 entityType: "إضبارة موظف",
                 entityId: Employee.EmployeeId,
-                description: $"أرشفة مجمعة لعدد ({_items.Count}) مستند في إضبارة ({Employee.EmployeeName})."
+                description: $"أرشفة وتوزيع ({_items.Count}) كتاباً مع إدارة المشاركة الجماعية بنجاح."
             );
 
-            Snackbar.Add($"تم حفظ وفهرسة {_items.Count} كتاباً بنجاح في الإضبارة!", Severity.Success);
+            Snackbar.Add($"تم حفظ وتوزيع {_items.Count} كتاباً بنجاح في أضابير الموظفين المعنيين!", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"حدث خطأ أثناء الحفظ: {ex.Message}", Severity.Error);
+            Snackbar.Add($"حدث خطأ أثناء حفظ الملفات: {ex.Message}", Severity.Error);
         }
         finally
         {

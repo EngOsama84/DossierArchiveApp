@@ -1,0 +1,96 @@
+﻿@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using DossierArchiveApp.Data
+@using DossierArchiveApp.Models
+@inject AppDbContext DbContext
+
+<MudDialog MaxWidth="MaxWidth.ExtraSmall" FullWidth="true">
+    <TitleContent>
+        <div class="d-flex align-center gap-2" style="color: #1B4D3E;">
+            <MudIcon Icon="@Icons.Material.Filled.Group" />
+            <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                الموظفون المشتركون بالكتاب
+            </MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div dir="rtl" class="pa-1">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2 d-block">
+                كتاب رقم: <strong>@DocumentNumber</strong>
+            </MudText>
+
+            @if (_isLoading)
+            {
+                <div class="d-flex justify-center pa-4">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Small" />
+                </div>
+            }
+            else if (!_sharedEmployees.Any())
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center pa-3">
+                    لا يوجد موظفون آخرون مرتبطون بهذا المستند.
+                </MudText>
+            }
+            else
+            {
+                <MudList T="string" Dense="true" Class="pa-0">
+                    @foreach (var emp in _sharedEmployees)
+                    {
+                        <MudListItem Icon="@Icons.Material.Filled.Person">
+                            <div class="d-flex justify-space-between align-center w-100">
+                                <MudText Typo="Typo.body2" Class="fw-bold">@emp.EmployeeName</MudText>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
+                                    إضبارة: @emp.FileNumber
+                                </MudChip>
+                            </div>
+                        </MudListItem>
+                        <MudDivider />
+                    }
+                </MudList>
+            }
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Size="Size.Small"
+                   OnClick="Close"
+                   Style="background-color: #1B4D3E; color: white;">
+            إغلاق
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int DocumentId { get; set; }
+
+    [Parameter]
+    public int CurrentEmployeeId { get; set; }
+
+    [Parameter]
+    public string DocumentNumber { get; set; } = string.Empty;
+
+    private List<Employee> _sharedEmployees = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sharedEmployees = await DbContext.DocumentEmployees
+            .AsNoTracking()
+            .Where(de => de.DocumentId == DocumentId && de.EmployeeId != CurrentEmployeeId)
+            .Select(de => de.Employee)
+            .OrderBy(e => e.FileNumber)
+            .ToListAsync();
+
+        _isLoading = false;
+    }
+
+    private void Close() => MudDialog.Close();
+}

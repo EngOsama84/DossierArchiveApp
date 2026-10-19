@@ -142,6 +142,7 @@
             string cleanName = string.Concat(trimmedName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
             string cleanFile = string.Concat(trimmedFile.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
 
+            // 1. إنشاء المجلد الرئيسي للموظف (رقم_اسم)
             string employeeFolderRelPath = $"{cleanFile}_{cleanName}";
             string employeeFolderFullPath = Path.Combine(settings.BaseFolderPath, employeeFolderRelPath);
 
@@ -150,32 +151,46 @@
                 Directory.CreateDirectory(employeeFolderFullPath);
             }
 
+            // 2. المجلدان الأساسيان فقط: الصادر والوارد
+            string[] rootBranches = { "الصادر", "الوارد" };
+
+            // 3. جلب التصنيفات الفعلية من PrimaryCategories واستبعاد الصادر والوارد
             var primaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
-            if (primaryCategories.Any())
+
+            List<string> categoryNames = primaryCategories
+                .Select(c => c.Name.Trim())
+                .Where(name => name != "صادر" && name != "وارد" && name != "الصادر" && name != "الوارد")
+                .Distinct()
+                .ToList();
+
+            // في حال كانت قاعدة البيانات فارغة نستخدم التصنيفات الافتراضية الأربعة
+            if (!categoryNames.Any())
             {
-                foreach (var cat in primaryCategories)
-                {
-                    string cleanCat = string.Concat(cat.Name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                    string subCategoryFolder = Path.Combine(employeeFolderFullPath, cleanCat);
-                    if (!Directory.Exists(subCategoryFolder))
-                    {
-                        Directory.CreateDirectory(subCategoryFolder);
-                    }
-                }
+                categoryNames = new List<string> { "أوامر إدارية", "استمارات ومستمسكات", "طلبات شخصية", "كتب اعتيادية" };
             }
-            else
+
+            // 4. إنشاء المجلدات الهرمية (صادر/وارد وبداخلهما التصنيفات الأربعة فقط)
+            foreach (var branch in rootBranches)
             {
-                string[] defaultFolders = { "أوامر إدارية", "استمارات ومستمسكات", "طلبات شخصية", "كتب اعتيادية" };
-                foreach (var folder in defaultFolders)
+                string branchFullPath = Path.Combine(employeeFolderFullPath, branch);
+                if (!Directory.Exists(branchFullPath))
                 {
-                    string subFolder = Path.Combine(employeeFolderFullPath, folder);
-                    if (!Directory.Exists(subFolder))
+                    Directory.CreateDirectory(branchFullPath);
+                }
+
+                foreach (var catName in categoryNames)
+                {
+                    string cleanCatName = string.Concat(catName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                    string subCategoryFullPath = Path.Combine(branchFullPath, cleanCatName);
+
+                    if (!Directory.Exists(subCategoryFullPath))
                     {
-                        Directory.CreateDirectory(subFolder);
+                        Directory.CreateDirectory(subCategoryFullPath);
                     }
                 }
             }
 
+            // 5. حفظ بيانات الموظف في قاعدة البيانات
             _newEmployee.EmployeeName = trimmedName;
             _newEmployee.FileNumber = trimmedFile;
             _newEmployee.IsActive = _isActive ? 1 : 0;
@@ -183,13 +198,15 @@
 
             DbContext.Employees.Add(_newEmployee);
             await DbContext.SaveChangesAsync();
+
             await SessionService.LogActivityAsync(
                 actionType: "إضافة موظف",
                 entityType: "موظف",
                 entityId: _newEmployee.EmployeeId,
                 description: $"تمت إضافة الموظف ({_newEmployee.EmployeeName}) برقم إضبارة ({_newEmployee.FileNumber})."
             );
-            Snackbar.Add($"تم حفظ الموظف وإنشاء مجلد إضباره بنجاح: {employeeFolderRelPath}", Severity.Success);
+
+            Snackbar.Add($"تم حفظ الموظف وإنشاء هيكلية مجلدات إضباره (صادر / وارد) بنجاح", Severity.Success);
             MudDialog.Close(DialogResult.Ok(_newEmployee));
         }
         catch (DbUpdateException)
