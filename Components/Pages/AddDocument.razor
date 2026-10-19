@@ -11,6 +11,7 @@
 @inject ScannerService ScannerService
 @inject NavigationManager Navigation
 @inject UserSessionService SessionService
+@inject IJSRuntime JS
 
 <PageTitle>إضافة مستند جديد والأرشفة</PageTitle>
 
@@ -74,7 +75,7 @@
                           Style="max-width: 260px; min-width: 200px; height: 36px; background: white;" />
         </div>
 
-        <div style="max-height: 105px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; background-color: #fafafa;">
+        <div style="max-height: 155px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; background-color: #fafafa;">
             @if (_loadingEmployees)
             {
                 <div class="d-flex justify-center pa-2">
@@ -88,17 +89,17 @@
                     bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
                     <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
                          @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
-                         style="cursor: pointer; border-radius: 4px; font-size: 0.85rem;">
+                         style="cursor: pointer; border-radius: 4px; font-size: 0.88rem; min-height: 34px;">
                         <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
                                      ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
-                        <span class="ms-2">@($"{emp.EmployeeId:D3} - {emp.EmployeeName} — {emp.FileNumber}")</span>
+                        <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
                     </div>
                 }
             }
         </div>
     </MudPaper>
 
-    <!-- 3. شبكة العمل الرئيسية (بيانات الكتاب يساراً/يميناً والمعاينة متجاوبة) -->
+    <!-- 3. شبكة العمل الرئيسية -->
     <MudGrid Spacing="2">
 
         <!-- القسم الأول: إدخال البيانات والتصنيفات والسكنر -->
@@ -334,7 +335,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // فحص الأمان والصلاحيات
         if (SessionService.CurrentUser == null || !SessionService.CanAdd)
         {
             Snackbar.Add("عذراً، حسابك لا يمتلك صلاحية إضافة أو أرشفة مستندات!", Severity.Error);
@@ -351,6 +351,7 @@
             _selectedEmployeeIds.Add(InitialEmployeeId.Value);
         }
     }
+
     private async Task LoadSettings()
     {
         _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -496,8 +497,17 @@
             await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(memoryStream);
             _documentBytes = memoryStream.ToArray();
 
-            string base64 = Convert.ToBase64String(_documentBytes);
-            _previewFileUrl = $"data:application/pdf;base64,{base64}";
+            if (!string.IsNullOrEmpty(_previewFileUrl))
+            {
+                await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+            }
+
+            _previewFileUrl = await JS.InvokeAsync<string>(
+                "createBlobUrlFromByteArray",
+                _documentBytes,
+                "application/pdf"
+            );
+
             Snackbar.Add("تم تحميل الملف للمعاينة بنجاح", Severity.Success);
         }
         catch (Exception ex)
@@ -506,8 +516,12 @@
         }
     }
 
-    private void ClearPreview()
+    private async Task ClearPreview()
     {
+        if (!string.IsNullOrEmpty(_previewFileUrl))
+        {
+            await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+        }
         _previewFileUrl = string.Empty;
         _documentBytes = null;
         _selectedFile = null;
@@ -526,7 +540,6 @@
         {
             Snackbar.Add("جارٍ الاتصال بالماسح وسحب المستند...", Severity.Info);
 
-            // استدعاء السحب الفعلي
             var pdfBytes = await ScannerService.ScanDocumentAsync(
                 _settings.DefaultScannerName,
                 _settings.ScanSource ?? "Flatbed",
@@ -538,11 +551,18 @@
             {
                 _documentBytes = pdfBytes;
                 _finalExtension = ".pdf";
-                _selectedFile = null; // إفراغ الملف اليدوي لأن السحب تم عبر السكنر
+                _selectedFile = null;
 
-                // توليد رابط المعاينة الفوري للـ PDF المسحوب
-                string base64 = Convert.ToBase64String(_documentBytes);
-                _previewFileUrl = $"data:application/pdf;base64,{base64}";
+                if (!string.IsNullOrEmpty(_previewFileUrl))
+                {
+                    await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+                }
+
+                _previewFileUrl = await JS.InvokeAsync<string>(
+                    "createBlobUrlFromByteArray",
+                    _documentBytes,
+                    "application/pdf"
+                );
 
                 Snackbar.Add("تم سحب المستند ومعاينته بنجاح!", Severity.Success);
             }
@@ -557,6 +577,7 @@
             StateHasChanged();
         }
     }
+
     private string CleanFileSystemName(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return string.Empty;
@@ -572,34 +593,38 @@
         _isSaving = true;
         try
         {
-            if (_settings == null || string.IsNullOrWhiteSpace(_settings.BaseFolderPath) || !Directory.Exists(_settings.BaseFolderPath))
+            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            string baseFolder = settings?.BaseFolderPath ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(baseFolder) || !Directory.Exists(baseFolder))
             {
                 Snackbar.Add("مسار المجلد الأساسي غير متاح، يرجى ضبطه من الإعدادات أولاً!", Severity.Error);
                 _isSaving = false;
                 return;
             }
 
+            char[] invalidChars = Path.GetInvalidFileNameChars();
             string cleanSubject = CleanFileSystemName(_subject);
             string cleanDocNumber = CleanFileSystemName(_documentNumber);
             string formattedDate = _documentDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd");
 
             string storedFileName = $"{cleanSubject} - {cleanDocNumber} - {formattedDate}{_finalExtension}";
 
-            string mainFolderName = "عام";
+            string branchName = "الصادر";
             if (_selectedMainCatId.HasValue)
             {
                 var mainCat = _mainCategories.FirstOrDefault(m => m.MainCategoryId == _selectedMainCatId.Value);
-                if (mainCat != null)
+                if (mainCat != null && mainCat.Name.Contains("وارد"))
                 {
-                    mainFolderName = CleanFileSystemName(mainCat.Name);
+                    branchName = "الوارد";
                 }
             }
 
-            string primaryFolderName = "كتب عامة";
+            string primaryFolderName = "عام";
             if (_selectedPrimaryCatId.HasValue)
             {
                 var primCat = _allPrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == _selectedPrimaryCatId.Value);
-                if (primCat != null)
+                if (primCat != null && !string.IsNullOrWhiteSpace(primCat.Name))
                 {
                     primaryFolderName = CleanFileSystemName(primCat.Name);
                 }
@@ -613,6 +638,7 @@
                 OriginalFileName = _selectedFile?.Name ?? storedFileName,
                 StoredFileName = storedFileName,
                 FileExtension = _finalExtension,
+                FilePath = string.Empty,
                 MainCategoryId = _selectedMainCatId ?? 0,
                 PrimaryCategoryId = _selectedPrimaryCatId ?? 0,
                 SecondaryCategoryId = _selectedSecondaryCatId,
@@ -629,12 +655,26 @@
                 .Where(e => _selectedEmployeeIds.Contains(e.EmployeeId))
                 .ToListAsync();
 
+            string primaryRelativePath = string.Empty;
+
             foreach (var emp in selectedEmployees)
             {
-                if (string.IsNullOrWhiteSpace(emp.EmployeeFolderPath))
-                    continue;
+                string cleanEmpName = string.Concat(emp.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                string cleanEmpFile = string.Concat(emp.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                string empFolderRel = !string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)
+                    ? emp.EmployeeFolderPath
+                    : $"{cleanEmpFile}_{cleanEmpName}";
 
-                string targetCategoryDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, mainFolderName, primaryFolderName);
+                string targetCategoryDir = Path.Combine(baseFolder, empFolderRel, branchName, primaryFolderName);
+
+                if (_selectedSecondaryCatId.HasValue)
+                {
+                    var secCat = _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
+                    if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
+                    {
+                        targetCategoryDir = Path.Combine(targetCategoryDir, CleanFileSystemName(secCat.Name));
+                    }
+                }
 
                 if (!Directory.Exists(targetCategoryDir))
                 {
@@ -646,8 +686,8 @@
                 if (File.Exists(targetFilePath))
                 {
                     string uniqueSuffix = DateTime.Now.ToString("HHmmss");
-                    storedFileName = $"{cleanSubject} - {cleanDocNumber} - {formattedDate}_{uniqueSuffix}{_finalExtension}";
-                    targetFilePath = Path.Combine(targetCategoryDir, storedFileName);
+                    string altFileName = $"{cleanSubject} - {cleanDocNumber} - {formattedDate}_{uniqueSuffix}{_finalExtension}";
+                    targetFilePath = Path.Combine(targetCategoryDir, altFileName);
                 }
 
                 if (_documentBytes != null)
@@ -655,19 +695,24 @@
                     await File.WriteAllBytesAsync(targetFilePath, _documentBytes);
                 }
 
-                string relEmployeeFilePath = Path.Combine(emp.EmployeeFolderPath, mainFolderName, primaryFolderName, storedFileName);
+                string relEmployeeFilePath = Path.GetRelativePath(baseFolder, targetFilePath);
+
+                if (string.IsNullOrEmpty(primaryRelativePath))
+                {
+                    primaryRelativePath = relEmployeeFilePath;
+                }
 
                 var docEmp = new DocumentEmployee
                 {
                     DocumentId = document.DocumentId,
                     EmployeeId = emp.EmployeeId,
-                    EmployeeFilePath = relEmployeeFilePath,
-                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    EmployeeFilePath = relEmployeeFilePath
                 };
 
                 DbContext.DocumentEmployees.Add(docEmp);
             }
 
+            document.FilePath = primaryRelativePath;
             await DbContext.SaveChangesAsync();
 
             await SessionService.LogActivityAsync(
@@ -678,7 +723,6 @@
             );
 
             Snackbar.Add($"تم حفظ وتوزيع الكتاب على أضابير ({selectedEmployees.Count}) موظف بنجاح!", Severity.Success);
-
             Navigation.NavigateTo("/employees");
         }
         catch (Exception ex)

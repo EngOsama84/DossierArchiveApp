@@ -21,7 +21,7 @@
 
     <!-- الشريط العلوي المتجاوب -->
     <div class="d-flex flex-wrap align-center justify-space-between gap-2 mb-3">
-        <!-- فلاتر وبحث الموظفين -->
+        <!-- فلاتر وبحث الموظفين (في اليمين) -->
         <div class="d-flex flex-grow-1 align-center gap-2" style="max-width: 650px; min-width: 260px;">
             <MudTextField @bind-Value="_employeeSearchText"
                           Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
@@ -46,57 +46,67 @@
             </MudSelect>
         </div>
 
-        <!-- أزرار الإجراءات (طباعة الفهرس + تصدير Excel + أرشفة مجمعة + إضافة مستند) -->
+        <!-- أزرار الإجراءات بالترتيب: إضافة مستند -> أرشفة مجمعة -> خط فاصل -> زر منسدل -->
         <div class="d-flex align-center gap-2 flex-wrap">
-            @if (_selectedEmployee != null && _documents.Any())
+            @if (_selectedEmployee != null)
             {
-                <!-- زر طباعة الفهرس الرسمي A4 -->
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Print"
-                           OnClick="OpenPrintDialog"
-                           Style="border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap; background-color: white;">
-                    طباعة الفهرس
-                </MudButton>
+                @if (SessionService.CanAdd)
+                {
+                    <!-- 1. زر إضافة مستند فردي -->
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.NoteAdd"
+                               OnClick="OpenAddDocumentDialog"
+                               Style="background-color: #1B4D3E; color: white; border-radius: 6px; font-weight: bold; padding: 7px 18px; white-space: nowrap;">
+                        إضافة مستند
+                    </MudButton>
 
-                <!-- زر تصدير الإكسل -->
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Success"
-                           StartIcon="@Icons.Custom.FileFormats.FileExcel"
-                           OnClick="ExportToExcel"
-                           Disabled="_isExporting"
-                           Style="border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap; background-color: white;">
-                    @if (_isExporting)
-                    {
-                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
-                        <span>جارٍ التصدير...</span>
-                    }
-                    else
-                    {
-                        <span>تصدير إلى Excel</span>
-                    }
-                </MudButton>
-            }
+                    <!-- 2. زر الأرشفة الذكية المجمعة -->
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Tertiary"
+                               StartIcon="@Icons.Material.Filled.AutoFixHigh"
+                               OnClick="OpenBulkUploadDialog"
+                               Style="background-color: #2E7D32; color: white; border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap;">
+                        أرشفة ذكية مجمعة
+                    </MudButton>
+                }
 
-            @if (_selectedEmployee != null && SessionService.CanAdd)
-            {
-                <!-- زر الأرشفة الذكية المجمعة (سحب وإفلات) -->
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Tertiary"
-                           StartIcon="@Icons.Material.Filled.AutoFixHigh"
-                           OnClick="OpenBulkUploadDialog"
-                           Style="background-color: #2E7D32; color: white; border-radius: 6px; font-weight: bold; padding: 7px 16px; white-space: nowrap;">
-                    أرشفة ذكية مجمعة
-                </MudButton>
+                @if (_documents.Any())
+                {
+                    <!-- 3. خط عمودي فاصل -->
+                    <MudDivider Vertical="true" FlexItem="true" Class="mx-1" Style="height: 28px; border-color: #cfd8dc;" />
 
-                <!-- زر إضافة مستند فردي -->
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.NoteAdd"
-                           OnClick="OpenAddDocumentDialog"
-                           Style="background-color: #1B4D3E; color: white; border-radius: 6px; font-weight: bold; padding: 7px 20px; white-space: nowrap;">
-                    إضافة مستند
-                </MudButton>
+                    <!-- 4. زر منسدل موحد للمخرجات (طباعة الفهرس + تصدير Excel) -->
+                    <MudMenu Label="استخراج وفهرسة"
+                             Variant="Variant.Outlined"
+                             Color="Color.Primary"
+                             StartIcon="@Icons.Material.Filled.Assignment"
+                             EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                             AnchorOrigin="Origin.BottomRight"
+                             TransformOrigin="Origin.TopRight"
+                             Style="border-radius: 6px; font-weight: bold; background-color: white; white-space: nowrap;">
+
+                        <MudMenuItem Icon="@Icons.Material.Filled.Print"
+                                     IconColor="Color.Primary"
+                                     OnClick="OpenPrintDialog">
+                            طباعة الفهرس (A4)
+                        </MudMenuItem>
+
+                        <MudMenuItem Icon="@Icons.Custom.FileFormats.FileExcel"
+                                     IconColor="Color.Success"
+                                     OnClick="ExportToExcel"
+                                     Disabled="_isExporting">
+                            @if (_isExporting)
+                            {
+                                <span>جارٍ التصدير...</span>
+                            }
+                            else
+                            {
+                                <span>تصدير إلى Excel</span>
+                            }
+                        </MudMenuItem>
+                    </MudMenu>
+                }
             }
         </div>
     </div>
@@ -314,7 +324,7 @@
 
                     <MudDivider Class="my-2" />
 
-                    <!-- جدول استعراض كتب الموظف مع شريط تمرير أفقي responsive -->
+                    <!-- جدول استعراض كتب الموظف -->
                     <div style="overflow-x: auto;">
                         <MudTable Items="@FilteredDocuments"
                                   Dense="true"
@@ -323,12 +333,13 @@
                                   Loading="@_loadingDocs"
                                   LoadingProgressColor="Color.Primary">
                             <HeaderContent>
-                                <MudTh Style="font-weight: bold; background-color: #fafafa; white-space: nowrap;">الرقم</MudTh>
-                                <MudTh Style="font-weight: bold; background-color: #fafafa; min-width: 140px;">الموضوع</MudTh>
-                                <MudTh Style="font-weight: bold; background-color: #fafafa; white-space: nowrap;">التاريخ</MudTh>
-                                <MudTh Style="font-weight: bold; background-color: #fafafa;">التصنيف الشجري</MudTh>
-                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; white-space: nowrap;">الملف</MudTh>
-                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; white-space: nowrap;">إجراء</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; white-space: nowrap; width: 120px;">الرقم</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; min-width: 160px;">الموضوع</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; white-space: nowrap; width: 110px;">التاريخ</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; min-width: 140px;">التصنيف الشجري</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; width: 55px; white-space: nowrap; padding: 6px 10px;">الملف</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; width: 95px; white-space: nowrap; padding: 6px 10px;">إجراء</MudTh>
+                                <MudTh Style="font-weight: bold; background-color: #fafafa; text-align: center; width: 95px; white-space: nowrap; padding: 6px 10px;">المشتركون</MudTh>
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="الرقم">
@@ -341,14 +352,18 @@
                                 <MudTd DataLabel="التصنيف الشجري">
                                     @GetCategoryHierarchyName(context)
                                 </MudTd>
-                                <MudTd DataLabel="الملف" Style="text-align: center;">
+
+                                <!-- عمود الملف -->
+                                <MudTd DataLabel="الملف" Style="text-align: center; width: 55px; white-space: nowrap; padding: 6px 10px;">
                                     <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
                                                    Color="Color.Error"
                                                    Size="Size.Small"
                                                    OnClick="@(() => ViewDocument(context))" />
                                 </MudTd>
-                                <MudTd DataLabel="إجراء" Style="text-align: center;">
-                                    <div class="d-flex justify-center gap-1">
+
+                                <!-- عمود الإجراء -->
+                                <MudTd DataLabel="إجراء" Style="text-align: center; width: 95px; white-space: nowrap; padding: 6px 10px;">
+                                    <div class="d-flex justify-center align-center gap-2">
                                         @if (SessionService.CanEdit)
                                         {
                                             <MudIconButton Icon="@Icons.Material.Filled.Edit"
@@ -367,6 +382,22 @@
                                                            OnClick="@(() => DeleteDocument(context))" />
                                         }
                                     </div>
+                                </MudTd>
+
+                                <!-- عمود المشتركون -->
+                                <MudTd DataLabel="المشتركون" Style="text-align: center; width: 95px; white-space: nowrap; padding: 6px 10px;">
+                                    @if (_sharedCounts.TryGetValue(context.DocumentId, out int sharedCount) && sharedCount > 0)
+                                    {
+                                        <MudChip T="string"
+                                                 Variant="Variant.Filled"
+                                                 Size="Size.Small"
+                                                 Icon="@Icons.Material.Filled.Group"
+                                                 OnClick="@(() => ShowSharedEmployees(context.DocumentId, context.DocumentNumber))"
+                                                 Style="cursor: pointer; font-weight: bold; font-size: 0.78rem; background-color: #FADBD8; color: #78281F; border: 1px solid #F5B7B1; height: 26px; padding: 0 8px;"
+                                                 Title="انقر لعرض أسماء الموظفين المشتركين">
+                                            (@sharedCount)
+                                        </MudChip>
+                                    }
                                 </MudTd>
                             </RowTemplate>
                             <NoRecordsContent>
@@ -411,6 +442,7 @@
     private string _employeeStatusFilter = "Active";
 
     private List<Document> _documents = new();
+    private Dictionary<int, int> _sharedCounts = new();
 
     private List<MainCategory> _mainCategories = new();
     private List<PrimaryCategory> _primaryCategories = new();
@@ -574,6 +606,19 @@
                 .Where(d => docIds.Contains(d.DocumentId) && d.IsDeleted == 0)
                 .OrderByDescending(d => d.DocumentDate)
                 .ToListAsync();
+
+            if (docIds.Any())
+            {
+                _sharedCounts = await DbContext.DocumentEmployees
+                    .Where(de => docIds.Contains(de.DocumentId) && de.EmployeeId != employeeId)
+                    .GroupBy(de => de.DocumentId)
+                    .Select(g => new { DocumentId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.DocumentId, x => x.Count);
+            }
+            else
+            {
+                _sharedCounts.Clear();
+            }
         }
         catch (Exception ex)
         {
@@ -583,6 +628,27 @@
         {
             _loadingDocs = false;
         }
+    }
+
+    private async Task ShowSharedEmployees(int documentId, string docNumber)
+    {
+        if (_selectedEmployee == null) return;
+
+        var parameters = new DialogParameters
+        {
+            ["DocumentId"] = documentId,
+            ["CurrentEmployeeId"] = _selectedEmployee.EmployeeId,
+            ["DocumentNumber"] = docNumber
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = false,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<SharedEmployeesViewerDialog>("المشتركون بالكتاب", parameters, options);
     }
 
     private IEnumerable<Employee> FilteredEmployees => _employees.Where(e =>
@@ -767,6 +833,7 @@
             else
             {
                 _documents.Clear();
+                _sharedCounts.Clear();
             }
 
             Snackbar.Add($"تم نقل إضبارة الموظف ({deletedEmpName}) إلى سلة المحذوفات بنجاح", Severity.Success);

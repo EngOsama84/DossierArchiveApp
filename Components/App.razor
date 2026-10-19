@@ -40,6 +40,17 @@
             link.click();
             document.body.removeChild(link);
         };
+
+        window.createBlobUrlFromByteArray = (byteArray, contentType) => {
+            const blob = new Blob([byteArray], { type: contentType });
+            return URL.createObjectURL(blob);
+        };
+
+        window.revokeBlobUrl = (url) => {
+            if (url && url.startsWith('blob:')) {
+                URL.revokeObjectURL(url);
+            }
+        };
     </script>
 </body>
 

@@ -10,6 +10,7 @@
 @inject ScannerService ScannerService
 @inject NavigationManager Navigation
 @inject UserSessionService SessionService
+@inject IJSRuntime JS
 
 <PageTitle>تعديل بيانات ومستند الأضبارة</PageTitle>
 
@@ -85,16 +86,18 @@
                               Style="max-width: 260px; min-width: 200px; height: 36px; background: white;" />
             </div>
 
-            <div style="max-height: 110px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; background-color: #fafafa;">
+            <!-- تم ضبط الارتفاع ليتسع لـ 4 أسطر كاملة ومريحة -->
+            <div style="max-height: 155px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; background-color: #fafafa;">
                 @foreach (var emp in FilteredEmployees)
                 {
                     bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
                     <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
                          @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
-                         style="cursor: pointer; border-radius: 4px; font-size: 0.85rem;">
+                         style="cursor: pointer; border-radius: 4px; font-size: 0.88rem; min-height: 34px;">
                         <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
                                      ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
-                        <span class="ms-2">@($"{emp.EmployeeId:D3} - {emp.EmployeeName} — {emp.FileNumber}")</span>
+                        <!-- إزالة التسلسل الرقمي وعرض الاسم ورقم الإضبارة مباشرة -->
+                        <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
                     </div>
                 }
             </div>
@@ -353,7 +356,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // فحص الأمان والصلاحيات
         if (SessionService.CurrentUser == null || !SessionService.CanEdit)
         {
             Snackbar.Add("عذراً، حسابك لا يمتلك صلاحية تعديل المستندات!", Severity.Error);
@@ -428,17 +430,29 @@
     {
         if (_settings == null || string.IsNullOrWhiteSpace(_settings.BaseFolderPath)) return;
 
-        string? relPath = _existingDocEmployees.FirstOrDefault()?.EmployeeFilePath ?? _document?.FilePath;
-        if (!string.IsNullOrEmpty(relPath))
+        string? relPath = _existingDocEmployees.FirstOrDefault(de => !string.IsNullOrEmpty(de.EmployeeFilePath))?.EmployeeFilePath
+                          ?? _document?.FilePath;
+
+        if (string.IsNullOrWhiteSpace(relPath)) return;
+
+        relPath = relPath.Replace('/', Path.DirectorySeparatorChar)
+                         .Replace('\\', Path.DirectorySeparatorChar)
+                         .TrimStart(Path.DirectorySeparatorChar);
+
+        string fullPath = Path.Combine(_settings.BaseFolderPath, relPath);
+
+        if (File.Exists(fullPath))
         {
-            string fullPath = Path.Combine(_settings.BaseFolderPath, relPath);
-            if (File.Exists(fullPath))
-            {
-                _originalFileBytes = await File.ReadAllBytesAsync(fullPath);
-                string base64 = Convert.ToBase64String(_originalFileBytes);
-                _originalPreviewUrl = $"data:application/pdf;base64,{base64}";
-                _previewFileUrl = _originalPreviewUrl;
-            }
+            _originalFileBytes = await File.ReadAllBytesAsync(fullPath);
+
+            // تحويل المصفوفة إلى Blob URL فوري عبر المتصفح
+            _previewFileUrl = await JS.InvokeAsync<string>(
+                "createBlobUrlFromByteArray",
+                _originalFileBytes,
+                "application/pdf"
+            );
+
+            StateHasChanged();
         }
     }
 
@@ -631,18 +645,18 @@
 
             string newFileName = $"{cleanSubj} - {cleanNum} - {formattedDate}{ext}";
 
-            string mainFolder = "عام";
+            string branchName = "الصادر";
             if (_selectedMainCatId.HasValue)
             {
                 var mc = _mainCategories.FirstOrDefault(m => m.MainCategoryId == _selectedMainCatId.Value);
-                if (mc != null) mainFolder = CleanFileSystemName(mc.Name);
+                if (mc != null && mc.Name.Contains("وارد")) branchName = "الوارد";
             }
 
-            string primFolder = "كتب عامة";
+            string primFolder = "عام";
             if (_selectedPrimaryCatId.HasValue)
             {
                 var pc = _allPrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == _selectedPrimaryCatId.Value);
-                if (pc != null) primFolder = CleanFileSystemName(pc.Name);
+                if (pc != null && !string.IsNullOrWhiteSpace(pc.Name)) primFolder = CleanFileSystemName(pc.Name);
             }
 
             byte[] activeFileBytes = _newReplacementBytes ?? _originalFileBytes ?? Array.Empty<byte>();
@@ -677,14 +691,23 @@
                 string oldRelPath = docEmp.EmployeeFilePath ?? string.Empty;
                 string oldFullDiskPath = Path.Combine(_settings.BaseFolderPath, oldRelPath);
 
-                string newTargetDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, mainFolder, primFolder);
+                string newTargetDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, branchName, primFolder);
+                if (_selectedSecondaryCatId.HasValue)
+                {
+                    var secCat = _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
+                    if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
+                    {
+                        newTargetDir = Path.Combine(newTargetDir, CleanFileSystemName(secCat.Name));
+                    }
+                }
+
                 if (!Directory.Exists(newTargetDir))
                 {
                     Directory.CreateDirectory(newTargetDir);
                 }
 
                 string newFullDiskPath = Path.Combine(newTargetDir, newFileName);
-                string newRelPath = Path.Combine(emp.EmployeeFolderPath, mainFolder, primFolder, newFileName);
+                string newRelPath = Path.GetRelativePath(_settings.BaseFolderPath, newFullDiskPath);
 
                 if (_newReplacementBytes != null)
                 {
@@ -719,14 +742,23 @@
                 var emp = _allEmployees.FirstOrDefault(e => e.EmployeeId == empId);
                 if (emp == null || string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)) continue;
 
-                string newTargetDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, mainFolder, primFolder);
+                string newTargetDir = Path.Combine(_settings.BaseFolderPath, emp.EmployeeFolderPath, branchName, primFolder);
+                if (_selectedSecondaryCatId.HasValue)
+                {
+                    var secCat = _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
+                    if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
+                    {
+                        newTargetDir = Path.Combine(newTargetDir, CleanFileSystemName(secCat.Name));
+                    }
+                }
+
                 if (!Directory.Exists(newTargetDir))
                 {
                     Directory.CreateDirectory(newTargetDir);
                 }
 
                 string newFullDiskPath = Path.Combine(newTargetDir, newFileName);
-                string newRelPath = Path.Combine(emp.EmployeeFolderPath, mainFolder, primFolder, newFileName);
+                string newRelPath = Path.GetRelativePath(_settings.BaseFolderPath, newFullDiskPath);
 
                 if (activeFileBytes.Length > 0)
                 {
@@ -737,8 +769,7 @@
                 {
                     DocumentId = _document.DocumentId,
                     EmployeeId = emp.EmployeeId,
-                    EmployeeFilePath = newRelPath,
-                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    EmployeeFilePath = newRelPath
                 };
 
                 DbContext.DocumentEmployees.Add(newDocEmp);
