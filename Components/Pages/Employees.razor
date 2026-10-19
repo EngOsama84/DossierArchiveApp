@@ -203,18 +203,19 @@
                         </MudText>
                     </div>
 
-                    <!-- شريط فلاتر التصنيفات الأربعة الشجرية -->
-                    <MudGrid Spacing="1" Class="mb-2">
+                    <!-- السطر الأول: القوائم الأربع المنسدلة -->
+                    <MudGrid Spacing="2" Class="mb-2">
 
                         <!-- 1. نوع الكتاب -->
-                        <MudItem xs="6" sm="4" md="2">
+                        <MudItem xs="12" sm="6" md="3">
                             <MudSelect T="int?" Value="_selectedMainCatId"
                                        ValueChanged="OnMainCategoryChanged"
                                        Label="نوع الكتاب"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
-                                       Clearable="true">
+                                       Clearable="true"
+                                       Class="compact-filter-field">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
                                 @foreach (var cat in _mainCategories)
                                 {
@@ -224,7 +225,7 @@
                         </MudItem>
 
                         <!-- 2. التصنيف الرئيسي -->
-                        <MudItem xs="6" sm="4" md="2">
+                        <MudItem xs="12" sm="6" md="3">
                             <MudSelect T="int?" Value="_selectedPrimaryCatId"
                                        ValueChanged="OnPrimaryCategoryChanged"
                                        Label="التصنيف الرئيسي"
@@ -232,7 +233,8 @@
                                        Margin="Margin.Dense"
                                        Dense="true"
                                        Clearable="true"
-                                       Disabled="@(_selectedMainCatId == null || !AvailablePrimaryCategories.Any())">
+                                       Disabled="@(_selectedMainCatId == null || !AvailablePrimaryCategories.Any())"
+                                       Class="compact-filter-field">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
                                 @foreach (var cat in AvailablePrimaryCategories)
                                 {
@@ -242,7 +244,7 @@
                         </MudItem>
 
                         <!-- 3. التصنيف الفرعي الأول -->
-                        <MudItem xs="6" sm="4" md="2">
+                        <MudItem xs="12" sm="6" md="3">
                             <MudSelect T="int?" Value="_selectedSecondaryCatId"
                                        ValueChanged="OnSecondaryCategoryChanged"
                                        Label="الفرعي الأول"
@@ -250,7 +252,8 @@
                                        Margin="Margin.Dense"
                                        Dense="true"
                                        Clearable="true"
-                                       Disabled="@(_selectedPrimaryCatId == null || !AvailableSecondaryCategories.Any())">
+                                       Disabled="@(_selectedPrimaryCatId == null || !AvailableSecondaryCategories.Any())"
+                                       Class="compact-filter-field">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
                                 @foreach (var cat in AvailableSecondaryCategories)
                                 {
@@ -260,14 +263,15 @@
                         </MudItem>
 
                         <!-- 4. التصنيف الفرعي الثاني -->
-                        <MudItem xs="6" sm="4" md="2">
+                        <MudItem xs="12" sm="6" md="3">
                             <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
                                        Label="الفرعي الثاني"
                                        Variant="Variant.Outlined"
                                        Margin="Margin.Dense"
                                        Dense="true"
                                        Clearable="true"
-                                       Disabled="@(!IsTertiaryEnabled)">
+                                       Disabled="@(!IsTertiaryEnabled)"
+                                       Class="compact-filter-field">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
                                 @foreach (var cat in AvailableTertiaryCategories)
                                 {
@@ -275,50 +279,53 @@
                                 }
                             </MudSelect>
                         </MudItem>
-
-                        <!-- موضوع الكتاب -->
-                        <MudItem xs="6" sm="4" md="2">
-                            <MudTextField @bind-Value="_docSubjectFilter"
-                                          Placeholder="الموضوع"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Clearable="true"
-                                          Immediate="true" />
-                        </MudItem>
-
-                        <!-- رقم الكتاب -->
-                        <MudItem xs="6" sm="4" md="2">
-                            <MudTextField @bind-Value="_docNumberFilter"
-                                          Placeholder="رقم الكتاب"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Clearable="true"
-                                          Immediate="true" />
-                        </MudItem>
                     </MudGrid>
 
-                    <!-- فلاتر التواريخ -->
-                    <MudGrid Spacing="1" Class="mb-2" AlignItems="Center">
-                        <MudItem xs="6" sm="4">
+                    <!-- السطر الثاني: الموضوع والرقم والتاريخ (4 حقول مطابقة تماماً للسطر الأول) -->
+                    <MudGrid Spacing="2" Class="mb-3">
+
+                        <!-- 1. موضوع الكتاب -->
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudTextField @bind-Value="_docSubjectFilter"
+                                          Label="الموضوع"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Clearable="true"
+                                          Immediate="true"
+                                          Class="compact-filter-field" />
+                        </MudItem>
+
+                        <!-- 2. رقم الكتاب -->
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudTextField @bind-Value="_docNumberFilter"
+                                          Label="رقم الكتاب"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Clearable="true"
+                                          Immediate="true"
+                                          Class="compact-filter-field" />
+                        </MudItem>
+
+                        <!-- 3. من تاريخ -->
+                        <MudItem xs="12" sm="6" md="3">
                             <MudDatePicker Label="من تاريخ"
                                            @bind-Date="_dateFrom"
                                            Variant="Variant.Outlined"
                                            Margin="Margin.Dense"
                                            Clearable="true"
-                                           DateFormat="yyyy/MM/dd" />
+                                           DateFormat="yyyy/MM/dd"
+                                           Class="compact-filter-field date-compact" />
                         </MudItem>
-                        <MudItem xs="6" sm="4">
+
+                        <!-- 4. إلى تاريخ -->
+                        <MudItem xs="12" sm="6" md="3">
                             <MudDatePicker Label="إلى تاريخ"
                                            @bind-Date="_dateTo"
                                            Variant="Variant.Outlined"
                                            Margin="Margin.Dense"
                                            Clearable="true"
-                                           DateFormat="yyyy/MM/dd" />
-                        </MudItem>
-                        <MudItem xs="12" sm="4" Class="text-end">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                الفلاتر تُحدث النتائج تلقائياً
-                            </MudText>
+                                           DateFormat="yyyy/MM/dd"
+                                           Class="compact-filter-field date-compact" />
                         </MudItem>
                     </MudGrid>
 
@@ -431,6 +438,52 @@
 
         .employee-card:hover {
             background-color: #f1f7f4 !important;
+        }
+
+    /* 1. ضبط الارتفاع الخارجي وتوسيط العناصر شاقولياً */
+    .compact-filter-field .mud-input-root-outlined {
+        height: 36px !important;
+        min-height: 36px !important;
+        background-color: #ffffff;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    /* 2. خط النصوص والخيارات داخل الحقول */
+    .compact-filter-field input,
+    .compact-filter-field .mud-select-input {
+        font-size: 0.88rem !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        height: 34px !important;
+        line-height: 34px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    /* 3. توسيط أيقونات السهم والمسح */
+    .compact-filter-field .mud-input-adornment {
+        margin-top: 0 !important;
+        align-self: center !important;
+    }
+
+    /* 4. تكبير حجم الكلمات الدلالية (Labels) عند النقر والفراغ */
+    .compact-filter-field .mud-input-label-outlined {
+        transform: translate(-14px, 9px) scale(1) !important;
+        font-size: 0.92rem !important;
+        font-weight: 500 !important;
+        color: #555555 !important;
+    }
+
+        /* 5. تكبير الكلمات الدلالية بعد صعودها واستقرارها أعلى الإطار */
+        .compact-filter-field .mud-input-label-outlined.mud-input-label-inputcontrol {
+            transform: translate(-14px, -8px) scale(0.85) !important;
+            font-size: 0.95rem !important;
+            font-weight: bold !important;
+            background-color: #ffffff !important;
+            padding: 0 5px !important;
         }
 </style>
 

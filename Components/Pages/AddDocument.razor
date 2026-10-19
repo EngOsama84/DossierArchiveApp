@@ -1,6 +1,7 @@
 ﻿@page "/add-document"
 @page "/add-document/{InitialEmployeeId:int}"
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
@@ -732,6 +733,25 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_previewFileUrl))
+            {
+                await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // تجاهل الاستثناء عند انقطاع الاتصال أو مغادرة الصفحة
+        }
+        catch (Exception)
+        {
+            // حماية من أي أخطاء أثناء تنظيف الموارد
         }
     }
 }

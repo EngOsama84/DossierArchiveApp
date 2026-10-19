@@ -1,5 +1,6 @@
 ﻿@page "/edit-document/{DocumentId:int}"
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
@@ -445,13 +446,21 @@
         {
             _originalFileBytes = await File.ReadAllBytesAsync(fullPath);
 
-            // تحويل المصفوفة إلى Blob URL فوري عبر المتصفح
-            _previewFileUrl = await JS.InvokeAsync<string>(
+            string ext = Path.GetExtension(fullPath).ToLower();
+            string mimeType = ext switch
+            {
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                _ => "application/pdf"
+            };
+
+            // استخدام Blob URL لعرض الملف الأصلي
+            _originalPreviewUrl = await JS.InvokeAsync<string>(
                 "createBlobUrlFromByteArray",
                 _originalFileBytes,
-                "application/pdf"
+                mimeType
             );
-
+            _previewFileUrl = _originalPreviewUrl;
             StateHasChanged();
         }
     }
@@ -467,8 +476,18 @@
             _newReplacementBytes = ms.ToArray();
             _replacementFileName = file.Name;
 
-            string base64 = Convert.ToBase64String(_newReplacementBytes);
-            _previewFileUrl = $"data:application/pdf;base64,{base64}";
+            // تحرير رابط الاستبدال السابق إن وجد
+            if (_previewFileUrl != _originalPreviewUrl && !string.IsNullOrEmpty(_previewFileUrl))
+            {
+                await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+            }
+
+            // توليد Blob URL خفيف للملف البديل
+            _previewFileUrl = await JS.InvokeAsync<string>(
+                "createBlobUrlFromByteArray",
+                _newReplacementBytes,
+                "application/pdf"
+            );
 
             Snackbar.Add("تم تحميل الملف البديل للمعاينة. سيتم استبدال الملف نهائياً عند الضغط على حفظ التعديلات.", Severity.Info);
         }
@@ -503,8 +522,17 @@
                 _newReplacementBytes = pdfBytes;
                 _replacementFileName = $"سحب_سكنر_بديل_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
 
-                string base64 = Convert.ToBase64String(_newReplacementBytes);
-                _previewFileUrl = $"data:application/pdf;base64,{base64}";
+                // تحرير رابط الاستبدال السابق إن وجد
+                if (_previewFileUrl != _originalPreviewUrl && !string.IsNullOrEmpty(_previewFileUrl))
+                {
+                    await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+                }
+
+                _previewFileUrl = await JS.InvokeAsync<string>(
+                    "createBlobUrlFromByteArray",
+                    _newReplacementBytes,
+                    "application/pdf"
+                );
 
                 Snackbar.Add("تم سحب الورقة البديلة بنجاح. سيتم اعتمادها عند حفظ التعديلات.", Severity.Success);
             }
@@ -520,8 +548,12 @@
         }
     }
 
-    private void CancelFileReplacement()
+    private async Task CancelFileReplacement()
     {
+        if (_previewFileUrl != _originalPreviewUrl && !string.IsNullOrEmpty(_previewFileUrl))
+        {
+            await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+        }
         _newReplacementBytes = null;
         _replacementFileName = null;
         _previewFileUrl = _originalPreviewUrl;
@@ -812,6 +844,30 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_previewFileUrl))
+            {
+                await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
+            }
+
+            if (!string.IsNullOrEmpty(_originalPreviewUrl) && _originalPreviewUrl != _previewFileUrl)
+            {
+                await JS.InvokeVoidAsync("revokeBlobUrl", _originalPreviewUrl);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // تجاهل الاستثناء عند انقطاع الاتصال أو مغادرة الصفحة
+        }
+        catch (Exception)
+        {
+            // حماية من أي أخطاء أثناء تنظيف الموارد
         }
     }
 }
