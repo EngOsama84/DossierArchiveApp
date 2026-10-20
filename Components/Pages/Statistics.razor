@@ -113,7 +113,6 @@
         </div>
 
         <div class="chart-container">
-            <!-- تحديد حد أدنى للعرض يمنع تداخل الـ 12 عموداً عند نصف الشاشة -->
             <div class="d-flex justify-space-between align-end chart-bars-row" style="height: 190px; min-width: 500px; padding-bottom: 25px; border-bottom: 2px solid #eceff1;">
                 @for (int m = 1; m <= 12; m++)
                 {
@@ -123,7 +122,6 @@
                     if (heightPercent == 0 && count > 0) { heightPercent = 6; }
 
                     <div class="d-flex flex-column align-center chart-col" style="flex: 1; padding: 0 4px;">
-                        <!-- القيمة والعمود -->
                         <div class="d-flex flex-column align-center justify-end w-100" style="height: 140px;">
                             <div class="chart-bar"
                                  title="شهر @monthIndex: @count كتاب"
@@ -131,7 +129,6 @@
                             </div>
                         </div>
 
-                        <!-- رقم الشهر والعدد أسفل الخط -->
                         <div class="text-center mt-2">
                             <span class="d-block fw-bold text-muted" style="font-size: 0.82rem;">ش @monthIndex</span>
                             <span class="d-block fw-bold" style="font-size: 0.8rem; color: #1B4D3E;">@count</span>
@@ -240,11 +237,12 @@
         _isLoading = true;
         try
         {
-            string yearStr = _selectedYear.ToString();
+            DateTime startDate = new DateTime(_selectedYear, 1, 1);
+            DateTime endDate = new DateTime(_selectedYear, 12, 31, 23, 59, 59);
 
             IQueryable<Document> query = DbContext.Documents
                 .AsNoTracking()
-                .Where(d => d.IsDeleted == 0 && d.DocumentDate.StartsWith(yearStr));
+                .Where(d => d.IsDeleted == 0 && d.DocumentDate >= startDate && d.DocumentDate <= endDate);
 
             if (_selectedEmployeeId.HasValue)
             {
@@ -266,11 +264,12 @@
             _monthlyData = new int[12];
             foreach (var doc in docs)
             {
-                if (DateTime.TryParse(doc.DocumentDate, out var dt))
+                if (doc.DocumentDate.HasValue)
                 {
-                    if (dt.Month >= 1 && dt.Month <= 12)
+                    int m = doc.DocumentDate.Value.Month;
+                    if (m >= 1 && m <= 12)
                     {
-                        _monthlyData[dt.Month - 1]++;
+                        _monthlyData[m - 1]++;
                     }
                 }
             }

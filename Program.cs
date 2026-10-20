@@ -68,6 +68,79 @@ using (var scope = app.Services.CreateScope())
     //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanExport INTEGER DEFAULT 0;");
     //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN MustChangePassword INTEGER DEFAULT 0;");
 
+    // --- »–— «· ’‰Ì›«  «·„” Œ—Ã… „‰ ﬁ«⁄œ… «·»Ì«‰«  «·√’·Ì… ---
+    using (var seedScope = app.Services.CreateScope())
+    {
+        var db2 = seedScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db2.Database.EnsureCreated();
+
+        if (!db2.MainCategories.Any())
+        {
+            // 1. «·√‰Ê«⁄ «·—∆Ì”Ì…
+            var mainIn = new MainCategory { Name = "Ê«—œ" };
+            var mainOut = new MainCategory { Name = "’«œ—" };
+            db2.MainCategories.AddRange(mainIn, mainOut);
+            db2.SaveChanges();
+
+            // 2. «· ’‰Ì›«  «·—∆Ì”Ì… ·ﬂ·« «·‰Ê⁄Ì‰ (Ê«—œ Ê’«œ—)
+            var primaryNames = new[] { "√„— ≈œ«—Ì", "«” „«—…", "ÿ·» ‘Œ’Ì", "«⁄ Ì«œÌ…" };
+            var primaryList = new List<PrimaryCategory>();
+
+            foreach (var main in new[] { mainIn, mainOut })
+            {
+                foreach (var pName in primaryNames)
+                {
+                    primaryList.Add(new PrimaryCategory { Name = pName, MainCategoryId = main.MainCategoryId });
+                }
+            }
+            db2.PrimaryCategories.AddRange(primaryList);
+            db2.SaveChanges();
+
+            // 3. «· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï
+            var secondaryNames = new[]
+            {
+            "„»«‘—…", "«‰›ﬂ«ﬂ", "⁄·«Ê…", " —›Ì⁄", "‘ﬂ—", "⁄ﬁÊ»…",
+            "«Õ ”«»", "„ﬂ«›√…", " ﬂ·Ì›", " ‰”Ì»", " —‘ÌÕ", "·Ã‰…",
+            " ﬁÌÌ„", "„” „”ﬂ« ", "„⁄·Ê„« ", "„Œ’’« ", " Ÿ·„",
+            "‰ﬁ·", "≈Ã«“…", "≈⁄›«¡", "œÊ—…", "‰ ÌÃ…", " »·Ì€", "«” œ⁄«¡", "€Ì— –·ﬂ"
+        };
+
+            var secondaryList = new List<SecondaryCategory>();
+            foreach (var prim in primaryList)
+            {
+                foreach (var sName in secondaryNames)
+                {
+                    secondaryList.Add(new SecondaryCategory { Name = sName, PrimaryCategoryId = prim.PrimaryCategoryId });
+                }
+            }
+            db2.SecondaryCategories.AddRange(secondaryList);
+            db2.SaveChanges();
+
+            // 4. «· ’‰Ì›«  «·›—⁄Ì… «·À«‰Ì…
+            var tertiaryNames = new[]
+            {
+            "œÊ—…", "„ƒ „—", "Ê—‘…", "≈Ã«“…", "‰ﬁ·",
+            " ‰”Ì»", " ﬁ«⁄œ", " ﬂ·Ì›", "‘Â«œ…", "Œœ„…"
+        };
+
+            var tertiaryList = new List<TertiaryCategory>();
+            // —»ÿÂ« »«· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï «·„‰«”»… („À· «‰›ﬂ«ﬂ° „»«‘—…° «Õ ”«»° ≈Ã«“…° œÊ—…)
+            var targetSecs = secondaryList.Where(s =>
+                s.Name == "«‰›ﬂ«ﬂ" || s.Name == "„»«‘—…" || s.Name == "«Õ ”«»" ||
+                s.Name == "≈Ã«“…" || s.Name == "œÊ—…" || s.Name == " ﬂ·Ì›").ToList();
+
+            foreach (var sec in targetSecs)
+            {
+                foreach (var tName in tertiaryNames)
+                {
+                    tertiaryList.Add(new TertiaryCategory { Name = tName, SecondaryCategoryId = sec.SecondaryCategoryId });
+                }
+            }
+            db2.TertiaryCategories.AddRange(tertiaryList);
+            db2.SaveChanges();
+        }
+    }
+    // -------------------------------------------------------------
     // «· Õﬁﬁ „‰ ÊÃÊœ Õ”«» «·„œÌ— «·«› —«÷Ì √Ê ≈‰‘«ƒÂ
     var adminUser = db.Users.FirstOrDefault(u => u.UserName.ToLower() == "admin");
 

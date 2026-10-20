@@ -25,18 +25,22 @@ public class Employee
     public string EmployeeFolderPath { get; set; } = string.Empty;
 
     [Column("CreatedAt")]
-    public string CreatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+    public DateTime? CreatedAt { get; set; } = DateTime.Now;
 
     [Column("UpdatedAt")]
-    public string UpdatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+    public DateTime? UpdatedAt { get; set; } = DateTime.Now;
 
     [Column("CreatedBy")]
     public int? CreatedBy { get; set; }
 
     [Column("UpdatedBy")]
     public int? UpdatedBy { get; set; }
+
+    [Column("IsDeleted")]
     public int IsDeleted { get; set; } = 0;
-    public string? DeletedAt { get; set; }
+
+    [Column("DeletedAt")]
+    public DateTime? DeletedAt { get; set; }
 
     // خاصية مساعدة لواجهة المستخدم
     [NotMapped]

@@ -17,7 +17,7 @@ public class Document
     public string DocumentNumber { get; set; } = string.Empty;
 
     [Column("DocumentDate")]
-    public string DocumentDate { get; set; } = string.Empty;
+    public DateTime? DocumentDate { get; set; }
 
     [Column("OriginalFileName")]
     public string OriginalFileName { get; set; } = string.Empty;
@@ -47,10 +47,10 @@ public class Document
     public int? TertiaryCategoryId { get; set; }
 
     [Column("CreatedAt")]
-    public string CreatedAt { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; } = DateTime.Now;
 
     [Column("UpdatedAt")]
-    public string UpdatedAt { get; set; } = string.Empty;
+    public DateTime? UpdatedAt { get; set; } = DateTime.Now;
 
     [Column("CreatedBy")]
     public int? CreatedBy { get; set; }
@@ -60,7 +60,9 @@ public class Document
 
     [Column("IsDeleted")]
     public int IsDeleted { get; set; } = 0;
-    public string? DeletedAt { get; set; }
+
+    [Column("DeletedAt")]
+    public DateTime? DeletedAt { get; set; }
 }
 
 [Table("TB_DocumentEmployees")]
@@ -80,5 +82,5 @@ public class DocumentEmployee
     public string EmployeeFilePath { get; set; } = string.Empty;
 
     [Column("CreatedAt")]
-    public string CreatedAt { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; } = DateTime.Now;
 }

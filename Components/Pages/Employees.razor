@@ -88,14 +88,15 @@
 
                         <MudMenuItem Icon="@Icons.Material.Filled.Print"
                                      IconColor="Color.Primary"
-                                     OnClick="OpenPrintDialog">
+                                     OnClick="OpenPrintDialog"
+                                     Disabled="@(!SessionService.CanExport)">
                             طباعة الفهرس (A4)
                         </MudMenuItem>
 
                         <MudMenuItem Icon="@Icons.Custom.FileFormats.FileExcel"
                                      IconColor="Color.Success"
                                      OnClick="ExportToExcel"
-                                     Disabled="_isExporting">
+                                     Disabled="@(_isExporting || !SessionService.CanExport)">
                             @if (_isExporting)
                             {
                                 <span>جارٍ التصدير...</span>
@@ -114,7 +115,7 @@
     <!-- شبكة العرض الرئيسية المتجاوبة -->
     <MudGrid Spacing="2">
 
-        <!-- 1. قائمة الموظفين (في اليمين) بارتفاع ديناميكي مطابق لارتفاع قسم الجدول -->
+        <!-- 1. قائمة الموظفين (في اليمين) -->
         <MudItem xs="12" md="4" lg="3">
             <MudPaper Elevation="1" Class="pa-3" Style="border-radius: 8px; background-color: white; height: 100%; display: flex; flex-direction: column;">
                 <MudText Typo="Typo.h6" Class="fw-bold text-center mb-2" Style="color: #1B4D3E;">
@@ -155,7 +156,7 @@
                     }
                 </div>
 
-                <!-- قائمة الموظفين مع تمرير عمودي ديناميكي يعتمد على مساحة الشاشة -->
+                <!-- قائمة الموظفين مع تمرير عمودي ديناميكي -->
                 <div class="dynamic-employee-scroll pa-1" style="height: calc(100vh - 275px); overflow-y: auto;">
                     @if (_loadingEmployees)
                     {
@@ -281,7 +282,7 @@
                         </MudItem>
                     </MudGrid>
 
-                    <!-- السطر الثاني: الموضوع والرقم والتاريخ (4 حقول مطابقة تماماً للسطر الأول) -->
+                    <!-- السطر الثاني: الموضوع والرقم والتاريخ -->
                     <MudGrid Spacing="2" Class="mb-3">
 
                         <!-- 1. موضوع الكتاب -->
@@ -331,7 +332,7 @@
 
                     <MudDivider Class="my-2" />
 
-                    <!-- جدول استعراض كتب الموظف بارتفاع ديناميكي متجاوب مع حجم الشاشة -->
+                    <!-- جدول استعراض كتب الموظف -->
                     <div style="overflow-x: auto;">
                         <MudTable Items="@FilteredDocuments"
                                   Dense="true"
@@ -358,7 +359,9 @@
                                     </MudChip>
                                 </MudTd>
                                 <MudTd DataLabel="الموضوع" Class="fw-bold">@context.Subject</MudTd>
-                                <MudTd DataLabel="التاريخ" Style="white-space: nowrap;">@context.DocumentDate</MudTd>
+                                <MudTd DataLabel="التاريخ" Style="white-space: nowrap;">
+                                    @(context.DocumentDate?.ToString("yyyy/MM/dd") ?? "—")
+                                </MudTd>
                                 <MudTd DataLabel="التصنيف الشجري">
                                     @GetCategoryHierarchyName(context)
                                 </MudTd>
@@ -443,7 +446,6 @@
             background-color: #f1f7f4 !important;
         }
 
-    /* 1. ضبط الارتفاع الخارجي وتوسيط العناصر شاقولياً */
     .compact-filter-field .mud-input-root-outlined {
         height: 36px !important;
         min-height: 36px !important;
@@ -454,7 +456,6 @@
         align-items: center !important;
     }
 
-    /* 2. خط النصوص والخيارات داخل الحقول */
     .compact-filter-field input,
     .compact-filter-field .mud-select-input {
         font-size: 0.88rem !important;
@@ -466,13 +467,11 @@
         align-items: center !important;
     }
 
-    /* 3. توسيط أيقونات السهم والمسح */
     .compact-filter-field .mud-input-adornment {
         margin-top: 0 !important;
         align-self: center !important;
     }
 
-    /* 4. تكبير حجم الكلمات الدلالية (Labels) عند النقر والفراغ */
     .compact-filter-field .mud-input-label-outlined {
         transform: translate(-14px, 9px) scale(1) !important;
         font-size: 0.92rem !important;
@@ -480,7 +479,6 @@
         color: #555555 !important;
     }
 
-        /* 5. تكبير الكلمات الدلالية بعد صعودها واستقرارها أعلى الإطار */
         .compact-filter-field .mud-input-label-outlined.mud-input-label-inputcontrol {
             transform: translate(-14px, -8px) scale(0.85) !important;
             font-size: 0.95rem !important;
@@ -489,14 +487,12 @@
             padding: 0 5px !important;
         }
 
-    /* تثبيت رأس الجدول بلون واضح أثناء السكرول */
     .responsive-dynamic-table .mud-table-sticky-header th {
         background-color: #fafafa !important;
         z-index: 2 !important;
         border-bottom: 2px solid #e0e0e0 !important;
     }
 
-    /* ضبط شريط التمرير لقائمة الموظفين والجدول ليكون أنيقاً ومتطابقاً */
     .dynamic-employee-scroll::-webkit-scrollbar,
     .responsive-dynamic-table .mud-table-container::-webkit-scrollbar {
         width: 6px;
@@ -777,10 +773,10 @@
             }
         }
 
-        if (_dateFrom.HasValue && DateTime.TryParse(d.DocumentDate, out var docDate) && docDate < _dateFrom.Value)
+        if (_dateFrom.HasValue && d.DocumentDate.HasValue && d.DocumentDate.Value.Date < _dateFrom.Value.Date)
             return false;
 
-        if (_dateTo.HasValue && DateTime.TryParse(d.DocumentDate, out var docDate2) && docDate2 > _dateTo.Value)
+        if (_dateTo.HasValue && d.DocumentDate.HasValue && d.DocumentDate.Value.Date > _dateTo.Value.Date)
             return false;
 
         return true;
@@ -808,6 +804,12 @@
 
     private async Task OpenAddEmployeeDialog()
     {
+        if (!SessionService.CanAddEmployee)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لإضافة موظف جديد!", Severity.Error);
+            return;
+        }
+
         var options = new DialogOptions
         {
             CloseOnEscapeKey = true,
@@ -832,6 +834,12 @@
     private async Task OpenEditEmployeeDialog()
     {
         if (_selectedEmployee == null) return;
+
+        if (!SessionService.CanEditEmployee)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لتعديل بيانات الموظفين!", Severity.Error);
+            return;
+        }
 
         var parameters = new DialogParameters { ["EmployeeToEdit"] = _selectedEmployee };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
@@ -891,7 +899,7 @@
             if (empDb != null)
             {
                 empDb.IsDeleted = 1;
-                empDb.DeletedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                empDb.DeletedAt = DateTime.Now;
                 DbContext.Employees.Update(empDb);
                 await DbContext.SaveChangesAsync();
 
@@ -926,6 +934,12 @@
 
     private void OpenAddDocumentDialog()
     {
+        if (!SessionService.CanAdd)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لإضافة مستندات!", Severity.Error);
+            return;
+        }
+
         if (_selectedEmployee != null)
         {
             Navigation.NavigateTo($"/add-document/{_selectedEmployee.EmployeeId}");
@@ -939,6 +953,12 @@
     private async Task OpenBulkUploadDialog()
     {
         if (_selectedEmployee == null) return;
+
+        if (!SessionService.CanAdd)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة للأرشفة وإضافة المستندات!", Severity.Error);
+            return;
+        }
 
         var parameters = new DialogParameters
         {
@@ -968,6 +988,12 @@
 
     private void OpenEditDocumentDialog(Document doc)
     {
+        if (!SessionService.CanEdit)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لتعديل المستندات!", Severity.Error);
+            return;
+        }
+
         Navigation.NavigateTo($"/edit-document/{doc.DocumentId}");
     }
 
@@ -1058,6 +1084,12 @@
     {
         if (_selectedEmployee == null || doc == null) return;
 
+        if (!SessionService.CanDelete)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لحذف المستندات!", Severity.Error);
+            return;
+        }
+
         try
         {
             var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -1081,7 +1113,7 @@
                 };
 
                 var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small };
-                var dialog = await DialogService.ShowAsync<DeleteChoiceDialog>("خيارات حذف المستند المشترك", parameters, options);
+                var dialog = await DialogService.ShowAsync(typeof(DeleteChoiceDialog), "خيارات حذف المستند المشترك", parameters, options);
                 var result = await dialog.Result;
 
                 if (result.Canceled || result.Data == null)
@@ -1110,7 +1142,7 @@
                 if (docDb != null)
                 {
                     docDb.IsDeleted = 1;
-                    docDb.DeletedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                    docDb.DeletedAt = DateTime.Now;
                     DbContext.Documents.Update(docDb);
                     await DbContext.SaveChangesAsync();
                 }
@@ -1154,6 +1186,12 @@
 
     private async Task ExportToExcel()
     {
+        if (!SessionService.CanExport)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لتصدير البيانات!", Severity.Error);
+            return;
+        }
+
         if (_selectedEmployee == null || !_documents.Any())
         {
             Snackbar.Add("لا توجد مستندات لتصديرها لهذا الموظف!", Severity.Warning);
@@ -1200,6 +1238,12 @@
 
     private async Task OpenPrintDialog()
     {
+        if (!SessionService.CanExport)
+        {
+            Snackbar.Add("عذراً، لا تملك الصلاحية اللازمة لطباعة وتصدير الفهرس!", Severity.Error);
+            return;
+        }
+
         if (_selectedEmployee == null || !_documents.Any()) return;
 
         await JS.InvokeVoidAsync("open", $"/print-dossier/{_selectedEmployee.EmployeeId}", "_blank");

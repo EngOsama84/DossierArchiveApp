@@ -61,10 +61,10 @@
         </div>
     </div>
 
-    <!-- 2. شبكة العمل المتناسقة (تمت زيادة مساحة الحقول إلى lg="5" وتقليص العارض إلى lg="7") -->
+    <!-- 2. شبكة العمل المتناسقة -->
     <MudGrid Spacing="2">
 
-        <!-- القسم الأيمن: قائمة الموظفين + التصنيفات والبيانات (عرض مريح lg="5") -->
+        <!-- القسم الأيمن: قائمة الموظفين + التصنيفات والبيانات -->
         <MudItem xs="12" lg="5">
 
             <!-- شريط اختيار الموظفين المعنيين -->
@@ -108,57 +108,80 @@
                 </div>
             </MudPaper>
 
-            <!-- بطاقة البيانات والتصنيفات والسكنر (كافة الحقول متطابقة في الارتفاع والعرض) -->
+            <!-- بطاقة البيانات والتصنيفات والسكنر -->
             <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="background-color: white; border-radius: 8px;">
 
-                <!-- السطر الأول للتصنيفات: نوع الكتاب (sm="6") والتصنيف الرئيسي (sm="6") -->
+                <!-- السطر الأول للتصنيفات: نوع الكتاب والتصنيف الرئيسي -->
                 <MudGrid Spacing="2" Class="mb-2">
                     <MudItem xs="12" sm="6">
-                        <MudSelect T="int?" Value="_selectedMainCatId" ValueChanged="OnMainCategoryChanged"
-                                   Label="نوع الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                        <MudSelect T="int?"
+                                   Value="_selectedMainCatId"
+                                   ValueChanged="OnMainCategoryChanged"
+                                   Label="نوع الكتاب"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Dense="true"
+                                   Clearable="true"
                                    Class="form-field-style">
                             @foreach (var c in _mainCategories)
                             {
-                                <MudSelectItem Value="@((int?)c.MainCategoryId)">@c.Name</MudSelectItem>
+                                <MudSelectItem T="int?" Value="@((int?)c.MainCategoryId)">@c.Name</MudSelectItem>
                             }
                         </MudSelect>
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
-                        <MudSelect T="int?" Value="_selectedPrimaryCatId" ValueChanged="OnPrimaryCategoryChanged"
-                                   Disabled="@(!_selectedMainCatId.HasValue)"
-                                   Label="التصنيف الرئيسي" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                        <MudSelect T="int?"
+                                   Value="_selectedPrimaryCatId"
+                                   ValueChanged="OnPrimaryCategoryChanged"
+                                   Disabled="@(!_selectedMainCatId.HasValue || !_availablePrimaryCategories.Any())"
+                                   Label="التصنيف الرئيسي"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Dense="true"
+                                   Clearable="true"
                                    Class="form-field-style">
                             @foreach (var c in _availablePrimaryCategories)
                             {
-                                <MudSelectItem Value="@((int?)c.PrimaryCategoryId)">@c.Name</MudSelectItem>
+                                <MudSelectItem T="int?" Value="@((int?)c.PrimaryCategoryId)">@c.Name</MudSelectItem>
                             }
                         </MudSelect>
                     </MudItem>
                 </MudGrid>
 
-                <!-- السطر الثاني للتصنيفات: الفرعي الأول (sm="6") والفرعي الثاني (sm="6") -->
+                <!-- السطر الثاني للتصنيفات: الفرعي الأول والفرعي الثاني -->
                 <MudGrid Spacing="2" Class="mb-3">
                     <MudItem xs="12" sm="6">
-                        <MudSelect T="int?" Value="_selectedSecondaryCatId" ValueChanged="OnSecondaryCategoryChanged"
-                                   Disabled="@(!_selectedPrimaryCatId.HasValue)"
-                                   Label="الفرعي الأول" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true"
+                        <MudSelect T="int?"
+                                   Value="_selectedSecondaryCatId"
+                                   ValueChanged="OnSecondaryCategoryChanged"
+                                   Disabled="@(!_selectedPrimaryCatId.HasValue || !_availableSecondaryCategories.Any())"
+                                   Label="الفرعي الأول"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Dense="true"
+                                   Clearable="true"
                                    Class="form-field-style">
                             @foreach (var c in _availableSecondaryCategories)
                             {
-                                <MudSelectItem Value="@((int?)c.SecondaryCategoryId)">@c.Name</MudSelectItem>
+                                <MudSelectItem T="int?" Value="@((int?)c.SecondaryCategoryId)">@c.Name</MudSelectItem>
                             }
                         </MudSelect>
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
-                        <MudSelect T="int?" @bind-Value="_selectedTertiaryCatId"
-                                   Disabled="@(!_isTertiaryEnabled)"
-                                   Label="الفرعي الثاني" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true"
+                        <MudSelect T="int?"
+                                   @bind-Value="_selectedTertiaryCatId"
+                                   Disabled="@(!_isTertiaryEnabled || !_availableTertiaryCategories.Any())"
+                                   Label="الفرعي الثاني"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Dense="true"
+                                   Clearable="true"
                                    Class="form-field-style">
                             @foreach (var c in _availableTertiaryCategories)
                             {
-                                <MudSelectItem Value="@((int?)c.TertiaryCategoryId)">@c.Name</MudSelectItem>
+                                <MudSelectItem T="int?" Value="@((int?)c.TertiaryCategoryId)">@c.Name</MudSelectItem>
                             }
                         </MudSelect>
                     </MudItem>
@@ -166,16 +189,24 @@
 
                 <MudDivider Class="my-3" />
 
-                <!-- موضوع الكتاب (كامل العرض بنفس الارتفاع الموحد 36px) -->
+                <!-- موضوع الكتاب -->
                 <div class="mb-3">
-                    <MudTextField @bind-Value="_subject" Label="موضوع الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                    <MudTextField @bind-Value="_subject"
+                                  Label="موضوع الكتاب"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
                                   Class="form-field-style" />
                 </div>
 
-                <!-- سطر رقم الكتاب وتاريخ الكتاب: بنفس قياس التصنيفات تماماً (sm="6" و sm="6") -->
+                <!-- رقم الكتاب وتاريخه -->
                 <MudGrid Spacing="2" Class="mb-3">
                     <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="_documentNumber" Label="رقم الكتاب" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                        <MudTextField @bind-Value="_documentNumber"
+                                      Label="رقم الكتاب"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Immediate="true"
                                       Class="form-field-style" />
                     </MudItem>
 
@@ -191,7 +222,7 @@
                     </MudItem>
                 </MudGrid>
 
-                <!-- بطاقة المسح الضوئي المباشر -->
+                <!-- المسح الضوئي المباشر -->
                 <MudPaper Outlined="true" Class="pa-2 mb-3" Style="background-color: #f1f8f5; border-color: #c8e6c9; border-radius: 6px;">
                     <div class="d-flex align-center justify-space-between gap-2">
                         <MudButton Variant="Variant.Outlined"
@@ -245,7 +276,7 @@
             </MudPaper>
         </MudItem>
 
-        <!-- القسم الأيسر: منطقة المعاينة (lg="7") -->
+        <!-- القسم الأيسر: منطقة المعاينة -->
         <MudItem xs="12" lg="7">
             <MudPaper Elevation="1" Class="pa-2" Style="background-color: white; border-radius: 8px; height: 100%; min-height: 620px; display: flex; flex-direction: column;">
                 <div class="flex-grow-1 d-flex flex-column align-center justify-center preview-box"
@@ -281,7 +312,6 @@
         background: repeating-linear-gradient( 45deg, #fafbfc, #fafbfc 10px, #f4f6f8 10px, #f4f6f8 20px );
     }
 
-    /* توحيد الارتفاع (36px) والشكل الخارجي لكافة حقول الإدخال بدون أي اختلاف */
     .form-field-style .mud-input-root-outlined {
         height: 36px !important;
         min-height: 36px !important;
@@ -292,7 +322,6 @@
         align-items: center !important;
     }
 
-    /* ضبط محتوى ونصوص الحقول بالكامل لتكون موحدة ومحاذية لليمين وواضحة */
     .form-field-style input,
     .form-field-style .mud-select-input {
         font-size: 0.90rem !important;
@@ -308,13 +337,11 @@
         text-align: right !important;
     }
 
-    /* ضبط موضع الأيقونات السهم والتقويم */
     .form-field-style .mud-input-adornment {
         margin-top: 0 !important;
         align-self: center !important;
     }
 
-    /* تسمية الحقول (Labels) عند النقر والفراغ */
     .form-field-style .mud-input-label-outlined {
         transform: translate(-14px, 9px) scale(1) !important;
         font-size: 0.85rem !important;
@@ -322,7 +349,6 @@
         color: #777777 !important;
     }
 
-        /* تسمية الحقول بعد صعودها واستقرارها في أعلى الإطار */
         .form-field-style .mud-input-label-outlined.mud-input-label-inputcontrol {
             transform: translate(-14px, -8px) scale(0.80) !important;
             font-size: 0.88rem !important;
@@ -355,6 +381,29 @@
     private int? _selectedSecondaryCatId;
     private int? _selectedTertiaryCatId;
     private bool _isTertiaryEnabled = false;
+
+    // 1. تعريف خريطة علاقات: التصنيف الرئيسي -> قائمة التصنيفات الفرعية الأولى
+    private readonly Dictionary<string, string[]> _primaryToSecondaryMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["أمر إداري"] = new[] { "مباشرة", "انفكاك", "علاوة", "ترفيع", "شكر", "عقوبة", "لجنة", "تكليف", "تنسيب", "ترشيح", "تقييم", "احتساب", "إضافة", "إعفاء", "دورة", "غير ذلك" },
+        ["استمارة"] = new[] { "معلومات", "مستمسكات", "تقييم", "جرد", "غير ذلك" },
+        ["طلب شخصي"] = new[] { "إجازة", "نقل", "تنسيب", "تظلم", "مخصصات", "سلفة", "غير ذلك" },
+        ["اعتيادية"] = new[] { "مخاطبات", "تبليغ", "استدعاء", "نتيجة", "غير ذلك" }
+    };
+
+    // 2. قوائم عناصر الفرعي الثاني حسب نوع الفرعي الأول
+    private readonly string[] _tertiaryForEnfakak = new[] { "دورة", "مؤتمر", "ورشة", "إجازة", "نقل", "تنسيب", "تقاعد", "تكليف", "غير ذلك" };
+    private readonly string[] _tertiaryForEhtisab = new[] { "شهادة", "خدمة", "علاوة", "ترفيع", "شكر", "غير ذلك" };
+    private readonly string[] _tertiaryForTakleef = new[] { "منصب", "لجنة", "مهام", "تنسيب", "تكليف", "غير ذلك" };
+    private readonly string[] _tertiaryForTarsheeh = new[] { "دورة", "مؤتمر", "ورشة", "تكليف", "لجنة", "غير ذلك" };
+
+    // 3. قائمة اللجان الرسمية
+    private readonly List<string> _iraqiCommittees = new()
+    {
+        "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
+        "مشتريات واعتدال أسعار", "شطب وإتلاف", "جرد سنوي", "تضمين",
+        "تثمين وبيع وإيجار أموال الدولة", "احتساب خدمة وتقاعد", "فنية تخصصية", "مقابلة وترقية"
+    };
 
     private string _subject = string.Empty;
     private string _documentNumber = string.Empty;
@@ -401,15 +450,22 @@
 
     private async Task LoadSettings()
     {
-        _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+        _settings = await DbContext.SystemSettings.FirstOrDefaultAsync();
     }
 
     private async Task LoadCategories()
     {
-        _mainCategories = await DbContext.MainCategories.AsNoTracking().ToListAsync();
-        _allPrimaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
-        _allSecondaryCategories = await DbContext.SecondaryCategories.AsNoTracking().ToListAsync();
-        _allTertiaryCategories = await DbContext.TertiaryCategories.AsNoTracking().ToListAsync();
+        try
+        {
+            _mainCategories = await DbContext.MainCategories.ToListAsync();
+            _allPrimaryCategories = await DbContext.PrimaryCategories.ToListAsync();
+            _allSecondaryCategories = await DbContext.SecondaryCategories.ToListAsync();
+            _allTertiaryCategories = await DbContext.TertiaryCategories.ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"خطأ في جلب التصنيفات: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task LoadEmployees()
@@ -418,7 +474,7 @@
         try
         {
             _employees = await DbContext.Employees
-                .Where(e => e.IsActive == 1)
+                .Where(e => e.IsActive == 1 && e.IsDeleted == 0)
                 .OrderBy(e => e.FileNumber)
                 .ToListAsync();
         }
@@ -440,6 +496,7 @@
             _selectedEmployeeIds.Add(empId);
     }
 
+    // 1. عند تغيير نوع الكتاب (وارد / صادر)
     private void OnMainCategoryChanged(int? mainId)
     {
         _selectedMainCatId = mainId;
@@ -460,8 +517,10 @@
         }
         _availableSecondaryCategories.Clear();
         _availableTertiaryCategories.Clear();
+        StateHasChanged();
     }
 
+    // 2. عند تغيير التصنيف الرئيسي: تصفية الفرعي الأول طبقاً للهيكلية المحددة
     private void OnPrimaryCategoryChanged(int? primId)
     {
         _selectedPrimaryCatId = primId;
@@ -471,17 +530,54 @@
 
         if (primId.HasValue)
         {
-            _availableSecondaryCategories = _allSecondaryCategories
-                .Where(s => s.PrimaryCategoryId == primId.Value)
-                .ToList();
+            var primCat = _allPrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == primId.Value);
+            string primName = primCat?.Name?.Trim() ?? string.Empty;
+
+            // جلب عناصر الفرعي الأول المرتبطة بهذا الرئيسي من قاعدة البيانات
+            var dbList = _allSecondaryCategories.Where(s => s.PrimaryCategoryId == primId.Value).ToList();
+
+            // فحص المطابقة مع الهيكلية المحددة
+            string? matchedKey = _primaryToSecondaryMap.Keys.FirstOrDefault(k => primName.Contains(k));
+            if (matchedKey != null)
+            {
+                var allowedSecNames = _primaryToSecondaryMap[matchedKey];
+
+                if (dbList.Any())
+                {
+                    // ترتيب وتصفية المسجل بالقاعدة وفق المسموح
+                    _availableSecondaryCategories = dbList
+                        .Where(s => allowedSecNames.Any(a => s.Name.Trim().Contains(a)))
+                        .OrderBy(s => Array.IndexOf(allowedSecNames, allowedSecNames.FirstOrDefault(a => s.Name.Trim().Contains(a))))
+                        .ToList();
+                }
+
+                // إذا كانت القاعدة لا تحتوي على كل العناصر، نولّد الناقص منها برمجياً
+                if (!_availableSecondaryCategories.Any())
+                {
+                    int vId = -200;
+                    _availableSecondaryCategories = allowedSecNames.Select(name => new SecondaryCategory
+                    {
+                        SecondaryCategoryId = vId--,
+                        PrimaryCategoryId = primId.Value,
+                        Name = name
+                    }).ToList();
+                }
+            }
+            else
+            {
+                _availableSecondaryCategories = dbList;
+            }
         }
         else
         {
             _availableSecondaryCategories.Clear();
         }
+
         _availableTertiaryCategories.Clear();
+        StateHasChanged();
     }
 
+    // 3. عند تغيير التصنيف الفرعي الأول: تصفية وتحديد الفرعي الثاني بدقة تامة
     private void OnSecondaryCategoryChanged(int? secId)
     {
         _selectedSecondaryCatId = secId;
@@ -491,44 +587,77 @@
 
         if (secId.HasValue)
         {
-            var secCat = _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secId.Value);
+            var secCat = _availableSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secId.Value)
+                         ?? _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secId.Value);
+
             string secName = secCat?.Name?.Trim() ?? string.Empty;
 
-            string[] conditionalBranches = { "انفكاك", "مباشرة", "احتساب", "إعفاء" };
-            if (conditionalBranches.Contains(secName))
+            // أ) انفكاك
+            if (secName.Contains("انفكاك"))
             {
-                var subList = _allTertiaryCategories.Where(t => t.SecondaryCategoryId == secId.Value).ToList();
-                if (subList.Any())
-                {
-                    _availableTertiaryCategories = subList;
-                    _isTertiaryEnabled = true;
-                }
-            }
-            else if (secName == "لجنة")
-            {
-                var subList = _allTertiaryCategories.Where(t => t.SecondaryCategoryId == secId.Value).ToList();
-                if (subList.Any())
-                {
-                    _availableTertiaryCategories = subList;
-                }
-                else
-                {
-                    string[] iraqiCommittees = {
-                        "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
-                        "مشتريات واعتدال أسعار", "شطب وإتلاف", "جرد سنوي", "تضمين",
-                        "تثمين وبيع وإيجار أموال الدولة", "احتساب خدمة وتقاعد", "فنية تخصصية", "مقابلة وترقية"
-                    };
-                    int tempId = 1;
-                    _availableTertiaryCategories = iraqiCommittees.Select(c => new TertiaryCategory
-                    {
-                        TertiaryCategoryId = tempId++,
-                        SecondaryCategoryId = secId.Value,
-                        Name = c
-                    }).ToList();
-                }
+                _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForEnfakak);
                 _isTertiaryEnabled = true;
             }
+            // ب) احتساب أو إضافة
+            else if (secName.Contains("احتساب") || secName.Contains("إضافة") || secName.Contains("اضافة"))
+            {
+                _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForEhtisab);
+                _isTertiaryEnabled = true;
+            }
+            // ج) تكليف أو إعفاء
+            else if (secName.Contains("تكليف") || secName.Contains("إعفاء") || secName.Contains("اعفاء"))
+            {
+                _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForTakleef);
+                _isTertiaryEnabled = true;
+            }
+            // د) ترشيح
+            else if (secName.Contains("ترشيح"))
+            {
+                _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForTarsheeh);
+                _isTertiaryEnabled = true;
+            }
+            // هـ) لجنة (لجان التحقيق والتدقيق المعتمدة)
+            else if (secName.Contains("لجنة"))
+            {
+                _availableTertiaryCategories = BuildTertiaryList(secId.Value, _iraqiCommittees.ToArray());
+                _isTertiaryEnabled = true;
+            }
+            // و) أي فرعي أول آخر: يتم إغلاق وتعطيل الفرعي الثاني لعدم الحاجة إليه
+            else
+            {
+                _isTertiaryEnabled = false;
+                _availableTertiaryCategories.Clear();
+            }
         }
+
+        StateHasChanged();
+    }
+
+    // دالة مساعدة لتجهيز قائمة الفرعي الثاني بمطابقة قاعدة البيانات والتوليد الذكي
+    private List<TertiaryCategory> BuildTertiaryList(int secId, string[] definedNames)
+    {
+        var result = new List<TertiaryCategory>();
+        var fromDb = _allTertiaryCategories.Where(t => t.SecondaryCategoryId == secId).ToList();
+
+        int virtualId = -100;
+        foreach (var name in definedNames)
+        {
+            var matched = fromDb.FirstOrDefault(d => d.Name.Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                result.Add(matched);
+            }
+            else
+            {
+                result.Add(new TertiaryCategory
+                {
+                    TertiaryCategoryId = virtualId--,
+                    SecondaryCategoryId = secId,
+                    Name = name
+                });
+            }
+        }
+        return result;
     }
 
     private async Task OnPdfFileSelected(IBrowserFile file)
@@ -640,7 +769,7 @@
         _isSaving = true;
         try
         {
-            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            var settings = await DbContext.SystemSettings.FirstOrDefaultAsync();
             string baseFolder = settings?.BaseFolderPath ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(baseFolder) || !Directory.Exists(baseFolder))
@@ -677,21 +806,39 @@
                 }
             }
 
+            // معالجة التصنيفات الفرعية الأولى والثانية إذا كانت افتراضية سالبة
+            int? actualSecondaryId = _selectedSecondaryCatId;
+            if (actualSecondaryId.HasValue && actualSecondaryId.Value < 0)
+            {
+                var chosenSec = _availableSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == actualSecondaryId.Value);
+                if (chosenSec != null && _selectedPrimaryCatId.HasValue)
+                {
+                    var newSec = new SecondaryCategory { Name = chosenSec.Name, PrimaryCategoryId = _selectedPrimaryCatId.Value };
+                    DbContext.SecondaryCategories.Add(newSec);
+                    await DbContext.SaveChangesAsync();
+                    actualSecondaryId = newSec.SecondaryCategoryId;
+                }
+            }
+
+            int? actualTertiaryId = (_selectedTertiaryCatId.HasValue && _selectedTertiaryCatId.Value < 0)
+                ? null
+                : _selectedTertiaryCatId;
+
             var document = new Document
             {
                 Subject = _subject.Trim(),
                 DocumentNumber = _documentNumber.Trim(),
-                DocumentDate = formattedDate,
+                DocumentDate = _documentDate,
                 OriginalFileName = _selectedFile?.Name ?? storedFileName,
                 StoredFileName = storedFileName,
                 FileExtension = _finalExtension,
                 FilePath = string.Empty,
                 MainCategoryId = _selectedMainCatId ?? 0,
                 PrimaryCategoryId = _selectedPrimaryCatId ?? 0,
-                SecondaryCategoryId = _selectedSecondaryCatId,
-                TertiaryCategoryId = _selectedTertiaryCatId,
-                CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                SecondaryCategoryId = actualSecondaryId,
+                TertiaryCategoryId = actualTertiaryId,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now,
                 IsDeleted = 0
             };
 
@@ -716,7 +863,8 @@
 
                 if (_selectedSecondaryCatId.HasValue)
                 {
-                    var secCat = _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
+                    var secCat = _availableSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value)
+                                 ?? _allSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
                     if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
                     {
                         targetCategoryDir = Path.Combine(targetCategoryDir, CleanFileSystemName(secCat.Name));
@@ -753,7 +901,8 @@
                 {
                     DocumentId = document.DocumentId,
                     EmployeeId = emp.EmployeeId,
-                    EmployeeFilePath = relEmployeeFilePath
+                    EmployeeFilePath = relEmployeeFilePath,
+                    CreatedAt = DateTime.Now
                 };
 
                 DbContext.DocumentEmployees.Add(docEmp);
@@ -766,7 +915,7 @@
                 actionType: "إضافة مستند",
                 entityType: "مستند",
                 entityId: document.DocumentId,
-                description: $"تمت أرشفة كتاب ({document.Subject}) برقم ({document.DocumentNumber}) وتاريخ ({document.DocumentDate}) لعدد ({selectedEmployees.Count}) موظفين."
+                description: $"تمت أرشفة كتاب ({document.Subject}) برقم ({document.DocumentNumber}) وتاريخ ({document.DocumentDate?.ToString("yyyy/MM/dd")}) لعدد ({selectedEmployees.Count}) موظفين."
             );
 
             Snackbar.Add($"تم حفظ وتوزيع الكتاب على أضابير ({selectedEmployees.Count}) موظف بنجاح!", Severity.Success);
@@ -793,11 +942,9 @@
         }
         catch (JSDisconnectedException)
         {
-            // تجاهل الاستثناء عند انقطاع الاتصال أو مغادرة الصفحة
         }
         catch (Exception)
         {
-            // حماية من أي أخطاء أثناء تنظيف الموارد
         }
     }
 }

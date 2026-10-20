@@ -50,7 +50,7 @@
                                Style="min-width: 140px; background-color: white;">
                         @foreach (var cat in DistinctMainCategories)
                         {
-                            <MudSelectItem Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
+                            <MudSelectItem T="int?" Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
                         }
                     </MudSelect>
 
@@ -67,7 +67,7 @@
                                Style="min-width: 140px; background-color: white;">
                         @foreach (var pCat in AvailableBulkPrimaryCategories)
                         {
-                            <MudSelectItem Value="@((int?)pCat.PrimaryCategoryId)">@pCat.Name</MudSelectItem>
+                            <MudSelectItem T="int?" Value="@((int?)pCat.PrimaryCategoryId)">@pCat.Name</MudSelectItem>
                         }
                     </MudSelect>
 
@@ -84,7 +84,7 @@
                                Style="min-width: 140px; background-color: white;">
                         @foreach (var sCat in AvailableBulkSecondaryCategories)
                         {
-                            <MudSelectItem Value="@((int?)sCat.SecondaryCategoryId)">@sCat.Name</MudSelectItem>
+                            <MudSelectItem T="int?" Value="@((int?)sCat.SecondaryCategoryId)">@sCat.Name</MudSelectItem>
                         }
                     </MudSelect>
 
@@ -100,7 +100,7 @@
                                Style="min-width: 140px; background-color: white;">
                         @foreach (var tCat in AvailableBulkTertiaryCategories)
                         {
-                            <MudSelectItem Value="@((int?)tCat.TertiaryCategoryId)">@tCat.Name</MudSelectItem>
+                            <MudSelectItem T="int?" Value="@((int?)tCat.TertiaryCategoryId)">@tCat.Name</MudSelectItem>
                         }
                     </MudSelect>
 
@@ -119,26 +119,27 @@
             <MudFileUpload T="IReadOnlyList<IBrowserFile>"
                            FilesChanged="OnFilesDropped"
                            AppendMultipleFiles="true"
+                           maximumFileCount="20"
                            Accept=".pdf,.jpg,.jpeg,.png">
                 <ActivatorContent>
                     <div class="drop-zone">
                         <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Style="font-size: 3rem; color: #1B4D3E;" />
                         <MudText Typo="Typo.subtitle1" Class="fw-bold mt-1">
-                            اسحب وأفلت ملفات الكتب هنا دفعة واحدة
+                            اسحب وأفلت ملفات الكتب هنا دفعة واحدة (بحد أقصى 20 كتاباً)
                         </MudText>
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            أو انقر لتحديد ملفات الـ PDF أو الصور من الحاسبة
+                            أو انقر لتحديد ملفات الـ PDF أو الصور من الحاسبة (أقصى حجم للملف 20 ميغابايت)
                         </MudText>
                     </div>
                 </ActivatorContent>
             </MudFileUpload>
 
-            <!-- جدول المعاينة والإدخال السريع قبل الحفظ (مع توسيع الارتفاع إلى 520px) -->
+            <!-- جدول المعاينة والإدخال السريع قبل الحفظ -->
             @if (_items.Any())
             {
                 <div class="d-flex justify-space-between align-center mt-4 mb-2">
                     <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
-                        الكتب المستخرجة جاهزة للمراجعة والحفظ (@_items.Count كتاباً):
+                        الكتب المستخرجة جاهزة للمراجعة والحفظ (@_items.Count من 20 كتاباً):
                     </MudText>
                     <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="_items.Clear">
                         تفريغ القائمة
@@ -146,19 +147,19 @@
                 </div>
 
                 <div style="max-height: 520px; overflow-y: auto; overflow-x: auto; border: 1px solid #dcdcdc; border-radius: 6px;">
-                    <MudSimpleTable Dense="true" Hover="true" Striped="true" Style="background-color: white; min-width: 1100px;">
+                    <MudSimpleTable Dense="true" Hover="true" Striped="true" Class="compact-bulk-table" Style="background-color: white; width: 100%; table-layout: fixed;">
                         <thead>
                             <tr style="background-color: #1B4D3E; color: white;">
-                                <th style="width: 3%; text-align: center;">ت</th>
-                                <th style="width: 12%;">رقم الكتاب</th>
-                                <th style="width: 13%;">تاريخ الكتاب</th>
-                                <th style="width: 18%;">الموضوع</th>
-                                <th style="width: 11%;">نوع الكتاب</th>
-                                <th style="width: 11%;">الرئيسي</th>
-                                <th style="width: 11%;">الفرعي الأول</th>
-                                <th style="width: 9%;">الفرعي الثاني</th>
-                                <th style="width: 9%; text-align: center;">المشاركة</th>
-                                <th style="width: 3%; text-align: center;">حذف</th>
+                                <th style="width: 35px; text-align: center;">ت</th>
+                                <th style="width: 105px;">رقم الكتاب</th>
+                                <th style="width: 145px;">تاريخ الكتاب</th>
+                                <th style="width: 22%;">الموضوع</th>
+                                <th style="width: 110px;">نوع الكتاب</th>
+                                <th style="width: 115px;">الرئيسي</th>
+                                <th style="width: 115px;">الفرعي الأول</th>
+                                <th style="width: 110px;">الفرعي الثاني</th>
+                                <th style="width: 85px; text-align: center;">المشاركة</th>
+                                <th style="width: 45px; text-align: center;">حذف</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -175,6 +176,7 @@
                                         <MudTextField @bind-Value="item.DocumentNumber"
                                                       Variant="Variant.Outlined"
                                                       Margin="Margin.Dense"
+                                                      Class="table-input"
                                                       Required="true" />
                                     </td>
 
@@ -183,7 +185,9 @@
                                         <MudDatePicker @bind-Date="item.DocumentDate"
                                                        Variant="Variant.Outlined"
                                                        Margin="Margin.Dense"
-                                                       DateFormat="yyyy-MM-dd" />
+                                                       DateFormat="yyyy-MM-dd"
+                                                       ShowToolbar="false"
+                                                       Class="table-input" />
                                     </td>
 
                                     <!-- موضوع الكتاب -->
@@ -192,6 +196,7 @@
                                                       Variant="Variant.Outlined"
                                                       Margin="Margin.Dense"
                                                       Placeholder="موضوع الكتاب..."
+                                                      Class="table-input"
                                                       Required="true" />
                                     </td>
 
@@ -202,10 +207,11 @@
                                                    ToStringFunc="GetMainCatName"
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
-                                                   Dense="true">
+                                                   Dense="true"
+                                                   Class="table-input">
                                             @foreach (var cat in DistinctMainCategories)
                                             {
-                                                <MudSelectItem Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
+                                                <MudSelectItem T="int?" Value="@((int?)cat.MainCategoryId)">@cat.Name</MudSelectItem>
                                             }
                                         </MudSelect>
                                     </td>
@@ -218,10 +224,11 @@
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true"
+                                                   Class="table-input"
                                                    Disabled="@(!GetFilteredPrimaryCategories(item.MainCategoryId).Any())">
                                             @foreach (var pCat in GetFilteredPrimaryCategories(item.MainCategoryId))
                                             {
-                                                <MudSelectItem Value="@((int?)pCat.PrimaryCategoryId)">@pCat.Name</MudSelectItem>
+                                                <MudSelectItem T="int?" Value="@((int?)pCat.PrimaryCategoryId)">@pCat.Name</MudSelectItem>
                                             }
                                         </MudSelect>
                                     </td>
@@ -234,10 +241,11 @@
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true"
+                                                   Class="table-input"
                                                    Disabled="@(!GetFilteredSecondaryCategories(item.PrimaryCategoryId).Any())">
                                             @foreach (var sCat in GetFilteredSecondaryCategories(item.PrimaryCategoryId))
                                             {
-                                                <MudSelectItem Value="@((int?)sCat.SecondaryCategoryId)">@sCat.Name</MudSelectItem>
+                                                <MudSelectItem T="int?" Value="@((int?)sCat.SecondaryCategoryId)">@sCat.Name</MudSelectItem>
                                             }
                                         </MudSelect>
                                     </td>
@@ -249,10 +257,11 @@
                                                    Variant="Variant.Outlined"
                                                    Margin="Margin.Dense"
                                                    Dense="true"
+                                                   Class="table-input"
                                                    Disabled="@(!GetFilteredTertiaryCategories(item.SecondaryCategoryId).Any())">
                                             @foreach (var tCat in GetFilteredTertiaryCategories(item.SecondaryCategoryId))
                                             {
-                                                <MudSelectItem Value="@((int?)tCat.TertiaryCategoryId)">@tCat.Name</MudSelectItem>
+                                                <MudSelectItem T="int?" Value="@((int?)tCat.TertiaryCategoryId)">@tCat.Name</MudSelectItem>
                                             }
                                         </MudSelect>
                                     </td>
@@ -266,7 +275,7 @@
                                                        Size="Size.Small"
                                                        StartIcon="@Icons.Material.Filled.Group"
                                                        OnClick="@(() => OpenShareDialog(item))"
-                                                       Style="border-radius: 6px; font-weight: bold; font-size: 0.75rem;">
+                                                       Style="font-weight: bold; font-size: 0.72rem; padding: 2px 6px; height: 30px; white-space: nowrap;">
                                                 مشترك (@item.SharedEmployeeIds.Count)
                                             </MudButton>
                                         }
@@ -277,7 +286,7 @@
                                                        Size="Size.Small"
                                                        StartIcon="@Icons.Material.Filled.PersonAdd"
                                                        OnClick="@(() => OpenShareDialog(item))"
-                                                       Style="border-radius: 6px; font-size: 0.75rem;">
+                                                       Style="font-size: 0.72rem; padding: 2px 6px; height: 30px; white-space: nowrap;">
                                                 مشاركة
                                             </MudButton>
                                         }
@@ -340,6 +349,35 @@
             background-color: #ebf3ef;
             border-color: #143a2f;
         }
+
+    .compact-bulk-table th,
+    .compact-bulk-table td {
+        padding: 4px 5px !important;
+        vertical-align: middle !important;
+    }
+
+    .compact-bulk-table .table-input .mud-input-root-outlined {
+        height: 32px !important;
+        min-height: 32px !important;
+        background-color: #ffffff;
+        padding: 0 4px !important;
+    }
+
+    .compact-bulk-table .table-input input,
+    .compact-bulk-table .table-input .mud-select-input {
+        font-size: 0.82rem !important;
+        padding: 0 4px !important;
+        height: 30px !important;
+        line-height: 30px !important;
+    }
+
+    .compact-bulk-table .table-input .mud-input-adornment {
+        margin: 0 !important;
+    }
+
+        .compact-bulk-table .table-input .mud-input-adornment .mud-icon-root {
+            font-size: 1.1rem !important;
+        }
 </style>
 
 @code {
@@ -381,6 +419,19 @@
     private int? _bulkSecondaryCatId;
     private int? _bulkTertiaryCatId;
 
+    private readonly Dictionary<string, string[]> _primaryToSecondaryMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["أمر إداري"] = new[] { "مباشرة", "انفكاك", "علاوة", "ترفيع", "شكر", "عقوبة", "لجنة", "تكليف", "تنسيب", "ترشيح", "تقييم", "احتساب", "إضافة", "إعفاء", "دورة", "غير ذلك" },
+        ["استمارة"] = new[] { "معلومات", "مستمسكات", "تقييم", "جرد", "غير ذلك" },
+        ["طلب شخصي"] = new[] { "إجازة", "نقل", "تنسيب", "تظلم", "مخصصات", "سلفة", "غير ذلك" },
+        ["اعتيادية"] = new[] { "مخاطبات", "تبليغ", "استدعاء", "نتيجة", "غير ذلك" }
+    };
+
+    private readonly string[] _tertiaryForEnfakak = new[] { "دورة", "مؤتمر", "ورشة", "إجازة", "نقل", "تنسيب", "تقاعد", "تكليف", "غير ذلك" };
+    private readonly string[] _tertiaryForEhtisab = new[] { "شهادة", "خدمة", "علاوة", "ترفيع", "شكر", "غير ذلك" };
+    private readonly string[] _tertiaryForTakleef = new[] { "منصب", "لجنة", "مهام", "تنسيب", "تكليف", "غير ذلك" };
+    private readonly string[] _tertiaryForTarsheeh = new[] { "دورة", "مؤتمر", "ورشة", "تكليف", "لجنة", "غير ذلك" };
+
     private readonly List<string> _iraqiCommittees = new()
     {
         "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
@@ -407,7 +458,19 @@
     private string GetSecondaryCatName(int? id)
     {
         if (!id.HasValue) return string.Empty;
-        return SecondaryCategories.FirstOrDefault(c => c.SecondaryCategoryId == id.Value)?.Name ?? string.Empty;
+        var sec = SecondaryCategories.FirstOrDefault(c => c.SecondaryCategoryId == id.Value);
+        if (sec != null) return sec.Name;
+
+        var bulkSec = AvailableBulkSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == id.Value);
+        if (bulkSec != null) return bulkSec.Name;
+
+        foreach (var item in _items)
+        {
+            var rSec = GetFilteredSecondaryCategories(item.PrimaryCategoryId).FirstOrDefault(s => s.SecondaryCategoryId == id.Value);
+            if (rSec != null) return rSec.Name;
+        }
+
+        return string.Empty;
     }
 
     private string GetTertiaryCatName(int? id)
@@ -416,14 +479,15 @@
         var tert = TertiaryCategories.FirstOrDefault(c => c.TertiaryCategoryId == id.Value);
         if (tert != null) return tert.Name;
 
-        if (id.Value < 0)
+        var bulkTert = AvailableBulkTertiaryCategories.FirstOrDefault(t => t.TertiaryCategoryId == id.Value);
+        if (bulkTert != null) return bulkTert.Name;
+
+        foreach (var item in _items)
         {
-            int index = (-id.Value) - 100;
-            if (index >= 0 && index < _iraqiCommittees.Count)
-            {
-                return _iraqiCommittees[index];
-            }
+            var rTert = GetFilteredTertiaryCategories(item.SecondaryCategoryId).FirstOrDefault(t => t.TertiaryCategoryId == id.Value);
+            if (rTert != null) return rTert.Name;
         }
+
         return string.Empty;
     }
 
@@ -431,16 +495,10 @@
         MainCategories.GroupBy(c => c.Name.Trim()).Select(g => g.First());
 
     private IEnumerable<PrimaryCategory> AvailableBulkPrimaryCategories =>
-        _bulkMainCatId.HasValue
-            ? PrimaryCategories.Where(p => p.MainCategoryId == _bulkMainCatId.Value)
-                               .GroupBy(p => p.Name.Trim()).Select(g => g.First())
-            : Enumerable.Empty<PrimaryCategory>();
+        GetFilteredPrimaryCategories(_bulkMainCatId);
 
     private IEnumerable<SecondaryCategory> AvailableBulkSecondaryCategories =>
-        _bulkPrimaryCatId.HasValue
-            ? SecondaryCategories.Where(s => s.PrimaryCategoryId == _bulkPrimaryCatId.Value)
-                                 .GroupBy(s => s.Name.Trim()).Select(g => g.First())
-            : Enumerable.Empty<SecondaryCategory>();
+        GetFilteredSecondaryCategories(_bulkPrimaryCatId);
 
     private IEnumerable<TertiaryCategory> AvailableBulkTertiaryCategories =>
         GetFilteredTertiaryCategories(_bulkSecondaryCatId);
@@ -472,34 +530,108 @@
                                .GroupBy(p => p.Name.Trim()).Select(g => g.First())
             : Enumerable.Empty<PrimaryCategory>();
 
-    private IEnumerable<SecondaryCategory> GetFilteredSecondaryCategories(int? primaryCatId) =>
-        primaryCatId.HasValue
-            ? SecondaryCategories.Where(s => s.PrimaryCategoryId == primaryCatId.Value)
-                                 .GroupBy(s => s.Name.Trim()).Select(g => g.First())
-            : Enumerable.Empty<SecondaryCategory>();
+    private IEnumerable<SecondaryCategory> GetFilteredSecondaryCategories(int? primaryCatId)
+    {
+        if (!primaryCatId.HasValue) return Enumerable.Empty<SecondaryCategory>();
+
+        var primCat = PrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == primaryCatId.Value);
+        string primName = primCat?.Name?.Trim() ?? string.Empty;
+        var dbList = SecondaryCategories.Where(s => s.PrimaryCategoryId == primaryCatId.Value)
+                                        .GroupBy(s => s.Name.Trim()).Select(g => g.First()).ToList();
+
+        string? matchedKey = _primaryToSecondaryMap.Keys.FirstOrDefault(k => primName.Contains(k));
+        if (matchedKey != null)
+        {
+            var allowedSecNames = _primaryToSecondaryMap[matchedKey];
+            if (dbList.Any())
+            {
+                var filtered = dbList
+                    .Where(s => allowedSecNames.Any(a => s.Name.Trim().Contains(a)))
+                    .OrderBy(s => Array.IndexOf(allowedSecNames, allowedSecNames.FirstOrDefault(a => s.Name.Trim().Contains(a))))
+                    .ToList();
+
+                if (filtered.Any()) return filtered;
+            }
+
+            int vId = -200;
+            return allowedSecNames.Select(name => new SecondaryCategory
+            {
+                SecondaryCategoryId = vId--,
+                PrimaryCategoryId = primaryCatId.Value,
+                Name = name
+            }).ToList();
+        }
+
+        return dbList;
+    }
 
     private IEnumerable<TertiaryCategory> GetFilteredTertiaryCategories(int? secondaryCatId)
     {
         if (!secondaryCatId.HasValue) return Enumerable.Empty<TertiaryCategory>();
 
-        var list = TertiaryCategories.Where(t => t.SecondaryCategoryId == secondaryCatId.Value)
-                                     .GroupBy(t => t.Name.Trim()).Select(g => g.First()).ToList();
+        var secCat = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secondaryCatId.Value)
+                     ?? AvailableBulkSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secondaryCatId.Value);
 
-        if (list.Any()) return list;
-
-        var sec = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == secondaryCatId.Value);
-        if (sec != null && sec.Name.Contains("لجنة"))
+        if (secCat == null)
         {
-            int virtualId = -100;
-            return _iraqiCommittees.Select(c => new TertiaryCategory
+            foreach (var itm in _items)
             {
-                TertiaryCategoryId = virtualId--,
-                SecondaryCategoryId = secondaryCatId.Value,
-                Name = c
-            }).ToList();
+                secCat = GetFilteredSecondaryCategories(itm.PrimaryCategoryId).FirstOrDefault(s => s.SecondaryCategoryId == secondaryCatId.Value);
+                if (secCat != null) break;
+            }
+        }
+
+        string secName = secCat?.Name?.Trim() ?? string.Empty;
+
+        if (secName.Contains("انفكاك"))
+        {
+            return BuildTertiaryList(secondaryCatId.Value, _tertiaryForEnfakak);
+        }
+        if (secName.Contains("احتساب") || secName.Contains("إضافة") || secName.Contains("اضافة"))
+        {
+            return BuildTertiaryList(secondaryCatId.Value, _tertiaryForEhtisab);
+        }
+        if (secName.Contains("تكليف") || secName.Contains("إعفاء") || secName.Contains("اعفاء"))
+        {
+            return BuildTertiaryList(secondaryCatId.Value, _tertiaryForTakleef);
+        }
+        if (secName.Contains("ترشيح"))
+        {
+            return BuildTertiaryList(secondaryCatId.Value, _tertiaryForTarsheeh);
+        }
+        if (secName.Contains("لجنة"))
+        {
+            return BuildTertiaryList(secondaryCatId.Value, _iraqiCommittees.ToArray());
         }
 
         return Enumerable.Empty<TertiaryCategory>();
+    }
+
+    private List<TertiaryCategory> BuildTertiaryList(int secId, string[] definedNames)
+    {
+        var result = new List<TertiaryCategory>();
+        var fromDb = TertiaryCategories.Where(t => t.SecondaryCategoryId == secId)
+                                       .GroupBy(t => t.Name.Trim()).Select(g => g.First()).ToList();
+
+        int virtualId = -100;
+        foreach (var name in definedNames)
+        {
+            var matched = fromDb.FirstOrDefault(d => d.Name.Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                result.Add(matched);
+            }
+            else
+            {
+                result.Add(new TertiaryCategory
+                {
+                    TertiaryCategoryId = virtualId--,
+                    SecondaryCategoryId = secId,
+                    Name = name
+                });
+            }
+        }
+        return result;
     }
 
     private void OnRowMainCatChanged(BulkDocumentItem item, int? val)
@@ -523,22 +655,45 @@
         item.TertiaryCategoryId = null;
     }
 
-    private void ApplyBulkCategoryToAll()
+    // تطبيق القيم على مرحلتين لضمان جاهزية قائمة الفرعي الثاني وملئها من الضغطة الأولى
+    private async Task ApplyBulkCategoryToAll()
     {
         foreach (var item in _items)
         {
             item.MainCategoryId = _bulkMainCatId;
             item.PrimaryCategoryId = _bulkPrimaryCatId;
             item.SecondaryCategoryId = _bulkSecondaryCatId;
+        }
+
+        StateHasChanged();
+        await Task.Yield();
+
+        foreach (var item in _items)
+        {
             item.TertiaryCategoryId = _bulkTertiaryCatId;
         }
+
         StateHasChanged();
     }
 
     private void OnFilesDropped(IReadOnlyList<IBrowserFile> files)
     {
+        const long maxFileSizeBytes = 20 * 1024 * 1024; // 20 ميغابايت
+
         foreach (var file in files)
         {
+            if (_items.Count >= 20)
+            {
+                Snackbar.Add("تم بلوغ الحد الأقصى المسموح به (20 كتاباً) في الدفعة الواحدة!", Severity.Warning);
+                break;
+            }
+
+            if (file.Size > maxFileSizeBytes)
+            {
+                Snackbar.Add($"الملف ({file.Name}) يتجاوز الحد الأقصى المسموح به للحجم (20 ميغابايت) وتم استبعاده!", Severity.Error);
+                continue;
+            }
+
             if (_items.Any(i => i.File.Name == file.Name)) continue;
 
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
@@ -734,15 +889,32 @@
                 string cleanPri = string.Concat(priName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
 
                 string primaryTargetDir = Path.Combine(employeeRootFullPath, cleanBranch, cleanPri);
+
+                int? actualSecondaryId = item.SecondaryCategoryId;
+                string secName = string.Empty;
+
                 if (item.SecondaryCategoryId.HasValue)
                 {
-                    var secCat = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == item.SecondaryCategoryId.Value);
+                    var secCat = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == item.SecondaryCategoryId.Value)
+                                 ?? GetFilteredSecondaryCategories(item.PrimaryCategoryId).FirstOrDefault(s => s.SecondaryCategoryId == item.SecondaryCategoryId.Value);
+
                     if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
                     {
-                        string cleanSec = string.Concat(secCat.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                        secName = secCat.Name.Trim();
+                        if (actualSecondaryId.Value < 0 && item.PrimaryCategoryId.HasValue)
+                        {
+                            var newSec = new SecondaryCategory { Name = secName, PrimaryCategoryId = item.PrimaryCategoryId.Value };
+                            DbContext.SecondaryCategories.Add(newSec);
+                            await DbContext.SaveChangesAsync();
+                            actualSecondaryId = newSec.SecondaryCategoryId;
+                            item.SecondaryCategoryId = actualSecondaryId;
+                        }
+
+                        string cleanSec = string.Concat(secName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                         primaryTargetDir = Path.Combine(primaryTargetDir, cleanSec);
                     }
                 }
+
                 if (!Directory.Exists(primaryTargetDir)) Directory.CreateDirectory(primaryTargetDir);
 
                 string cleanSubject = string.Concat((string.IsNullOrWhiteSpace(item.Subject) ? "مستند" : item.Subject.Trim()).Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
@@ -775,14 +947,16 @@
                 var newDoc = new Document
                 {
                     DocumentNumber = item.DocumentNumber.Trim(),
-                    DocumentDate = docDateStr,
+                    DocumentDate = item.DocumentDate,
                     Subject = string.IsNullOrWhiteSpace(item.Subject) ? $"كتاب رقم {item.DocumentNumber}" : item.Subject.Trim(),
                     FilePath = relativeFilePath,
                     MainCategoryId = item.MainCategoryId ?? 0,
                     PrimaryCategoryId = item.PrimaryCategoryId ?? 0,
-                    SecondaryCategoryId = item.SecondaryCategoryId,
+                    SecondaryCategoryId = actualSecondaryId,
                     TertiaryCategoryId = actualTertiaryId,
-                    IsDeleted = 0
+                    IsDeleted = 0,
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
                 };
 
                 DbContext.Documents.Add(newDoc);
@@ -792,7 +966,8 @@
                 {
                     DocumentId = newDoc.DocumentId,
                     EmployeeId = Employee.EmployeeId,
-                    EmployeeFilePath = relativeFilePath
+                    EmployeeFilePath = relativeFilePath,
+                    CreatedAt = DateTime.Now
                 };
                 DbContext.DocumentEmployees.Add(docEmployee);
 
@@ -805,14 +980,10 @@
                         string sEmpFolderRel = !string.IsNullOrWhiteSpace(sharedEmp.EmployeeFolderPath) ? sharedEmp.EmployeeFolderPath : $"{sCleanFile}_{sCleanName}";
 
                         string sEmpTargetDir = Path.Combine(baseFolder, sEmpFolderRel, cleanBranch, cleanPri);
-                        if (item.SecondaryCategoryId.HasValue)
+                        if (!string.IsNullOrWhiteSpace(secName))
                         {
-                            var secCat = SecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == item.SecondaryCategoryId.Value);
-                            if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
-                            {
-                                string cleanSec = string.Concat(secCat.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                                sEmpTargetDir = Path.Combine(sEmpTargetDir, cleanSec);
-                            }
+                            string cleanSec = string.Concat(secName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                            sEmpTargetDir = Path.Combine(sEmpTargetDir, cleanSec);
                         }
                         if (!Directory.Exists(sEmpTargetDir)) Directory.CreateDirectory(sEmpTargetDir);
 
@@ -830,7 +1001,8 @@
                         {
                             DocumentId = newDoc.DocumentId,
                             EmployeeId = sharedEmp.EmployeeId,
-                            EmployeeFilePath = sRelativeFilePath
+                            EmployeeFilePath = sRelativeFilePath,
+                            CreatedAt = DateTime.Now
                         });
                     }
                 }

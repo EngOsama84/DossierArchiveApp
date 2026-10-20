@@ -89,6 +89,7 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
     private async Task Submit()
     {
         await _form.Validate();
@@ -154,7 +155,7 @@
                     // نقل وتغيير اسم المجلد القديم بكل ما يحتويه من كتب وتصنيفات إلى الاسم الجديد
                     Directory.Move(oldFolderFullPath, newFolderFullPath);
 
-                    // تحديث مسارات المستندات التابعة للموظف في جدول الربط TB_DocumentEmployees لضمان عدم ضياع روابط الفتح مستقبلاً
+                    // تحديث مسارات المستندات التابعة للموظف في جدول الربط TB_DocumentEmployees
                     var docEmployees = await DbContext.DocumentEmployees
                         .Where(de => de.EmployeeId == EmployeeToEdit.EmployeeId)
                         .ToListAsync();
@@ -169,7 +170,7 @@
                 }
                 else
                 {
-                    // إذا لم يكن المجلد القديم موجوداً، ننشئ المجلد الجديد وتصنيفاته
+                    // إنشاء المجلد الجديد وتصنيفاته
                     if (!Directory.Exists(newFolderFullPath))
                     {
                         Directory.CreateDirectory(newFolderFullPath);
@@ -195,17 +196,17 @@
             var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == EmployeeToEdit.EmployeeId);
             if (empDb != null)
             {
-                string oldName = empDb.EmployeeName; // حفظ الاسم القديم للتوثيق
+                string oldName = empDb.EmployeeName;
 
                 empDb.EmployeeName = trimmedName;
                 empDb.FileNumber = trimmedFile;
                 empDb.IsActive = _isActive ? 1 : 0;
                 empDb.EmployeeFolderPath = newFolderRelPath;
-                empDb.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                empDb.UpdatedAt = DateTime.Now; // إسناد مباشر كـ DateTime? بدلاً من النص
 
                 await DbContext.SaveChangesAsync();
 
-                // توثيق حركة التعديل في سجل الحركات باستخدام empDb
+                // توثيق حركة التعديل في سجل الحركات
                 await SessionService.LogActivityAsync(
                     actionType: "تعديل موظف",
                     entityType: "موظف",
