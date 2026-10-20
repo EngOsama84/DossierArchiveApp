@@ -14,22 +14,43 @@ public class User
     [Required]
     public string UserName { get; set; } = string.Empty;
 
+    [Column("FullName")]
+    public string FullName { get; set; } = string.Empty;
+
     [Column("PasswordHash")]
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
 
-    [Column("UserTypeID")]
-    public int UserTypeId { get; set; }
+    // --- الصلاحيات المباشرة (0 = لا، 1 = نعم) ---
+    [Column("IsAdmin")]
+    public int IsAdmin { get; set; } = 0;
 
+    [Column("CanAdd")]
+    public int CanAdd { get; set; } = 0;
+
+    [Column("CanEdit")]
+    public int CanEdit { get; set; } = 0;
+
+    [Column("CanDelete")]
+    public int CanDelete { get; set; } = 0;
+
+    [Column("CanExport")]
+    public int CanExport { get; set; } = 0;
+
+    // --- حالة الحساب والأمان الإجباري ---
     [Column("IsActive")]
     public int IsActive { get; set; } = 1;
 
+    [Column("MustChangePassword")]
+    public bool MustChangePassword { get; set; } = false;
+
+    // --- حقول التواريخ القياسية لضمان التوافق التام مع SQL Server و SQLite ---
     [Column("CreatedAt")]
-    public string CreatedAt { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; }
 
     [Column("UpdatedAt")]
-    public string UpdatedAt { get; set; } = string.Empty;
+    public DateTime? UpdatedAt { get; set; }
 
     [Column("LastLogin")]
-    public string? LastLogin { get; set; }
+    public DateTime? LastLogin { get; set; }
 }

@@ -11,7 +11,6 @@
 @inject NavigationManager Navigation
 @inject UserSessionService SessionService
 
-
 <PageTitle>إدارة المستخدمين</PageTitle>
 
 <div dir="rtl" class="pa-4" style="background-color: #f8f9fa; min-height: 90vh; text-align: right;">
@@ -41,8 +40,8 @@
         <MudTable Items="_users" Dense="true" Hover="true" Loading="_isLoading" Elevation="0">
             <HeaderContent>
                 <MudTh Style="font-weight: bold; width: 80px;">رقم الحساب</MudTh>
-                <MudTh Style="font-weight: bold;">اسم المستخدم</MudTh>
-                <MudTh Style="font-weight: bold; text-align: center;">نوع الحساب / الصلاحية</MudTh>
+                <MudTh Style="font-weight: bold;">اسم المستخدم / الكامل</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center;">الدور / الصلاحيات</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center;">آخر تسجيل دخول</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center;">تاريخ الإنشاء</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center;">الحالة</MudTh>
@@ -50,57 +49,72 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="رقم الحساب" Class="text-muted">@context.UserId.ToString("D3")</MudTd>
-                <MudTd DataLabel="اسم المستخدم" Class="fw-bold">
+                <MudTd DataLabel="اسم المستخدم">
                     <div class="d-flex align-center gap-2">
                         <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Primary" Size="Size.Small" />
-                        <span>@context.UserName</span>
+                        <div>
+                            <span class="fw-bold">@context.UserName</span>
+                            @if (!string.IsNullOrWhiteSpace(context.FullName))
+                            {
+                                <MudText Typo="Typo.caption" Class="d-block text-muted">@context.FullName</MudText>
+                            }
+                        </div>
                     </div>
                 </MudTd>
-                <MudTd DataLabel="نوع الحساب" Style="text-align: center;">
-                    @switch (context.UserTypeId)
+                <MudTd DataLabel="الدور / الصلاحيات" Style="text-align: center;">
+                    @if (context.IsAdmin == 1)
                     {
-                        case 1:
-                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
-                                مدير نظام
-                            </MudChip>
-                            break;
-                        case 2:
-                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
-                                محرر بيانات
-                            </MudChip>
-                            break;
-                        case 3:
-                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
-                                مدخل بيانات
-                            </MudChip>
-                            break;
-                        case 4:
-                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">
-                                قارئ بيانات
-                            </MudChip>
-                            break;
-                        default:
-                            <MudChip T="string" Color="Color.Default" Size="Size.Small">
-                                غير محدد
-                            </MudChip>
-                            break;
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
+                            مدير نظام
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-center gap-1 flex-wrap">
+                            @if (context.CanAdd == 1)
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">إضافة</MudChip>
+                            }
+                            @if (context.CanEdit == 1)
+                            {
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">تعديل</MudChip>
+                            }
+                            @if (context.CanDelete == 1)
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">حذف</MudChip>
+                            }
+                            @if (context.CanExport == 1)
+                            {
+                                <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">تصدير</MudChip>
+                            }
+                            @if (context.CanAdd == 0 && context.CanEdit == 0 && context.CanDelete == 0 && context.CanExport == 0)
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">عرض فقط</MudChip>
+                            }
+                        </div>
                     }
                 </MudTd>
                 <MudTd DataLabel="آخر دخول" Style="text-align: center; direction: ltr; font-size: 0.85rem; color: #555;">
-                    @(string.IsNullOrEmpty(context.LastLogin) ? "—" : context.LastLogin)
+                    @(context.LastLogin?.ToString("yyyy-MM-dd HH:mm") ?? "—")
                 </MudTd>
                 <MudTd DataLabel="تاريخ الإنشاء" Style="text-align: center; direction: ltr; font-size: 0.85rem; color: #555;">
-                    @context.CreatedAt
+                    @(context.CreatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")
                 </MudTd>
                 <MudTd DataLabel="الحالة" Style="text-align: center;">
                     <MudSwitch T="bool"
                                Value="@(context.IsActive == 1)"
-                               ValueChanged="@((val) => ToggleUserStatus(context, val))"
+                               ValueChanged="@(async (bool val) => await ToggleUserStatus(context, val))"
                                Color="Color.Success" />
                 </MudTd>
                 <MudTd DataLabel="إجراء" Style="text-align: center;">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" OnClick="@(() => OpenEditUserDialog(context))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteUser(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Info"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditUserDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(async () => await DeleteUser(context))" />
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>
@@ -117,7 +131,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // فحص الأمان والصلاحيات
         if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
         {
             Snackbar.Add("عذراً، إدارة المستخدمين مقتصرة على مدير النظام فقط!", Severity.Error);
@@ -148,15 +161,24 @@
     private async Task ToggleUserStatus(User user, bool isActive)
     {
         user.IsActive = isActive ? 1 : 0;
-        user.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        user.UpdatedAt = DateTime.Now;
         await DbContext.SaveChangesAsync();
         Snackbar.Add($"تم تحديث حالة الحساب ({user.UserName})", Severity.Info);
     }
 
     private async Task OpenAddUserDialog()
     {
-        var parameters = new DialogParameters { ["UserToEdit"] = new User { UserTypeId = 2, IsActive = 1 } };
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            ["UserToEdit"] = new User
+            {
+                IsActive = 1,
+                CanAdd = 1,
+                MustChangePassword = true,
+                CreatedAt = DateTime.Now
+            }
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<UserDialog>("إضافة مستخدم جديد", parameters, options);
         var result = await dialog.Result;
         if (!result.Canceled)
@@ -168,7 +190,7 @@
     private async Task OpenEditUserDialog(User user)
     {
         var parameters = new DialogParameters { ["UserToEdit"] = user };
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<UserDialog>("تعديل بيانات المستخدم", parameters, options);
         var result = await dialog.Result;
         if (!result.Canceled)
@@ -179,6 +201,12 @@
 
     private async Task DeleteUser(User user)
     {
+        if (SessionService.CurrentUser?.UserId == user.UserId)
+        {
+            Snackbar.Add("لا يمكنك حذف الحساب الذي تستخدمه حالياً!", Severity.Warning);
+            return;
+        }
+
         bool? confirm = await DialogService.ShowMessageBox(
             "تأكيد الحذف",
             $"هل أنت متأكد من حذف الحساب ({user.UserName})؟",

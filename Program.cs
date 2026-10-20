@@ -5,92 +5,95 @@ using DossierArchiveApp.Services;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
+// 1. ≈‰‘«¡ «·‹ Builder Ê ”ÃÌ· «·Œœ„«  √Ê·«
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
 builder.Services.AddServerSideBlazor(options =>
 {
     options.DetailedErrors = true;
 });
+
 builder.Services.AddMudServices();
 
 //  ”ÃÌ· ﬁ«⁄œ… »Ì«‰«  SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=dossiers.sqlite3"));
 
-//  ”ÃÌ· Œœ„… «·„«”Õ «·÷Ê∆Ì
+//  ”ÃÌ· «·Œœ„«  «·„Œ’’…
 builder.Services.AddScoped<ScannerService>();
 builder.Services.AddScoped<UserSessionService>();
 builder.Services.AddScoped<ExportService>();
+
+// 2. »‰«¡ «· ÿ»Ìﬁ Ê Ê·Ìœ «·„ €Ì— app (Â‰« ÌÊ·œ «·ﬂ«∆‰ app)
 var app = builder.Build();
 
-//  —ﬁÌ… „ƒﬂœ… ·ÃœÊ· «·≈⁄œ«œ«  ›Ì SQLite ⁄‰œ ﬂ· ≈ﬁ·«⁄
+// 3.  ÂÌ∆… ﬁ«⁄œ… «·»Ì«‰«  Ê≈‰‘«¡ «·Ãœ«Ê· ÊÕ”«» «·„œÌ— (Ì√ Ì »⁄œ builder.Build)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    void TryAddColumn(string sql)
+    // ≈‰‘«¡ ﬂ«›… «·Ãœ«Ê· ≈–« ·„  ﬂ‰ „ÊÃÊœ…
+    db.Database.EnsureCreated();
+
+    void TryExecuteSql(string sql)
     {
         try { db.Database.ExecuteSqlRaw(sql); } catch { }
     }
 
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN DirectorateName TEXT DEFAULT '«·„œÌ—Ì… «·⁄«„…';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN DepartmentName TEXT DEFAULT '‘⁄»…  ﬂ‰Ê·ÊÃÌ« «·„⁄·Ê„« ';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN LogoPath TEXT DEFAULT '';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN FontFamily TEXT DEFAULT 'Dubai';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN DefaultScannerName TEXT DEFAULT '';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN ScanSource TEXT DEFAULT 'Feeder';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN DuplexScan INTEGER DEFAULT 0;");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerResolutionDPI INTEGER DEFAULT 200;");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerColorMode TEXT DEFAULT 'Grayscale';");
-    TryAddColumn("ALTER TABLE TB_SystemSettings ADD COLUMN PdfCompressionLevel TEXT DEFAULT 'Medium';");
+    //  —ﬁÌ«  «Õ Ì«ÿÌ… ··Ãœ«Ê·
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DirectorateName TEXT DEFAULT '«·„œÌ—Ì… «·⁄«„…';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DepartmentName TEXT DEFAULT '‘⁄»…  ﬂ‰Ê·ÊÃÌ« «·„⁄·Ê„« ';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN LogoPath TEXT DEFAULT '';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN FontFamily TEXT DEFAULT 'Dubai';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DefaultScannerName TEXT DEFAULT '';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN ScanSource TEXT DEFAULT 'Feeder';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DuplexScan INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerResolutionDPI INTEGER DEFAULT 200;");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerColorMode TEXT DEFAULT 'Grayscale';");
+    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN PdfCompressionLevel TEXT DEFAULT 'Medium';");
 
-    TryAddColumn("ALTER TABLE TB_Documents ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
-    TryAddColumn("ALTER TABLE TB_Documents ADD COLUMN DeletedAt TEXT NULL;");
-    TryAddColumn("ALTER TABLE TB_Employees ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
-    TryAddColumn("ALTER TABLE TB_Employees ADD COLUMN DeletedAt TEXT NULL;");
-}
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    //TryExecuteSql("ALTER TABLE TB_Documents ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Documents ADD COLUMN DeletedAt TEXT NULL;");
+    //TryExecuteSql("ALTER TABLE TB_Employees ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Employees ADD COLUMN DeletedAt TEXT NULL;");
 
-    // «· Õﬁﬁ „‰ ÊÃÊœ „” Œœ„ „œÌ—° Ê≈‰‘«∆Â  ·ﬁ«∆Ì« ≈–« ·„ Ìﬂ‰ „ÊÃÊœ«
-    var hasAdmin = db.Users.Any(u => u.UserTypeId == 1);
-    if (!hasAdmin)
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN FullName TEXT DEFAULT '';");
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN IsAdmin INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanAdd INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanEdit INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanDelete INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanExport INTEGER DEFAULT 0;");
+    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN MustChangePassword INTEGER DEFAULT 0;");
+
+    // «· Õﬁﬁ „‰ ÊÃÊœ Õ”«» «·„œÌ— «·«› —«÷Ì √Ê ≈‰‘«ƒÂ
+    var adminUser = db.Users.FirstOrDefault(u => u.UserName.ToLower() == "admin");
+
+    if (adminUser == null)
     {
-        var defaultAdmin = new User
+        adminUser = new User
         {
             UserName = "admin",
-            PasswordHash = "123456", // ﬂ·„… „—Ê— «·Õ”«» «·«› —«÷Ì
-            UserTypeId = 1,          // „œÌ— ‰Ÿ«„
+            FullName = "„œÌ— «·‰Ÿ«„ «·«› —«÷Ì",
+            PasswordHash = "123456",
+            IsAdmin = 1,
+            CanAdd = 1,
+            CanEdit = 1,
+            CanDelete = 1,
+            CanExport = 1,
             IsActive = 1,
-            CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-            UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            MustChangePassword = false,
+            CreatedAt = DateTime.Now,
+            UpdatedAt = DateTime.Now
         };
-        db.Users.Add(defaultAdmin);
+        db.Users.Add(adminUser);
         db.SaveChanges();
     }
 }
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // 1. «·»ÕÀ ⁄‰ Õ”«» admin √Ê √Ê· Õ”«» ›Ì «·ÃœÊ·
-    var adminUser = db.Users.FirstOrDefault(u => u.UserName.ToLower() == "admin")
-                    ?? db.Users.FirstOrDefault();
-
-    if (adminUser != null)
-    {
-        //  ⁄ÌÌ‰ ﬂ·„… «·„—Ê— ≈·Ï 123456 Ê ›⁄Ì· «·Õ”«» ﬂ„œÌ— ‰Ÿ«„
-        adminUser.PasswordHash = "123456";
-        adminUser.UserTypeId = 1; // „œÌ— ‰Ÿ«„ ﬂ«„· «·’·«ÕÌ« 
-        adminUser.IsActive = 1;   // „›⁄·
-        adminUser.UpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-        db.SaveChanges();
-    }
-}
+// 4. Œÿ √‰«»Ì» «·„⁄«·Ã… (Middleware Pipeline)
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -104,4 +107,5 @@ app.UseAntiforgery();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+// 5.  ‘€Ì· «· ÿ»Ìﬁ
 app.Run();

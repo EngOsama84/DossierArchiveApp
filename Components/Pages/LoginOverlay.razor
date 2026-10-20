@@ -13,7 +13,6 @@
         <div class="text-center mb-4">
             @if (!string.IsNullOrWhiteSpace(_settings?.LogoPath))
             {
-                <!-- شعار بحجم صورة شخصية رسمية (عرض 100px وارتفاع 120px) مع إطار خفيف -->
                 <img src="@_settings.LogoPath"
                      style="width: 100px; height: 125px; object-fit: contain; border-radius: 8px; border: 1px solid #e0e0e0; padding: 4px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 10px;"
                      alt="شعار المؤسسة" />
@@ -25,12 +24,10 @@
                 </div>
             }
 
-            <!-- 1. اسم البرنامج -->
             <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E; line-height: 1.3;">
                 برنامج الأضابير الإلكترونية
             </MudText>
 
-            <!-- 2. اسم المديرية -->
             @if (!string.IsNullOrEmpty(_settings?.DirectorateName))
             {
                 <MudText Typo="Typo.subtitle1" Class="fw-bold mt-1" Style="color: #2c3e50;">
@@ -38,7 +35,6 @@
                 </MudText>
             }
 
-            <!-- 3. اسم القسم / الشعبة -->
             @if (!string.IsNullOrEmpty(_settings?.DepartmentName))
             {
                 <MudText Typo="Typo.body2" Class="fw-bold text-secondary" Style="margin-top: 2px;">
@@ -47,11 +43,10 @@
             }
 
             <MudText Typo="Typo.caption" Class="d-block mt-2 text-muted" Style="font-size: 0.8rem;">
-                تسجيل الدخول للمتابعة
+                @(_mustChangePasswordMode ? "تعيين كلمة مرور جديدة للمتابعة" : "تسجيل الدخول للمتابعة")
             </MudText>
         </div>
 
-        <!-- رسالة الخطأ الواضحة -->
         @if (!string.IsNullOrEmpty(_errorMessage))
         {
             <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true" Class="mb-3 text-right" Style="font-size: 0.85rem; border-radius: 6px;">
@@ -59,56 +54,107 @@
             </MudAlert>
         }
 
-        <!-- حقل اسم المستخدم مع التركيز المباشر -->
-        <div class="mb-3">
-            <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">اسم المستخدم *</MudText>
-            <MudTextField @ref="_userNameField"
-                          @bind-Value="_userName"
-                          Placeholder="أدخل اسم المستخدم"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          AutoFocus="true"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Person"
-                          Immediate="true" />
-        </div>
+        @if (!_mustChangePasswordMode)
+        {
+            <!-- ================= نمط تسجيل الدخول المعتاد ================= -->
+            <!-- حقل اسم المستخدم -->
+            <div class="mb-3">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">اسم المستخدم *</MudText>
+                <MudTextField @ref="_userNameField"
+                              @bind-Value="_userName"
+                              Placeholder="أدخل اسم المستخدم"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              AutoFocus="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Person"
+                              Immediate="true" />
+            </div>
 
-        <!-- حقل كلمة المرور -->
-        <div class="mb-4">
-            <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">كلمة المرور *</MudText>
-            <MudTextField @bind-Value="_password"
-                          Placeholder="أدخل كلمة المرور"
-                          InputType="InputType.Password"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Lock"
-                          OnKeyDown="@(async (e) => { if (e.Key == "Enter") await AttemptLogin(); })" />
-        </div>
+            <!-- حقل كلمة المرور -->
+            <div class="mb-4">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">كلمة المرور *</MudText>
+                <MudTextField @bind-Value="_password"
+                              Placeholder="أدخل كلمة المرور"
+                              InputType="InputType.Password"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              OnKeyDown="@(async (e) => { if (e.Key == "Enter") await AttemptLogin(); })" />
+            </div>
 
-        <!-- زر الدخول مع تأثير التحويم والتركيز بزر Tab -->
-        <MudButton Variant="Variant.Filled"
-                   FullWidth="true"
-                   Size="Size.Large"
-                   OnClick="AttemptLogin"
-                   Disabled="_isLoggingIn"
-                   Class="login-submit-btn">
-            @if (_isLoggingIn)
-            {
-                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                <span class="mr-2">جارٍ التحقق...</span>
-            }
-            else
-            {
-                <span>تسجيل الدخول</span>
-            }
-        </MudButton>
+            <!-- زر الدخول -->
+            <MudButton Variant="Variant.Filled"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="AttemptLogin"
+                       Disabled="_isBusy"
+                       Class="login-submit-btn">
+                @if (_isBusy)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <span class="mr-2">جارٍ التحقق...</span>
+                }
+                else
+                {
+                    <span>تسجيل الدخول</span>
+                }
+            </MudButton>
+        }
+        else
+        {
+            <!-- ================= نمط تغيير كلمة المرور الإجباري ================= -->
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" Variant="Variant.Outlined" Style="font-size: 0.82rem;">
+                هذا الدخول الأول لحسابك، يرجى تعيين كلمة مرور جديدة وخاصة بك.
+            </MudAlert>
+
+            <div class="mb-3">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">كلمة المرور الجديدة *</MudText>
+                <MudTextField @bind-Value="_newPassword"
+                              Placeholder="أدخل كلمة المرور الجديدة"
+                              InputType="InputType.Password"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              AutoFocus="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.LockReset" />
+            </div>
+
+            <div class="mb-4">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">تأكيد كلمة المرور الجديدة *</MudText>
+                <MudTextField @bind-Value="_confirmPassword"
+                              Placeholder="أعد إدخال كلمة المرور"
+                              InputType="InputType.Password"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.CheckCircleOutline"
+                              OnKeyDown="@(async (e) => { if (e.Key == "Enter") await ConfirmPasswordReset(); })" />
+            </div>
+
+            <MudButton Variant="Variant.Filled"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="ConfirmPasswordReset"
+                       Disabled="_isBusy"
+                       Class="login-submit-btn">
+                @if (_isBusy)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <span class="mr-2">جارٍ الحفظ والمتابعة...</span>
+                }
+                else
+                {
+                    <span>حفظ ومتابعة الدخول</span>
+                }
+            </MudButton>
+        }
 
     </MudPaper>
 </div>
 
 <style>
-    /* زر تسجيل الدخول وتأثير مرور الماوس والتركيز بالـ Tab */
     .login-submit-btn {
         background-color: #1B4D3E !important;
         color: #ffffff !important;
@@ -120,7 +166,6 @@
         outline: none !important;
     }
 
-        /* اللون الذهبي الوقفي الفاخر مع تأثير الارتفاع عند التحويم (Hover) أو التركيز بزر Tab (Focus) */
         .login-submit-btn:hover:not(:disabled),
         .login-submit-btn:focus:not(:disabled),
         .login-submit-btn:focus-visible:not(:disabled) {
@@ -128,7 +173,7 @@
             color: #ffffff !important;
             transform: translateY(-2px) !important;
             box-shadow: 0 6px 16px rgba(197, 160, 89, 0.45) !important;
-            outline: 2px solid #8e6c28 !important; /* إطار تركيز أنيق يؤكد استقرار الـ Tab عليه */
+            outline: 2px solid #8e6c28 !important;
             outline-offset: 2px !important;
         }
 
@@ -140,8 +185,14 @@
 @code {
     private string _userName = string.Empty;
     private string _password = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+
     private string? _errorMessage;
-    private bool _isLoggingIn = false;
+    private bool _isBusy = false;
+    private bool _mustChangePasswordMode = false;
+    private User? _pendingUser;
+
     private SystemSetting? _settings;
     private MudTextField<string>? _userNameField;
 
@@ -156,9 +207,8 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && _userNameField != null)
+        if (firstRender && _userNameField != null && !_mustChangePasswordMode)
         {
-            // تركيز المؤشر مباشرة داخل حقل اسم المستخدم فور تحميل الشاشة
             await _userNameField.FocusAsync();
         }
     }
@@ -179,10 +229,10 @@
             return;
         }
 
-        _isLoggingIn = true;
+        _isBusy = true;
         try
         {
-            // 1. فحص وجود الحساب وحالته أولاً لإظهار رسالة مناسبة إذا كان معطلاً
+            // 1. فحص وجود الحساب وحالته
             var account = await DbContext.Users
                 .FirstOrDefaultAsync(u => u.UserName.ToLower() == _userName.Trim().ToLower());
 
@@ -193,7 +243,7 @@
                 return;
             }
 
-            // 2. التحقق المشفر من كلمة المرور عبر UserSessionService مع الترقية التلقائية للبصمة
+            // 2. التحقق من صحة بيانات الدخول
             var user = await SessionService.ValidateUserCredentialsAsync(_userName.Trim(), _password);
 
             if (user == null)
@@ -203,12 +253,18 @@
                 return;
             }
 
-            // 3. تحديث آخر تسجيل دخول وتفعيل الجلسة
-            user.LastLogin = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            await DbContext.SaveChangesAsync();
+            // 3. التحقق من شرط تغيير كلمة المرور عند أول دخول
+            if (user.MustChangePassword)
+            {
+                _pendingUser = user;
+                _mustChangePasswordMode = true;
+                _newPassword = string.Empty;
+                _confirmPassword = string.Empty;
+                return;
+            }
 
-            await SessionService.SetUserAsync(user);
-            Snackbar.Add($"أهلاً بك، {user.UserName}", Severity.Success);
+            // 4. الدخول المباشر
+            await FinalizeLogin(user);
         }
         catch (Exception ex)
         {
@@ -216,7 +272,70 @@
         }
         finally
         {
-            _isLoggingIn = false;
+            _isBusy = false;
         }
+    }
+
+    private async Task ConfirmPasswordReset()
+    {
+        _errorMessage = null;
+
+        if (_pendingUser == null)
+        {
+            _mustChangePasswordMode = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_newPassword) || _newPassword.Length < 4)
+        {
+            _errorMessage = "كلمة المرور يجب ألا تقل عن 4 خانات.";
+            return;
+        }
+
+        if (_newPassword != _confirmPassword)
+        {
+            _errorMessage = "كلمتا المرور غير متطابقتين.";
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var userInDb = await DbContext.Users.FindAsync(_pendingUser.UserId);
+            if (userInDb == null)
+            {
+                _errorMessage = "تعذر العثور على الحساب لتحديثه.";
+                return;
+            }
+
+            userInDb.PasswordHash = UserSessionService.HashPassword(_newPassword);
+            userInDb.MustChangePassword = false;
+            userInDb.UpdatedAt = DateTime.Now;
+
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add("تم تعيين كلمة المرور الجديدة بنجاح", Severity.Success);
+
+            // إكمال تسجيل الدخول وتفعيل الجلسة
+            await FinalizeLogin(userInDb);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"خطأ أثناء حفظ كلمة المرور: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task FinalizeLogin(User user)
+    {
+        user.LastLogin = DateTime.Now;
+        user.UpdatedAt = DateTime.Now;
+        await DbContext.SaveChangesAsync();
+
+        await SessionService.SetUserAsync(user);
+        Snackbar.Add($"أهلاً بك، {user.UserName}", Severity.Success);
     }
 }

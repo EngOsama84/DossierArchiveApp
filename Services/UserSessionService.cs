@@ -17,8 +17,9 @@ public class UserSessionService
     // التحقق هل هناك مستخدم مسجل الدخول
     public bool IsLoggedIn => CurrentUser != null;
 
-    // حدث لإشعار الواجهات (مثل MainLayout و NavMenu) بالتحديث عند الدخول أو الخروج
+    // أحداث إشعار الواجهات بالتحديث عند الدخول أو الخروج
     public event Action? OnSessionChanged;
+    public event Action? OnChange;
 
     public UserSessionService(IServiceScopeFactory scopeFactory)
     {
@@ -27,26 +28,29 @@ public class UserSessionService
     }
 
     // المسمى الوصفي للصلاحية
-    public string RoleName => CurrentUser?.UserTypeId switch
+    public string RoleName
     {
-        1 => "مدير نظام (تحكم كامل)",
-        2 => "محرر بيانات (إضافة، تعديل، حذف)",
-        3 => "مدخل بيانات (إضافة وتعديل)",
-        4 => "قارئ بيانات (استعراض فقط)",
-        _ => string.Empty
-    };
+        get
+        {
+            if (CurrentUser == null) return string.Empty;
+            if (CurrentUser.IsAdmin == 1) return "مدير نظام (تحكم كامل)";
+            return "مستخدم مخصص الصلاحيات";
+        }
+    }
 
     // دوال فحص الصلاحيات المباشرة
-    public bool IsAdmin => CurrentUser?.UserTypeId == 1;
-    public bool CanAdd => CurrentUser?.UserTypeId is 1 or 2 or 3;
-    public bool CanEdit => CurrentUser?.UserTypeId is 1 or 2 or 3;
-    public bool CanDelete => CurrentUser?.UserTypeId is 1 or 2;
-    public bool CanAccessSettingsOrUsers => CurrentUser?.UserTypeId == 1;
+    public bool IsAdmin => CurrentUser != null && CurrentUser.IsAdmin == 1;
+    public bool CanAccessSettingsOrUsers => IsAdmin;
+
+    public bool CanAdd => CurrentUser != null && (CurrentUser.IsAdmin == 1 || CurrentUser.CanAdd == 1);
+    public bool CanEdit => CurrentUser != null && (CurrentUser.IsAdmin == 1 || CurrentUser.CanEdit == 1);
+    public bool CanDelete => CurrentUser != null && (CurrentUser.IsAdmin == 1 || CurrentUser.CanDelete == 1);
+    public bool CanExport => CurrentUser != null && (CurrentUser.IsAdmin == 1 || CurrentUser.CanExport == 1);
 
     // صلاحيات إدارة الموظفين
-    public bool CanAddEmployee => CurrentUser?.UserTypeId is 1 or 2 or 3;
-    public bool CanEditEmployee => CurrentUser?.UserTypeId is 1 or 2 or 3;
-    public bool CanDeleteEmployee => CurrentUser?.UserTypeId is 1 or 2;
+    public bool CanAddEmployee => CanAdd;
+    public bool CanEditEmployee => CanEdit;
+    public bool CanDeleteEmployee => CanDelete;
 
     /// <summary>
     /// دالة تشفير النصوص الثابتة باستخدام SHA-256
@@ -90,6 +94,7 @@ public class UserSessionService
             isValid = true;
             // ترقية كلمة المرور وحفظها مشفرة في القاعدة فوراً
             user.PasswordHash = hashedInput;
+            user.UpdatedAt = DateTime.Now;
             await db.SaveChangesAsync();
         }
 
@@ -100,7 +105,7 @@ public class UserSessionService
     public async Task SetUserAsync(User user)
     {
         CurrentUser = user;
-        OnSessionChanged?.Invoke();
+        NotifySessionChanged();
         await LogActivityAsync("تسجيل دخول", "النظام", user.UserId, $"قام المستخدم ({user.UserName}) بتسجيل الدخول للنظام.");
     }
 
@@ -111,8 +116,14 @@ public class UserSessionService
         {
             await LogActivityAsync("تسجيل خروج", "النظام", CurrentUser.UserId, $"قام المستخدم ({CurrentUser.UserName}) بتسجيل الخروج.");
             CurrentUser = null;
-            OnSessionChanged?.Invoke();
+            NotifySessionChanged();
         }
+    }
+
+    private void NotifySessionChanged()
+    {
+        OnSessionChanged?.Invoke();
+        OnChange?.Invoke();
     }
 
     // دالة مركزية لتوثيق أي حركة في جدول TB_AuditLog فوراً
