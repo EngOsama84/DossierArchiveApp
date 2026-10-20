@@ -11,10 +11,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddServerSideBlazor(options =>
-{
-    options.DetailedErrors = true;
-});
+builder.Services.AddServerSideBlazor()
+    .AddHubOptions(options =>
+    {
+        // ÑİÚ ÇáÍÏ ÇáÃŞÕì áÍÌã ÇáÑÓÇáÉ ÇáæÇÍÏÉ ÇáãÓÊŞÈáÉ ÚÈÑ SignalR Åáì 64 ãíÛÇÈÇíÊ
+        options.MaximumReceiveMessageSize = 64 * 1024 * 1024; // 64 MB
+    });
 
 builder.Services.AddMudServices();
 
