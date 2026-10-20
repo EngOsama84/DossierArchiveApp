@@ -77,14 +77,14 @@ using (var scope = app.Services.CreateScope())
         {
             UserName = "admin",
             FullName = "„œÌ— «·‰Ÿ«„ «·«› —«÷Ì",
-            PasswordHash = "123456",
+            PasswordHash = UserSessionService.HashPassword("123456"),
             IsAdmin = 1,
             CanAdd = 1,
             CanEdit = 1,
             CanDelete = 1,
             CanExport = 1,
             IsActive = 1,
-            MustChangePassword = false,
+            MustChangePassword = true,
             CreatedAt = DateTime.Now,
             UpdatedAt = DateTime.Now
         };

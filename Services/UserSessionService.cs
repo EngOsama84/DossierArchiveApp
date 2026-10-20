@@ -4,12 +4,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
 
 namespace DossierArchiveApp.Services;
 
 public class UserSessionService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private static readonly PasswordHasher<User> _passwordHasher = new();
 
     // المستخدم النشط حالياً (null يعني لم يتم تسجيل الدخول بعد)
     public User? CurrentUser { get; private set; }
@@ -53,52 +55,41 @@ public class UserSessionService
     public bool CanDeleteEmployee => CanDelete;
 
     /// <summary>
-    /// دالة تشفير النصوص الثابتة باستخدام SHA-256
+    /// تجزئة كلمة المرور باستخدام معيار PBKDF2 المدمج في ASP.NET Core مع Salt تلقائي
     /// </summary>
     public static string HashPassword(string password)
     {
         if (string.IsNullOrEmpty(password)) return string.Empty;
-
-        using var sha256 = SHA256.Create();
-        byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-        var builder = new StringBuilder();
-        foreach (var b in bytes)
-        {
-            builder.Append(b.ToString("x2"));
-        }
-        return builder.ToString();
+        return _passwordHasher.HashPassword(new User(), password);
     }
 
     /// <summary>
-    /// التحقق الذكي من كلمة المرور مع ترقية الحسابات القديمة تلقائياً إلى مشفرة
+    /// التحقق الآمن من كلمة المرور عبر PBKDF2 وإلغاء أي قبول للنصوص الصريحة
     /// </summary>
     public async Task<User?> ValidateUserCredentialsAsync(string username, string password)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.UserName == username && u.IsActive == 1);
-        if (user == null) return null;
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserName.ToLower() == username.Trim().ToLower() && u.IsActive == 1);
+        if (user == null || string.IsNullOrEmpty(user.PasswordHash)) return null;
 
-        string hashedInput = HashPassword(password);
-        bool isValid = false;
+        var verificationResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
 
-        // 1. فحص هل كلمة المرور في القاعدة مشفرة وتطابق المدخل
-        if (user.PasswordHash == hashedInput)
+        if (verificationResult == PasswordVerificationResult.Success)
         {
-            isValid = true;
+            return user;
         }
-        // 2. التوافق العكسي: إذا كانت الكلمة القديمة غير مشفرة وطابقت النص الصريح
-        else if (user.PasswordHash == password)
+
+        if (verificationResult == PasswordVerificationResult.SuccessRehashNeeded)
         {
-            isValid = true;
-            // ترقية كلمة المرور وحفظها مشفرة في القاعدة فوراً
-            user.PasswordHash = hashedInput;
+            user.PasswordHash = _passwordHasher.HashPassword(user, password);
             user.UpdatedAt = DateTime.Now;
             await db.SaveChangesAsync();
+            return user;
         }
 
-        return isValid ? user : null;
+        return null;
     }
 
     // تسجيل دخول المستخدم وتفعيل الجلسة
@@ -126,7 +117,7 @@ public class UserSessionService
         OnChange?.Invoke();
     }
 
-    // دالة مركزية لتوثيق أي حركة في جدول TB_AuditLog فوراً
+    // دالة توثيق الحركات
     public async Task LogActivityAsync(string actionType, string entityType, int? entityId, string description)
     {
         try
@@ -147,9 +138,6 @@ public class UserSessionService
             db.AuditLogs.Add(log);
             await db.SaveChangesAsync();
         }
-        catch
-        {
-            // تجاوز الخطأ لتفادي تعطيل تنفيذ العمليات الرئيسية
-        }
+        catch { }
     }
 }
