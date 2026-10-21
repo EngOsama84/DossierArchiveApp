@@ -119,7 +119,7 @@
         <MudItem xs="12" md="4" lg="3">
             <MudPaper Elevation="1" Class="pa-3" Style="border-radius: 8px; background-color: white; height: 100%; display: flex; flex-direction: column;">
                 <MudText Typo="Typo.h6" Class="fw-bold text-center mb-2" Style="color: #1B4D3E;">
-                    الموظفون
+                    الموظفون (@FilteredEmployees.Count)
                 </MudText>
 
                 @if (SessionService.CanAddEmployee)
@@ -156,7 +156,7 @@
                     }
                 </div>
 
-                <!-- قائمة الموظفين مع تمرير عمودي ديناميكي -->
+                <!-- قائمة الموظفين مدعومة بـ Virtualize للحفاظ على سرعة فائقة وبدون أخطاء توافق -->
                 <div class="dynamic-employee-scroll pa-1" style="height: calc(100vh - 275px); overflow-y: auto;">
                     @if (_loadingEmployees)
                     {
@@ -164,30 +164,39 @@
                             <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                         </div>
                     }
+                    else if (!FilteredEmployees.Any())
+                    {
+                        <div class="pa-4 text-center">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">لا يوجد موظفون مطابقون لبحثك.</MudText>
+                        </div>
+                    }
                     else
                     {
-                        @foreach (var emp in FilteredEmployees)
-                        {
-                            bool isSelected = _selectedEmployee?.EmployeeId == emp.EmployeeId;
-                            <div class="employee-card pa-2 mb-2"
-                                 @onclick="@(() => SelectEmployee(emp))"
-                                 style="@GetEmployeeCardStyle(isSelected)">
-                                <div class="d-flex justify-space-between align-center">
-                                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                        <MudText Typo="Typo.body2" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
-                                            @emp.EmployeeName
-                                        </MudText>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                            الأضبارة: @emp.FileNumber
-                                        </MudText>
+                        <Virtualize TItem="Employee" Items="@FilteredEmployees" Context="emp">
+                            <ItemContent>
+                                @{
+                                    bool isSelected = _selectedEmployee?.EmployeeId == emp.EmployeeId;
+                                }
+                                <div class="employee-card pa-2 mb-2"
+                                     @onclick="@(() => SelectEmployee(emp))"
+                                     style="@GetEmployeeCardStyle(isSelected)">
+                                    <div class="d-flex justify-space-between align-center">
+                                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            <MudText Typo="Typo.body2" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
+                                                @emp.EmployeeName
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                الأضبارة: @emp.FileNumber
+                                            </MudText>
+                                        </div>
+                                        @if (emp.IsActive != 1)
+                                        {
+                                            <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text">معطل</MudChip>
+                                        }
                                     </div>
-                                    @if (emp.IsActive != 1)
-                                    {
-                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text">معطل</MudChip>
-                                    }
                                 </div>
-                            </div>
-                        }
+                            </ItemContent>
+                        </Virtualize>
                     }
                 </div>
             </MudPaper>
@@ -200,11 +209,11 @@
                 {
                     <div class="d-flex align-center justify-start mb-3">
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2c3e50;">
-                            كتب @_selectedEmployee.EmployeeName
+                            كتب @_selectedEmployee.EmployeeName (@FilteredDocuments.Count())
                         </MudText>
                     </div>
 
-                    <!-- السطر الأول: القوائم الأربع المنسدلة -->
+                    <!-- السطر الأول: القوائم الأربع المنسدلة تتبع الهيكلية المعتمدة -->
                     <MudGrid Spacing="2" Class="mb-2">
 
                         <!-- 1. نوع الكتاب -->
@@ -271,7 +280,7 @@
                                        Margin="Margin.Dense"
                                        Dense="true"
                                        Clearable="true"
-                                       Disabled="@(!IsTertiaryEnabled)"
+                                       Disabled="@(!IsTertiaryEnabled || !AvailableTertiaryCategories.Any())"
                                        Class="compact-filter-field">
                                 <MudSelectItem Value="@((int?)null)">الكل</MudSelectItem>
                                 @foreach (var cat in AvailableTertiaryCategories)
@@ -527,20 +536,25 @@
     private bool _loadingDocs = false;
     private bool _isExporting = false;
 
+    // خريطة علاقات: التصنيف الرئيسي -> قائمة التصنيفات الفرعية الأولى المسموحة
+    private readonly Dictionary<string, string[]> _primaryToSecondaryMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["أمر إداري"] = new[] { "مباشرة", "انفكاك", "علاوة", "ترفيع", "شكر", "عقوبة", "لجنة", "تكليف", "تنسيب", "ترشيح", "تقييم", "احتساب", "إضافة", "إعفاء", "دورة", "غير ذلك" },
+        ["استمارة"] = new[] { "معلومات", "مستمسكات", "تقييم", "جرد", "غير ذلك" },
+        ["طلب شخصي"] = new[] { "إجازة", "نقل", "تنسيب", "تظلم", "مخصصات", "سلفة", "غير ذلك" },
+        ["اعتيادية"] = new[] { "مخاطبات", "تبليغ", "استدعاء", "نتيجة", "غير ذلك" }
+    };
+
+    private readonly string[] _tertiaryForEnfakak = new[] { "دورة", "مؤتمر", "ورشة", "إجازة", "نقل", "تنسيب", "تقاعد", "تكليف", "غير ذلك" };
+    private readonly string[] _tertiaryForEhtisab = new[] { "شهادة", "خدمة", "علاوة", "ترفيع", "شكر", "غير ذلك" };
+    private readonly string[] _tertiaryForTakleef = new[] { "منصب", "لجنة", "مهام", "تنسيب", "تكليف", "غير ذلك" };
+    private readonly string[] _tertiaryForTarsheeh = new[] { "دورة", "مؤتمر", "ورشة", "تكليف", "لجنة", "غير ذلك" };
+
     private readonly List<string> _iraqiCommittees = new()
     {
-        "تحقيقية",
-        "تدقيقية",
-        "فتح وتحليل العطاءات",
-        "استلام وإنجاز",
-        "مشتريات واعتدال أسعار",
-        "شطب وإتلاف",
-        "جرد سنوي",
-        "تضمين",
-        "تثمين وبيع وإيجار أموال الدولة",
-        "احتساب خدمة وتقاعد",
-        "فنية تخصصية",
-        "مقابلة وترقية"
+        "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
+        "مشتريات واعتدال أسعار", "شطب وإتلاف", "جرد سنوي", "تضمين",
+        "تثمين وبيع وإيجار أموال الدولة", "احتساب خدمة وتقاعد", "فنية تخصصية", "مقابلة وترقية"
     };
 
     private string _docNumberFilter = "";
@@ -560,20 +574,10 @@
 
     private async Task LoadCategories()
     {
-        _mainCategories = await DbContext.MainCategories.ToListAsync();
-        _primaryCategories = await DbContext.PrimaryCategories.ToListAsync();
-        _secondaryCategories = await DbContext.SecondaryCategories.ToListAsync();
-        _tertiaryCategories = await DbContext.TertiaryCategories.ToListAsync();
-    }
-
-    private bool IsCurrentSecondaryCommittee
-    {
-        get
-        {
-            if (!_selectedSecondaryCatId.HasValue) return false;
-            var currentSec = _secondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
-            return currentSec != null && currentSec.Name.Contains("لجنة");
-        }
+        _mainCategories = await DbContext.MainCategories.AsNoTracking().ToListAsync();
+        _primaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
+        _secondaryCategories = await DbContext.SecondaryCategories.AsNoTracking().ToListAsync();
+        _tertiaryCategories = await DbContext.TertiaryCategories.AsNoTracking().ToListAsync();
     }
 
     private IEnumerable<PrimaryCategory> AvailablePrimaryCategories =>
@@ -581,10 +585,42 @@
             ? _primaryCategories.Where(p => p.MainCategoryId == _selectedMainCatId.Value)
             : Enumerable.Empty<PrimaryCategory>();
 
-    private IEnumerable<SecondaryCategory> AvailableSecondaryCategories =>
-        _selectedPrimaryCatId.HasValue
-            ? _secondaryCategories.Where(s => s.PrimaryCategoryId == _selectedPrimaryCatId.Value)
-            : Enumerable.Empty<SecondaryCategory>();
+    private IEnumerable<SecondaryCategory> AvailableSecondaryCategories
+    {
+        get
+        {
+            if (!_selectedPrimaryCatId.HasValue) return Enumerable.Empty<SecondaryCategory>();
+
+            var primCat = _primaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == _selectedPrimaryCatId.Value);
+            string primName = primCat?.Name?.Trim() ?? string.Empty;
+            var dbList = _secondaryCategories.Where(s => s.PrimaryCategoryId == _selectedPrimaryCatId.Value).ToList();
+
+            string? matchedKey = _primaryToSecondaryMap.Keys.FirstOrDefault(k => primName.Contains(k));
+            if (matchedKey != null)
+            {
+                var allowedSecNames = _primaryToSecondaryMap[matchedKey];
+                if (dbList.Any())
+                {
+                    var filtered = dbList
+                        .Where(s => allowedSecNames.Any(a => s.Name.Trim().Contains(a)))
+                        .OrderBy(s => Array.IndexOf(allowedSecNames, allowedSecNames.FirstOrDefault(a => s.Name.Trim().Contains(a))))
+                        .ToList();
+
+                    if (filtered.Any()) return filtered;
+                }
+
+                int vId = -200;
+                return allowedSecNames.Select(name => new SecondaryCategory
+                {
+                    SecondaryCategoryId = vId--,
+                    PrimaryCategoryId = _selectedPrimaryCatId.Value,
+                    Name = name
+                }).ToList();
+            }
+
+            return dbList;
+        }
+    }
 
     private IEnumerable<TertiaryCategory> AvailableTertiaryCategories
     {
@@ -593,29 +629,57 @@
             if (!_selectedSecondaryCatId.HasValue)
                 return Enumerable.Empty<TertiaryCategory>();
 
-            var dbList = _tertiaryCategories
-                .Where(t => t.SecondaryCategoryId == _selectedSecondaryCatId.Value)
-                .ToList();
+            var secCat = AvailableSecondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value)
+                         ?? _secondaryCategories.FirstOrDefault(s => s.SecondaryCategoryId == _selectedSecondaryCatId.Value);
 
-            if (dbList.Any()) return dbList;
+            string secName = secCat?.Name?.Trim() ?? string.Empty;
 
-            if (IsCurrentSecondaryCommittee)
-            {
-                int virtualId = -100;
-                return _iraqiCommittees.Select(name => new TertiaryCategory
-                {
-                    TertiaryCategoryId = virtualId--,
-                    SecondaryCategoryId = _selectedSecondaryCatId.Value,
-                    Name = name
-                }).ToList();
-            }
+            if (secName.Contains("انفكاك"))
+                return BuildTertiaryList(_selectedSecondaryCatId.Value, _tertiaryForEnfakak);
+
+            if (secName.Contains("احتساب") || secName.Contains("إضافة") || secName.Contains("اضافة"))
+                return BuildTertiaryList(_selectedSecondaryCatId.Value, _tertiaryForEhtisab);
+
+            if (secName.Contains("تكليف") || secName.Contains("إعفاء") || secName.Contains("اعفاء"))
+                return BuildTertiaryList(_selectedSecondaryCatId.Value, _tertiaryForTakleef);
+
+            if (secName.Contains("ترشيح"))
+                return BuildTertiaryList(_selectedSecondaryCatId.Value, _tertiaryForTarsheeh);
+
+            if (secName.Contains("لجنة"))
+                return BuildTertiaryList(_selectedSecondaryCatId.Value, _iraqiCommittees.ToArray());
 
             return Enumerable.Empty<TertiaryCategory>();
         }
     }
 
-    private bool IsTertiaryEnabled => _selectedSecondaryCatId.HasValue &&
-        (AvailableTertiaryCategories.Any() || IsCurrentSecondaryCommittee);
+    private List<TertiaryCategory> BuildTertiaryList(int secId, string[] definedNames)
+    {
+        var result = new List<TertiaryCategory>();
+        var fromDb = _tertiaryCategories.Where(t => t.SecondaryCategoryId == secId).ToList();
+
+        int virtualId = -100;
+        foreach (var name in definedNames)
+        {
+            var matched = fromDb.FirstOrDefault(d => d.Name.Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                result.Add(matched);
+            }
+            else
+            {
+                result.Add(new TertiaryCategory
+                {
+                    TertiaryCategoryId = virtualId--,
+                    SecondaryCategoryId = secId,
+                    Name = name
+                });
+            }
+        }
+        return result;
+    }
+
+    private bool IsTertiaryEnabled => _selectedSecondaryCatId.HasValue && AvailableTertiaryCategories.Any();
 
     private void OnMainCategoryChanged(int? value)
     {
@@ -643,13 +707,16 @@
         _loadingEmployees = true;
         try
         {
+            // استعلام خفيف وسريع بدون تعقب للكائنات
             _employees = await DbContext.Employees
+                .AsNoTracking()
                 .OrderBy(e => e.FileNumber)
                 .ToListAsync();
 
             if (_employees.Any() && _selectedEmployee == null)
             {
-                await SelectEmployee(_employees.First());
+                var first = FilteredEmployees.FirstOrDefault() ?? _employees.First();
+                await SelectEmployee(first);
             }
         }
         catch (Exception ex)
@@ -673,28 +740,22 @@
         _loadingDocs = true;
         try
         {
-            var docIds = await DbContext.DocumentEmployees
-                .Where(de => de.EmployeeId == employeeId)
-                .Select(de => de.DocumentId)
-                .ToListAsync();
+            // استعلام موحد فائق السرعة عبر ربط داخلي (Join) لجلب وثائق الموظف مع عدد المشتركين
+            var query = from de in DbContext.DocumentEmployees.AsNoTracking()
+                        where de.EmployeeId == employeeId
+                        join d in DbContext.Documents.AsNoTracking() on de.DocumentId equals d.DocumentId
+                        where d.IsDeleted == 0
+                        orderby d.DocumentDate descending
+                        select new
+                        {
+                            Doc = d,
+                            SharedCount = DbContext.DocumentEmployees.Count(x => x.DocumentId == d.DocumentId && x.EmployeeId != employeeId)
+                        };
 
-            _documents = await DbContext.Documents
-                .Where(d => docIds.Contains(d.DocumentId) && d.IsDeleted == 0)
-                .OrderByDescending(d => d.DocumentDate)
-                .ToListAsync();
+            var results = await query.ToListAsync();
 
-            if (docIds.Any())
-            {
-                _sharedCounts = await DbContext.DocumentEmployees
-                    .Where(de => docIds.Contains(de.DocumentId) && de.EmployeeId != employeeId)
-                    .GroupBy(de => de.DocumentId)
-                    .Select(g => new { DocumentId = g.Key, Count = g.Count() })
-                    .ToDictionaryAsync(x => x.DocumentId, x => x.Count);
-            }
-            else
-            {
-                _sharedCounts.Clear();
-            }
+            _documents = results.Select(r => r.Doc).ToList();
+            _sharedCounts = results.ToDictionary(r => r.Doc.DocumentId, r => r.SharedCount);
         }
         catch (Exception ex)
         {
@@ -727,7 +788,8 @@
         await DialogService.ShowAsync<SharedEmployeesViewerDialog>("المشتركون بالكتاب", parameters, options);
     }
 
-    private IEnumerable<Employee> FilteredEmployees => _employees.Where(e =>
+    // تم التحديد الصريح لـ List<Employee> ليتوافق تماماً مع ICollection التي يطلبها Virtualize
+    private List<Employee> FilteredEmployees => _employees.Where(e =>
     {
         if (_employeeStatusFilter == "Active" && e.IsActive != 1) return false;
         if (_employeeStatusFilter == "Inactive" && e.IsActive == 1) return false;
@@ -740,7 +802,7 @@
         }
 
         return true;
-    });
+    }).ToList();
 
     private IEnumerable<Document> FilteredDocuments => _documents.Where(d =>
     {
