@@ -862,6 +862,7 @@
 
             char[] invalidChars = Path.GetInvalidFileNameChars();
 
+            // 1. جلب الموظفين المشتركين بدفعة واحدة
             var allTargetEmployeeIds = _items.SelectMany(i => i.SharedEmployeeIds).Distinct().ToList();
             var sharedEmployeesMap = await DbContext.Employees
                 .Where(e => allTargetEmployeeIds.Contains(e.EmployeeId))
@@ -875,6 +876,12 @@
 
             string employeeRootFullPath = Path.Combine(baseFolder, employeeFolderRelPath);
             if (!Directory.Exists(employeeRootFullPath)) Directory.CreateDirectory(employeeRootFullPath);
+
+            // قاموس مؤقت لمنع تكرار إدخال نفس التصنيف الفرعي الجديد أكثر من مرة في نفس عملية الحفظ
+            var createdSecCategories = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            // استخدام معاملة موحدة لضمان تكامل البيانات
+            await using var transaction = await DbContext.Database.BeginTransactionAsync();
 
             foreach (var item in _items)
             {
@@ -901,12 +908,37 @@
                     if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
                     {
                         secName = secCat.Name.Trim();
+
+                        // التحقق من التصنيفات المؤقتة ومنع تكرار إضافتها
                         if (actualSecondaryId is < 0 && item.PrimaryCategoryId.HasValue)
                         {
-                            var newSec = new SecondaryCategory { Name = secName, PrimaryCategoryId = item.PrimaryCategoryId.Value };
-                            DbContext.SecondaryCategories.Add(newSec);
-                            await DbContext.SaveChangesAsync();
-                            actualSecondaryId = newSec.SecondaryCategoryId;
+                            string catKey = $"{item.PrimaryCategoryId.Value}_{secName}";
+
+                            if (createdSecCategories.TryGetValue(catKey, out int existingId))
+                            {
+                                actualSecondaryId = existingId;
+                            }
+                            else
+                            {
+                                // فحص وجوده المسبق في قاعدة البيانات أولاً
+                                var existingDbCat = await DbContext.SecondaryCategories
+                                    .FirstOrDefaultAsync(s => s.PrimaryCategoryId == item.PrimaryCategoryId.Value && s.Name == secName);
+
+                                if (existingDbCat != null)
+                                {
+                                    actualSecondaryId = existingDbCat.SecondaryCategoryId;
+                                }
+                                else
+                                {
+                                    var newSec = new SecondaryCategory { Name = secName, PrimaryCategoryId = item.PrimaryCategoryId.Value };
+                                    DbContext.SecondaryCategories.Add(newSec);
+                                    await DbContext.SaveChangesAsync();
+                                    actualSecondaryId = newSec.SecondaryCategoryId;
+                                }
+
+                                createdSecCategories[catKey] = actualSecondaryId.Value;
+                            }
+
                             item.SecondaryCategoryId = actualSecondaryId;
                         }
 
@@ -933,9 +965,10 @@
                     physicalFilePath = Path.Combine(primaryTargetDir, fileName);
                 }
 
-                await using (var fileStream = new FileStream(physicalFilePath, FileMode.Create))
+                // كتابة الملف للقرص بكفاءة وسرعة عبر FileStream
+                await using (var fileStream = new FileStream(physicalFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
                 {
-                    await item.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(fileStream);
+                    await item.File.OpenReadStream(maxAllowedSize: 25 * 1024 * 1024).CopyToAsync(fileStream);
                 }
 
                 string relativeFilePath = Path.GetRelativePath(baseFolder, physicalFilePath);
@@ -960,17 +993,21 @@
                 };
 
                 DbContext.Documents.Add(newDoc);
-                await DbContext.SaveChangesAsync();
+                await DbContext.SaveChangesAsync(); // توليد DocumentId
 
-                var docEmployee = new DocumentEmployee
+                // ربط الموظف الأصلي
+                var docEmployeesToAdd = new List<DocumentEmployee>
+            {
+                new DocumentEmployee
                 {
                     DocumentId = newDoc.DocumentId,
                     EmployeeId = Employee.EmployeeId,
                     EmployeeFilePath = relativeFilePath,
                     CreatedAt = DateTime.Now
-                };
-                DbContext.DocumentEmployees.Add(docEmployee);
+                }
+            };
 
+                // توزيع نسخ الموظفين المشتركين
                 foreach (var sharedEmpId in item.SharedEmployeeIds)
                 {
                     if (sharedEmployeesMap.TryGetValue(sharedEmpId, out var sharedEmp))
@@ -997,7 +1034,7 @@
                         File.Copy(physicalFilePath, sPhysicalFilePath, overwrite: true);
                         string sRelativeFilePath = Path.GetRelativePath(baseFolder, sPhysicalFilePath);
 
-                        DbContext.DocumentEmployees.Add(new DocumentEmployee
+                        docEmployeesToAdd.Add(new DocumentEmployee
                         {
                             DocumentId = newDoc.DocumentId,
                             EmployeeId = sharedEmp.EmployeeId,
@@ -1007,10 +1044,15 @@
                     }
                 }
 
+                // إضافة جميع علاقات الموظفين لهذا المستند في استدعاء واحد
+                DbContext.DocumentEmployees.AddRange(docEmployeesToAdd);
                 await DbContext.SaveChangesAsync();
+
                 _processedCount++;
                 StateHasChanged();
             }
+
+            await transaction.CommitAsync();
 
             await SessionService.LogActivityAsync(
                 actionType: "أرشفة ذكية مجمعة ومشاركة",
