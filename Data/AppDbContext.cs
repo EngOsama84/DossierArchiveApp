@@ -30,7 +30,44 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Document>().HasQueryFilter(d => d.IsDeleted == 0);
         modelBuilder.Entity<Employee>().HasQueryFilter(e => e.IsDeleted == 0);
 
-        // 2. محوّل قياسي يعتمد دوال مساعدة ساكنة لتجنب قيود Expression Trees مع معلمات out
+        // 2. فهارس تحسين الأداء وسرعة الاستعلامات (Indexes)
+        // أ. جدول الموظفين
+        modelBuilder.Entity<Employee>()
+            .HasIndex(e => e.FileNumber)
+            .HasDatabaseName("IX_Employees_FileNumber");
+
+        modelBuilder.Entity<Employee>()
+            .HasIndex(e => e.EmployeeName)
+            .HasDatabaseName("IX_Employees_EmployeeName");
+
+        // ب. جدول المستندات
+        modelBuilder.Entity<Document>()
+            .HasIndex(d => d.DocumentNumber)
+            .HasDatabaseName("IX_Documents_DocumentNumber");
+
+        modelBuilder.Entity<Document>()
+            .HasIndex(d => d.DocumentDate)
+            .HasDatabaseName("IX_Documents_DocumentDate");
+
+        modelBuilder.Entity<Document>()
+            .HasIndex(d => new { d.MainCategoryId, d.PrimaryCategoryId })
+            .HasDatabaseName("IX_Documents_Categories");
+
+        // ج. جدول ربط المستندات بالموظفين (فهرس فائق الأهمية للاستعلامات والـ Join)
+        modelBuilder.Entity<DocumentEmployee>()
+            .HasIndex(de => new { de.EmployeeId, de.DocumentId })
+            .HasDatabaseName("IX_DocumentEmployees_Employee_Document");
+
+        modelBuilder.Entity<DocumentEmployee>()
+            .HasIndex(de => de.DocumentId)
+            .HasDatabaseName("IX_DocumentEmployees_DocumentId");
+
+        // د. جدول سجل النشاطات (لتسريع تقرير المراقبة والطباعة)
+        modelBuilder.Entity<AuditLog>()
+            .HasIndex(a => a.CreatedAt)
+            .HasDatabaseName("IX_AuditLogs_CreatedAt");
+
+        // 3. محوّل قياسي يعتمد دوال مساعدة ساكنة لتجنب قيود Expression Trees مع معلمات out
         var dateTimeConverter = new ValueConverter<DateTime, string>(
             v => v.ToString("yyyy-MM-dd HH:mm:ss"),
             v => ParseDateTimeSafe(v)
@@ -41,7 +78,7 @@ public class AppDbContext : DbContext
             v => ParseNullableDateTimeSafe(v)
         );
 
-        // 3. تطبيق المحول تلقائياً على جميع خصائص التواريخ في كافة جداول النظام
+        // 4. تطبيق المحول تلقائياً على جميع خصائص التواريخ في كافة جداول النظام
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())

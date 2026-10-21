@@ -20,9 +20,12 @@ builder.Services.AddServerSideBlazor()
 
 builder.Services.AddMudServices();
 
-// ÊÓÌíá ŞÇÚÏÉ ÈíÇäÇÊ SQLite ÚÈÑ DbContextFactory áÍá ãÔÇßá ÇáÊÒÇãä æÊÚÏÏ ÇáãåÇã İí Blazor Server
+// ŞÑÇÁÉ ãÓÇÑ ÇáÇÊÕÇá ãä appsettings.json ãÚ ŞíãÉ ÇÍÊíÇØíÉ ÇİÊÑÇÖíÉ İí ÍÇá ÚÏã ÇáÚËæÑ Úáíå
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                       ?? "Data Source=dossiers.sqlite3";
+
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
-    options.UseSqlite("Data Source=dossiers.sqlite3"));
+    options.UseSqlite(connectionString));
 
 // ÅÊÇÍÉ ÍŞä AppDbContext ÇáãÈÇÔÑ (@inject AppDbContext) áÖãÇä ÇáÊæÇİŞ ÇáÊÇã ãÚ ßÇİÉ ÇáÕİÍÇÊ ÇáÍÇáíÉ
 builder.Services.AddScoped(sp =>
