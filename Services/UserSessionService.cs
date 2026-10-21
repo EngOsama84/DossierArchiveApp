@@ -132,7 +132,7 @@ public class UserSessionService
                 EntityType = entityType,
                 EntityId = entityId,
                 Description = description,
-                CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                CreatedAt = DateTime.Now
             };
 
             db.AuditLogs.Add(log);

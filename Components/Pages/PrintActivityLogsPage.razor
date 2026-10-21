@@ -86,7 +86,7 @@ else
                 </tr>
             </table>
 
-                <!-- 4. جدول سجل الحركات والعمليات (مساحة أوسع بدون تواقيع) -->
+                <!-- 4. جدول سجل الحركات والعمليات -->
                 <table class="logs-table">
                     <thead>
                         <tr>
@@ -128,7 +128,7 @@ else
                 </table>
             </div>
 
-            <!-- 5. التذييل الأمني والإحصائي فقط (بدون أي خانات تواقيع) -->
+            <!-- 5. التذييل الأمني والإحصائي -->
             <div class="footer-container">
                 <div class="security-note">
                     <div>* وثيقة رسمية صادرة آلياً من قاعدة بيانات الأرشفة الإلكترونية - للاستخدام والتدقيق الإداري الداخلي.</div>
@@ -363,17 +363,17 @@ else
                     (l.EntityType != null && l.EntityType.Contains(_searchFilter)));
             }
 
-            // تطبيق فلترة التاريخ
+            // تطبيق فلترة التاريخ باستخدام DateTime مباشرة بدلاً من مقارنة النصوص
             if (!string.IsNullOrWhiteSpace(_dateFromFilter) && DateTime.TryParse(_dateFromFilter, out var fromDate))
             {
-                string fromStr = fromDate.ToString("yyyy-MM-dd 00:00:00");
-                query = query.Where(l => string.Compare(l.CreatedAt, fromStr) >= 0);
+                var startOfDay = fromDate.Date;
+                query = query.Where(l => l.CreatedAt >= startOfDay);
             }
 
             if (!string.IsNullOrWhiteSpace(_dateToFilter) && DateTime.TryParse(_dateToFilter, out var toDate))
             {
-                string toStr = toDate.ToString("yyyy-MM-dd 23:59:59");
-                query = query.Where(l => string.Compare(l.CreatedAt, toStr) <= 0);
+                var endOfDay = toDate.Date.AddDays(1).AddTicks(-1);
+                query = query.Where(l => l.CreatedAt <= endOfDay);
             }
 
             // أخذ ما يصل إلى 35 سجلاً لتعبئة صفحة A4 بدون تواقيع
@@ -391,7 +391,7 @@ else
                 l.ActionType,
                 l.EntityType,
                 l.Description,
-                l.CreatedAt
+                l.CreatedAt?.ToString("yyyy/MM/dd hh:mm tt") ?? "—"
             )).ToList();
         }
         finally

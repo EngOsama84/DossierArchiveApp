@@ -115,7 +115,7 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="التاريخ والوقت" Style="direction: ltr; text-align: right; font-size: 0.85rem; color: #555;">
-                    @context.CreatedAt
+                    @context.CreatedAtFormatted
                 </MudTd>
                 <MudTd DataLabel="المستخدم">
                     <div class="d-flex align-center gap-1">
@@ -156,7 +156,7 @@
 </div>
 
 @code {
-    public record AuditLogView(int LogId, string UserName, string ActionType, string? EntityType, int? EntityId, string Description, string CreatedAt);
+    public record AuditLogView(int LogId, string UserName, string ActionType, string? EntityType, int? EntityId, string Description, DateTime? RawCreatedAt, string CreatedAtFormatted);
 
     private List<AuditLogView> _logs = new();
     private bool _isLoading = true;
@@ -171,8 +171,8 @@
          l.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
          l.UserName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
          (l.EntityType != null && l.EntityType.Contains(_searchString, StringComparison.OrdinalIgnoreCase))) &&
-        (!_dateFrom.HasValue || (DateTime.TryParse(l.CreatedAt, out var dtFrom) && dtFrom.Date >= _dateFrom.Value.Date)) &&
-        (!_dateTo.HasValue || (DateTime.TryParse(l.CreatedAt, out var dtTo) && dtTo.Date <= _dateTo.Value.Date)));
+        (!_dateFrom.HasValue || (l.RawCreatedAt.HasValue && l.RawCreatedAt.Value.Date >= _dateFrom.Value.Date)) &&
+        (!_dateTo.HasValue || (l.RawCreatedAt.HasValue && l.RawCreatedAt.Value.Date <= _dateTo.Value.Date)));
 
     protected override async Task OnInitializedAsync()
     {
@@ -207,7 +207,8 @@
                 l.EntityType,
                 l.EntityId,
                 l.Description,
-                l.CreatedAt
+                l.CreatedAt,
+                l.CreatedAt?.ToString("yyyy/MM/dd hh:mm tt") ?? "—"
             )).ToList();
         }
         catch (Exception ex)
