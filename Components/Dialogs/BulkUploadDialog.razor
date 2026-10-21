@@ -725,7 +725,7 @@
         var dialog = await DialogService.ShowAsync<SelectSharedEmployeesDialog>("مشاركة الكتاب", parameters, options);
         var result = await dialog.Result;
 
-        if (!result.Canceled && result.Data is List<int> selectedIds)
+        if (result is not null && !result.Canceled && result.Data is List<int> selectedIds)
         {
             item.SharedEmployeeIds = selectedIds;
             StateHasChanged();
@@ -901,7 +901,7 @@
                     if (secCat != null && !string.IsNullOrWhiteSpace(secCat.Name))
                     {
                         secName = secCat.Name.Trim();
-                        if (actualSecondaryId.Value < 0 && item.PrimaryCategoryId.HasValue)
+                        if (actualSecondaryId is < 0 && item.PrimaryCategoryId.HasValue)
                         {
                             var newSec = new SecondaryCategory { Name = secName, PrimaryCategoryId = item.PrimaryCategoryId.Value };
                             DbContext.SecondaryCategories.Add(newSec);

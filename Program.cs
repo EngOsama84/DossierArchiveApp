@@ -5,7 +5,7 @@ using DossierArchiveApp.Services;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
-// 1. ≈‰‘«¡ «·‹ Builder Ê ”ÃÌ· «·Œœ„«  √Ê·«
+// 1. ≈‰‘«¡ «·‹ Builder Ê ”ÃÌ· «·Œœ„« 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
@@ -20,19 +20,23 @@ builder.Services.AddServerSideBlazor()
 
 builder.Services.AddMudServices();
 
-//  ”ÃÌ· ﬁ«⁄œ… »Ì«‰«  SQLite
-builder.Services.AddDbContext<AppDbContext>(options =>
+//  ”ÃÌ· ﬁ«⁄œ… »Ì«‰«  SQLite ⁄»— DbContextFactory ·Õ· „‘«ﬂ· «· “«„‰ Ê ⁄œœ «·„Â«„ ›Ì Blazor Server
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlite("Data Source=dossiers.sqlite3"));
+
+// ≈ «Õ… Õﬁ‰ AppDbContext «·„»«‘— (@inject AppDbContext) ·÷„«‰ «· Ê«›ﬁ «· «„ „⁄ ﬂ«›… «·’›Õ«  «·Õ«·Ì…
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
 //  ”ÃÌ· «·Œœ„«  «·„Œ’’…
 builder.Services.AddScoped<ScannerService>();
 builder.Services.AddScoped<UserSessionService>();
 builder.Services.AddScoped<ExportService>();
 
-// 2. »‰«¡ «· ÿ»Ìﬁ Ê Ê·Ìœ «·„ €Ì— app (Â‰« ÌÊ·œ «·ﬂ«∆‰ app)
+// 2. »‰«¡ «· ÿ»Ìﬁ
 var app = builder.Build();
 
-// 3.  ÂÌ∆… ﬁ«⁄œ… «·»Ì«‰«  Ê≈‰‘«¡ «·Ãœ«Ê· ÊÕ”«» «·„œÌ— (Ì√ Ì »⁄œ builder.Build)
+// 3.  ÂÌ∆… ﬁ«⁄œ… «·»Ì«‰«  Ê≈‰‘«¡ «·Ãœ«Ê· ÊÕ”«» «·„œÌ—
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -40,112 +44,74 @@ using (var scope = app.Services.CreateScope())
     // ≈‰‘«¡ ﬂ«›… «·Ãœ«Ê· ≈–« ·„  ﬂ‰ „ÊÃÊœ…
     db.Database.EnsureCreated();
 
-    void TryExecuteSql(string sql)
+    // »–— «· ’‰Ì›«  «·«› —«÷Ì…
+    if (!db.MainCategories.Any())
     {
-        try { db.Database.ExecuteSqlRaw(sql); } catch { }
-    }
+        // 1. «·√‰Ê«⁄ «·—∆Ì”Ì…
+        var mainIn = new MainCategory { Name = "Ê«—œ" };
+        var mainOut = new MainCategory { Name = "’«œ—" };
+        db.MainCategories.AddRange(mainIn, mainOut);
+        db.SaveChanges();
 
-    //  —ﬁÌ«  «Õ Ì«ÿÌ… ··Ãœ«Ê·
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DirectorateName TEXT DEFAULT '«·„œÌ—Ì… «·⁄«„…';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DepartmentName TEXT DEFAULT '‘⁄»…  ﬂ‰Ê·ÊÃÌ« «·„⁄·Ê„« ';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN LogoPath TEXT DEFAULT '';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN FontFamily TEXT DEFAULT 'Dubai';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DefaultScannerName TEXT DEFAULT '';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN ScanSource TEXT DEFAULT 'Feeder';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN DuplexScan INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerResolutionDPI INTEGER DEFAULT 200;");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN ScannerColorMode TEXT DEFAULT 'Grayscale';");
-    //TryExecuteSql("ALTER TABLE TB_SystemSettings ADD COLUMN PdfCompressionLevel TEXT DEFAULT 'Medium';");
+        // 2. «· ’‰Ì›«  «·—∆Ì”Ì… ·ﬂ·« «·‰Ê⁄Ì‰ (Ê«—œ Ê’«œ—)
+        var primaryNames = new[] { "√„— ≈œ«—Ì", "«” „«—…", "ÿ·» ‘Œ’Ì", "«⁄ Ì«œÌ…" };
+        var primaryList = new List<PrimaryCategory>();
 
-    //TryExecuteSql("ALTER TABLE TB_Documents ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Documents ADD COLUMN DeletedAt TEXT NULL;");
-    //TryExecuteSql("ALTER TABLE TB_Employees ADD COLUMN IsDeleted INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Employees ADD COLUMN DeletedAt TEXT NULL;");
-
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN FullName TEXT DEFAULT '';");
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN IsAdmin INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanAdd INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanEdit INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanDelete INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN CanExport INTEGER DEFAULT 0;");
-    //TryExecuteSql("ALTER TABLE TB_Users ADD COLUMN MustChangePassword INTEGER DEFAULT 0;");
-
-    // --- »–— «· ’‰Ì›«  «·„” Œ—Ã… „‰ ﬁ«⁄œ… «·»Ì«‰«  «·√’·Ì… ---
-    using (var seedScope = app.Services.CreateScope())
-    {
-        var db2 = seedScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db2.Database.EnsureCreated();
-
-        if (!db2.MainCategories.Any())
+        foreach (var main in new[] { mainIn, mainOut })
         {
-            // 1. «·√‰Ê«⁄ «·—∆Ì”Ì…
-            var mainIn = new MainCategory { Name = "Ê«—œ" };
-            var mainOut = new MainCategory { Name = "’«œ—" };
-            db2.MainCategories.AddRange(mainIn, mainOut);
-            db2.SaveChanges();
-
-            // 2. «· ’‰Ì›«  «·—∆Ì”Ì… ·ﬂ·« «·‰Ê⁄Ì‰ (Ê«—œ Ê’«œ—)
-            var primaryNames = new[] { "√„— ≈œ«—Ì", "«” „«—…", "ÿ·» ‘Œ’Ì", "«⁄ Ì«œÌ…" };
-            var primaryList = new List<PrimaryCategory>();
-
-            foreach (var main in new[] { mainIn, mainOut })
+            foreach (var pName in primaryNames)
             {
-                foreach (var pName in primaryNames)
-                {
-                    primaryList.Add(new PrimaryCategory { Name = pName, MainCategoryId = main.MainCategoryId });
-                }
+                primaryList.Add(new PrimaryCategory { Name = pName, MainCategoryId = main.MainCategoryId });
             }
-            db2.PrimaryCategories.AddRange(primaryList);
-            db2.SaveChanges();
+        }
+        db.PrimaryCategories.AddRange(primaryList);
+        db.SaveChanges();
 
-            // 3. «· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï
-            var secondaryNames = new[]
-            {
+        // 3. «· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï
+        var secondaryNames = new[]
+        {
             "„»«‘—…", "«‰›ﬂ«ﬂ", "⁄·«Ê…", " —›Ì⁄", "‘ﬂ—", "⁄ﬁÊ»…",
             "«Õ ”«»", "„ﬂ«›√…", " ﬂ·Ì›", " ‰”Ì»", " —‘ÌÕ", "·Ã‰…",
             " ﬁÌÌ„", "„” „”ﬂ« ", "„⁄·Ê„« ", "„Œ’’« ", " Ÿ·„",
             "‰ﬁ·", "≈Ã«“…", "≈⁄›«¡", "œÊ—…", "‰ ÌÃ…", " »·Ì€", "«” œ⁄«¡", "€Ì— –·ﬂ"
         };
 
-            var secondaryList = new List<SecondaryCategory>();
-            foreach (var prim in primaryList)
+        var secondaryList = new List<SecondaryCategory>();
+        foreach (var prim in primaryList)
+        {
+            foreach (var sName in secondaryNames)
             {
-                foreach (var sName in secondaryNames)
-                {
-                    secondaryList.Add(new SecondaryCategory { Name = sName, PrimaryCategoryId = prim.PrimaryCategoryId });
-                }
+                secondaryList.Add(new SecondaryCategory { Name = sName, PrimaryCategoryId = prim.PrimaryCategoryId });
             }
-            db2.SecondaryCategories.AddRange(secondaryList);
-            db2.SaveChanges();
+        }
+        db.SecondaryCategories.AddRange(secondaryList);
+        db.SaveChanges();
 
-            // 4. «· ’‰Ì›«  «·›—⁄Ì… «·À«‰Ì…
-            var tertiaryNames = new[]
-            {
+        // 4. «· ’‰Ì›«  «·›—⁄Ì… «·À«‰Ì…
+        var tertiaryNames = new[]
+        {
             "œÊ—…", "„ƒ „—", "Ê—‘…", "≈Ã«“…", "‰ﬁ·",
             " ‰”Ì»", " ﬁ«⁄œ", " ﬂ·Ì›", "‘Â«œ…", "Œœ„…"
         };
 
-            var tertiaryList = new List<TertiaryCategory>();
-            // —»ÿÂ« »«· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï «·„‰«”»… („À· «‰›ﬂ«ﬂ° „»«‘—…° «Õ ”«»° ≈Ã«“…° œÊ—…)
-            var targetSecs = secondaryList.Where(s =>
-                s.Name == "«‰›ﬂ«ﬂ" || s.Name == "„»«‘—…" || s.Name == "«Õ ”«»" ||
-                s.Name == "≈Ã«“…" || s.Name == "œÊ—…" || s.Name == " ﬂ·Ì›").ToList();
+        var tertiaryList = new List<TertiaryCategory>();
+        var targetSecs = secondaryList.Where(s =>
+            s.Name == "«‰›ﬂ«ﬂ" || s.Name == "„»«‘—…" || s.Name == "«Õ ”«»" ||
+            s.Name == "≈Ã«“…" || s.Name == "œÊ—…" || s.Name == " ﬂ·Ì›").ToList();
 
-            foreach (var sec in targetSecs)
+        foreach (var sec in targetSecs)
+        {
+            foreach (var tName in tertiaryNames)
             {
-                foreach (var tName in tertiaryNames)
-                {
-                    tertiaryList.Add(new TertiaryCategory { Name = tName, SecondaryCategoryId = sec.SecondaryCategoryId });
-                }
+                tertiaryList.Add(new TertiaryCategory { Name = tName, SecondaryCategoryId = sec.SecondaryCategoryId });
             }
-            db2.TertiaryCategories.AddRange(tertiaryList);
-            db2.SaveChanges();
         }
+        db.TertiaryCategories.AddRange(tertiaryList);
+        db.SaveChanges();
     }
-    // -------------------------------------------------------------
+
     // «· Õﬁﬁ „‰ ÊÃÊœ Õ”«» «·„œÌ— «·«› —«÷Ì √Ê ≈‰‘«ƒÂ
     var adminUser = db.Users.FirstOrDefault(u => u.UserName.ToLower() == "admin");
-
     if (adminUser == null)
     {
         adminUser = new User

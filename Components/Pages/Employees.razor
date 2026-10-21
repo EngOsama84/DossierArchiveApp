@@ -156,7 +156,7 @@
                     }
                 </div>
 
-                <!-- قائمة الموظفين مدعومة بـ Virtualize للحفاظ على سرعة فائقة وبدون أخطاء توافق -->
+                <!-- قائمة الموظفين مدعومة بـ Virtualize بدون أي تحذيرات CSS -->
                 <div class="dynamic-employee-scroll pa-1" style="height: calc(100vh - 275px); overflow-y: auto;">
                     @if (_loadingEmployees)
                     {
@@ -177,9 +177,8 @@
                                 @{
                                     bool isSelected = _selectedEmployee?.EmployeeId == emp.EmployeeId;
                                 }
-                                <div class="employee-card pa-2 mb-2"
-                                     @onclick="@(() => SelectEmployee(emp))"
-                                     style="@GetEmployeeCardStyle(isSelected)">
+                                <div class="employee-card pa-2 mb-2 @(isSelected ? "selected-card" : "normal-card")"
+                                     @onclick="@(() => SelectEmployee(emp))">
                                     <div class="d-flex justify-space-between align-center">
                                         <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                             <MudText Typo="Typo.body2" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
@@ -455,6 +454,17 @@
             background-color: #f1f7f4 !important;
         }
 
+    .selected-card {
+        background-color: #E8F5E9 !important;
+        border: 1px solid #C8E6C9 !important;
+        border-right: 5px solid #C5A059 !important;
+    }
+
+    .normal-card {
+        background-color: #FFFFFF;
+        border: 1px solid #EEEEEE;
+    }
+
     .compact-filter-field .mud-input-root-outlined {
         height: 36px !important;
         min-height: 36px !important;
@@ -707,7 +717,6 @@
         _loadingEmployees = true;
         try
         {
-            // استعلام خفيف وسريع بدون تعقب للكائنات
             _employees = await DbContext.Employees
                 .AsNoTracking()
                 .OrderBy(e => e.FileNumber)
@@ -740,7 +749,6 @@
         _loadingDocs = true;
         try
         {
-            // استعلام موحد فائق السرعة عبر ربط داخلي (Join) لجلب وثائق الموظف مع عدد المشتركين
             var query = from de in DbContext.DocumentEmployees.AsNoTracking()
                         where de.EmployeeId == employeeId
                         join d in DbContext.Documents.AsNoTracking() on de.DocumentId equals d.DocumentId
@@ -788,7 +796,6 @@
         await DialogService.ShowAsync<SharedEmployeesViewerDialog>("المشتركون بالكتاب", parameters, options);
     }
 
-    // تم التحديد الصريح لـ List<Employee> ليتوافق تماماً مع ICollection التي يطلبها Virtualize
     private List<Employee> FilteredEmployees => _employees.Where(e =>
     {
         if (_employeeStatusFilter == "Active" && e.IsActive != 1) return false;
@@ -855,15 +862,6 @@
         return string.Join(" / ", parts);
     }
 
-    private string GetEmployeeCardStyle(bool isSelected)
-    {
-        if (isSelected)
-        {
-            return "background-color: #E8F5E9; border-right: 5px solid #C5A059; border: 1px solid #C8E6C9;";
-        }
-        return "background-color: #FFFFFF; border: 1px solid #EEEEEE;";
-    }
-
     private async Task OpenAddEmployeeDialog()
     {
         if (!SessionService.CanAddEmployee)
@@ -882,7 +880,7 @@
         var dialog = await DialogService.ShowAsync<AddEmployeeDialog>("إضافة موظف", options);
         var result = await dialog.Result;
 
-        if (!result.Canceled && result.Data is Employee createdEmployee)
+        if (result is not null && !result.Canceled && result.Data is Employee createdEmployee)
         {
             await LoadEmployees();
             var emp = _employees.FirstOrDefault(e => e.EmployeeId == createdEmployee.EmployeeId);
@@ -909,7 +907,7 @@
         var dialog = await DialogService.ShowAsync<EditEmployeeDialog>("تعديل موظف", parameters, options);
         var result = await dialog.Result;
 
-        if (!result.Canceled && result.Data is Employee updatedEmp)
+        if (result is not null && !result.Canceled && result.Data is Employee updatedEmp)
         {
             var index = _employees.FindIndex(e => e.EmployeeId == updatedEmp.EmployeeId);
             if (index != -1)
@@ -1041,7 +1039,7 @@
         var dialog = await DialogService.ShowAsync<BulkUploadDialog>("الأرشفة المجمعة الذكية", parameters, options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadEmployeeDocuments(_selectedEmployee.EmployeeId);
             StateHasChanged();
@@ -1178,7 +1176,7 @@
                 var dialog = await DialogService.ShowAsync(typeof(DeleteChoiceDialog), "خيارات حذف المستند المشترك", parameters, options);
                 var result = await dialog.Result;
 
-                if (result.Canceled || result.Data == null)
+                if (result is null || result.Canceled || result.Data == null)
                 {
                     return;
                 }

@@ -296,23 +296,26 @@ else
             background-color: white !important;
             margin: 0 !important;
             padding: 0 !important;
+            width: 210mm !important;
+            height: 297mm !important;
         }
 
         .preview-area {
             padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
         }
 
         .a4-sheet {
             box-shadow: none !important;
-            width: 100% !important;
-            min-height: 275mm !important;
-            padding: 0 !important;
-            margin: 0 !important;
-        }
-
-        @@page {
-            size: A4 portrait;
-            margin: 8mm 12mm 8mm 12mm;
+            width: 210mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            padding: 8mm 12mm 8mm 12mm !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
+            page-break-after: always;
+            break-after: page;
         }
 
         .logs-table th {
@@ -363,7 +366,6 @@ else
                     (l.EntityType != null && l.EntityType.Contains(_searchFilter)));
             }
 
-            // تطبيق فلترة التاريخ باستخدام DateTime مباشرة بدلاً من مقارنة النصوص
             if (!string.IsNullOrWhiteSpace(_dateFromFilter) && DateTime.TryParse(_dateFromFilter, out var fromDate))
             {
                 var startOfDay = fromDate.Date;
@@ -376,7 +378,6 @@ else
                 query = query.Where(l => l.CreatedAt <= endOfDay);
             }
 
-            // أخذ ما يصل إلى 35 سجلاً لتعبئة صفحة A4 بدون تواقيع
             var rawLogs = await query
                 .OrderByDescending(l => l.LogId)
                 .Take(35)

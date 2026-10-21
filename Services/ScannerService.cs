@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using MudBlazor;
 
 namespace DossierArchiveApp.Services;
@@ -15,13 +16,50 @@ public class ScannerInfo
 public class ScannerService
 {
     private readonly ISnackbar _snackbar;
-    private readonly string _naps2Path;
+    private readonly string? _naps2Path;
 
-    public ScannerService(ISnackbar snackbar)
+    public ScannerService(ISnackbar snackbar, IConfiguration configuration)
     {
         _snackbar = snackbar;
-        // ملف الأداة التنفيذي يقع بجانب ملف قاعدة البيانات ومجلد المشروع
-        _naps2Path = Path.Combine(Directory.GetCurrentDirectory(), "naps2.console.exe");
+        _naps2Path = ResolveNaps2Path(configuration);
+    }
+
+    /// <summary>
+    /// حل مسار NAPS2 بدقة عبر عدة مسارات محتملة وتجنب مشاكل المسار النسبي وحساسية الأحرف
+    /// </summary>
+    private static string? ResolveNaps2Path(IConfiguration configuration)
+    {
+        // 1. المسار المعرف في appsettings.json إن وجد
+        var configuredPath = configuration["ScannerSettings:Naps2ExecutablePath"];
+        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
+        {
+            return configuredPath;
+        }
+
+        string baseDir = AppContext.BaseDirectory;
+
+        // 2. الفحص في مسارات التطبيق الرسمية
+        string[] candidatePaths =
+        {
+            Path.Combine(baseDir, "NAPS2.Console.exe"),
+            Path.Combine(baseDir, "naps2.console.exe"),
+            Path.Combine(baseDir, "Tools", "NAPS2", "NAPS2.Console.exe"),
+            Path.Combine(Directory.GetCurrentDirectory(), "NAPS2.Console.exe"),
+            Path.Combine(Directory.GetCurrentDirectory(), "naps2.console.exe"),
+            // مسارات التثبيت الافتراضية على الويندوز في حال تثبيته في النظام
+            @"C:\Program Files\NAPS2\NAPS2.Console.exe",
+            @"C:\Program Files (x86)\NAPS2\NAPS2.Console.exe"
+        };
+
+        foreach (var path in candidatePaths)
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -31,13 +69,12 @@ public class ScannerService
     {
         var scanners = new List<ScannerInfo>();
 
-        if (!File.Exists(_naps2Path))
+        if (string.IsNullOrEmpty(_naps2Path) || !File.Exists(_naps2Path))
         {
-            _snackbar.Add("لم يتم العثور على ملف naps2.console.exe بجانب قاعدة البيانات!", Severity.Error);
+            _snackbar.Add("لم يتم العثور على أداة NAPS2.Console.exe في مسارات النظام أو مجلد التطبيق!", Severity.Error);
             return scanners;
         }
 
-        // فحص أجهزة WIA أولاً ثم أجهزة TWAIN
         string[] drivers = { "wia", "twain" };
 
         foreach (var driver in drivers)
@@ -79,7 +116,7 @@ public class ScannerService
             }
             catch
             {
-                // الاستمرار لتجربة الدرايفر الآخر في حال فشل أحدهما
+                // الاستمرار لتجربة المشغل الآخر
             }
         }
 
@@ -87,13 +124,13 @@ public class ScannerService
     }
 
     /// <summary>
-    /// تنفيذ المسح الضوئي الفعلي وسحب الأوراق المباشر من الفيدر أو الزجاج وحفظها كـ PDF
+    /// تنفيذ المسح الضوئي وحفظ النتيجة كـ PDF
     /// </summary>
     public async Task<byte[]?> ScanDocumentAsync(string? scannerName, string scanSource = "Feeder", string colorMode = "Color", int dpi = 200, bool isDuplex = false)
     {
-        if (!File.Exists(_naps2Path))
+        if (string.IsNullOrEmpty(_naps2Path) || !File.Exists(_naps2Path))
         {
-            _snackbar.Add("ملف naps2.console.exe غير موجود في مجلد النظام!", Severity.Error);
+            _snackbar.Add("أداة المسح NAPS2.Console.exe غير متوفرة!", Severity.Error);
             return null;
         }
 
@@ -109,7 +146,6 @@ public class ScannerService
 
             try
             {
-                // تحديد مصدر التغذية: feeder = سحب آلي من الفيدر، glass = السطح الزجاجي
                 string sourceArg = scanSource.Equals("Feeder", StringComparison.OrdinalIgnoreCase) ? "feeder" : "glass";
 
                 if (sourceArg == "feeder" && isDuplex)
@@ -117,7 +153,7 @@ public class ScannerService
                     sourceArg = "duplex";
                 }
 
-                // محاولة المسح أولاً عبر WIA مع استخدام --device و --pagesize a4
+                // 1. المحاولة عبر WIA
                 string arguments = $"-o \"{tempPdfPath}\" --driver wia --device \"{scannerName}\" --source {sourceArg} --pagesize a4 --dpi {dpi} -f";
 
                 var psi = new ProcessStartInfo
@@ -130,22 +166,25 @@ public class ScannerService
                     CreateNoWindow = true
                 };
 
-                using var process = Process.Start(psi);
-                if (process != null)
+                using (var process = Process.Start(psi))
                 {
-                    string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit(90000);
-
-                    if (File.Exists(tempPdfPath) && new FileInfo(tempPdfPath).Length > 0)
+                    if (process != null)
                     {
-                        return File.ReadAllBytes(tempPdfPath);
+                        process.WaitForExit(90000);
+
+                        if (File.Exists(tempPdfPath) && new FileInfo(tempPdfPath).Length > 0)
+                        {
+                            return File.ReadAllBytes(tempPdfPath);
+                        }
                     }
+                }
 
-                    // إذا لم ينجح عبر WIA، المحاولة تلقائياً عبر TWAIN
-                    arguments = $"-o \"{tempPdfPath}\" --driver twain --device \"{scannerName}\" --source {sourceArg} --pagesize a4 --dpi {dpi} -f";
-                    psi.Arguments = arguments;
+                // 2. المحاولة عبر TWAIN في حال فشل WIA
+                arguments = $"-o \"{tempPdfPath}\" --driver twain --device \"{scannerName}\" --source {sourceArg} --pagesize a4 --dpi {dpi} -f";
+                psi.Arguments = arguments;
 
-                    using var processTwain = Process.Start(psi);
+                using (var processTwain = Process.Start(psi))
+                {
                     if (processTwain != null)
                     {
                         string twainError = processTwain.StandardError.ReadToEnd();
