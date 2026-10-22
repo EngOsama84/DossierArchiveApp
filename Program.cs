@@ -74,16 +74,16 @@ await app.RunAsync();
 // ==========================================
 static async Task SeedInitialDataAsync(AppDbContext db)
 {
-    // »–— ‘Ã—… «· ’‰Ì›«  «·«› —«÷Ì…
+    // 1. »–— ‘Ã—… «· ’‰Ì›«  «·«› —«÷Ì…
     if (!await db.MainCategories.AnyAsync())
     {
-        // 1. «·√‰Ê«⁄ «·—∆Ì”Ì…
+        // «·√‰Ê«⁄ «·—∆Ì”Ì…
         var mainIn = new MainCategory { Name = "Ê«—œ" };
         var mainOut = new MainCategory { Name = "’«œ—" };
         await db.MainCategories.AddRangeAsync(mainIn, mainOut);
         await db.SaveChangesAsync();
 
-        // 2. «· ’‰Ì›«  «·—∆Ì”Ì… ·ﬂ·« «·‰Ê⁄Ì‰ (Ê«—œ Ê’«œ—)
+        // «· ’‰Ì›«  «·—∆Ì”Ì… ·ﬂ·« «·‰Ê⁄Ì‰ (Ê«—œ Ê’«œ—)
         var primaryNames = new[] { "√„— ≈œ«—Ì", "«” „«—…", "ÿ·» ‘Œ’Ì", "«⁄ Ì«œÌ…" };
         var primaryList = new List<PrimaryCategory>();
 
@@ -101,7 +101,7 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         await db.PrimaryCategories.AddRangeAsync(primaryList);
         await db.SaveChangesAsync();
 
-        // 3. «· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï
+        // «· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï
         var secondaryNames = new[]
         {
             "„»«‘—…", "«‰›ﬂ«ﬂ", "⁄·«Ê…", " —›Ì⁄", "‘ﬂ—", "⁄ﬁÊ»…",
@@ -125,7 +125,7 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         await db.SecondaryCategories.AddRangeAsync(secondaryList);
         await db.SaveChangesAsync();
 
-        // 4. «· ’‰Ì›«  «·›—⁄Ì… «·À«‰Ì…
+        // «· ’‰Ì›«  «·›—⁄Ì… «·À«‰Ì…
         var tertiaryNames = new[]
         {
             "œÊ—…", "„ƒ „—", "Ê—‘…", "≈Ã«“…", "‰ﬁ·",
@@ -152,7 +152,7 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         await db.SaveChangesAsync();
     }
 
-    // »–— Õ”«» «·„œÌ— «·«› —«÷Ì
+    // 2. »–— Õ”«» «·„œÌ— «·«› —«÷Ì
     var adminUser = await db.Users.FirstOrDefaultAsync(u => u.UserName.ToLower() == "admin");
     if (adminUser == null)
     {
@@ -173,6 +173,39 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         };
 
         await db.Users.AddAsync(adminUser);
+        await db.SaveChangesAsync();
+    }
+
+    // 3. »–— ≈⁄œ«œ«  «·‰Ÿ«„ Ê«·‘⁄«— Ê«·„”«— «·«› —«÷Ì
+    var setting = await db.SystemSettings.FirstOrDefaultAsync();
+    if (setting == null)
+    {
+        setting = new SystemSetting
+        {
+            SettingId = 1,
+            DirectorateName = "œÌÊ«‰ «·Êﬁ› «·‘Ì⁄Ì",
+            DepartmentName = "‘⁄»…  ﬂ‰Ê·ÊÃÌ« «·„⁄·Ê„« ",
+            BaseFolderPath = @"D:\«·«÷»«—… «·«·ﬂ —Ê‰Ì… ··„ÊŸ›Ì‰",
+            LogoPath = "images/default_logo.png",
+            FontFamily = "Dubai",
+            PDFViewerMode = "internal",
+            DefaultScannerName = string.Empty,
+            ScanSource = "Feeder",
+            DuplexScan = 0,
+            ScannerResolutionDPI = 200,
+            ScannerColorMode = "Grayscale",
+            PdfCompressionLevel = "Medium",
+            EmployeeDisplayMode = "Active",
+            DefaultLanguage = "ar",
+            BackupFolderPath = string.Empty,
+            AutoBackupEnabled = 0,
+            AutoBackupInterval = 24,
+            MaxFileSize = 52428800,
+            DefaultSearchLimit = 200,
+            KeepAuditLog = 1
+        };
+
+        await db.SystemSettings.AddAsync(setting);
         await db.SaveChangesAsync();
     }
 }

@@ -91,29 +91,41 @@
                         <MudSelectItem Value="@("Tahoma")">Tahoma</MudSelectItem>
                     </MudSelect>
 
-                    <!-- شعار المديرية -->
-                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">شعار المديرية:</MudText>
+                    <!-- شعار المديرية وإدارته -->
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">شعار المديرية / الدائرة:</MudText>
                     <div class="d-flex align-center gap-3">
-                        @if (!string.IsNullOrEmpty(_settings.LogoPath))
-                        {
-                            <img src="@_settings.LogoPath" style="width: 56px; height: 56px; object-fit: contain; border: 1px solid #ddd; border-radius: 6px; padding: 2px;" alt="الشعار" />
-                        }
-                        else
-                        {
-                            <div style="width: 56px; height: 56px; background-color: #eee; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                                <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported" Color="Color.Secondary" />
-                            </div>
-                        }
+                        <img src="@GetEffectiveLogoUrl()"
+                             style="width: 70px; height: 70px; object-fit: contain; border: 1px solid #ddd; border-radius: 8px; padding: 4px; background-color: #fff;"
+                             alt="الشعار الرسمي" />
 
-                        <MudFileUpload T="IBrowserFile" FilesChanged="UploadLogo" Accept=".png, .jpg, .jpeg">
-                            <ActivatorContent>
-                                <MudButton Variant="Variant.Outlined"
-                                           Color="Color.Primary"
-                                           StartIcon="@Icons.Material.Filled.CloudUpload">
-                                    تحديد ملف الشعار
-                                </MudButton>
-                            </ActivatorContent>
-                        </MudFileUpload>
+                        <div class="d-flex flex-column gap-2">
+                            <div class="d-flex gap-2">
+                                <MudFileUpload T="IBrowserFile" FilesChanged="UploadLogo" Accept=".png, .jpg, .jpeg">
+                                    <ActivatorContent>
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   StartIcon="@Icons.Material.Filled.CloudUpload">
+                                            تغيير الشعار
+                                        </MudButton>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+
+                                @if (IsCustomLogoActive())
+                                {
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Secondary"
+                                               Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Restore"
+                                               OnClick="ResetToDefaultLogo">
+                                        استعادة الافتراضي
+                                    </MudButton>
+                                }
+                            </div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                الصيغ المدعومة: PNG, JPG (الحد الأقصى 5 ميغابايت)
+                            </MudText>
+                        </div>
                     </div>
                 </MudPaper>
             </MudItem>
@@ -216,11 +228,10 @@
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">مسار التخزين ونظام الأضابير</MudText>
                     </div>
 
-                    <!-- مسار التخزين بمحاذاة أفقية متطابقة -->
                     <div class="d-flex gap-2 mb-2 align-start">
                         <MudTextField @bind-Value="_settings.BaseFolderPath"
                                       Label="المسار الرئيسي لمجلد النظام (Base Folder Path)"
-                                      Placeholder="مثال: D:\DossierArchiveFiles"
+                                      Placeholder="مثال: D:\الاضبارة الالكترونية للموظفين"
                                       HelperText="المجلد الأساسي الذي يحتوي على كافة ملفات الموظفين المؤرشفة"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
@@ -271,7 +282,7 @@
                 </MudPaper>
             </MudItem>
 
-            <!-- 4. النسخ الاحتياطي والاستعادة وخيارات الشمولية -->
+            <!-- 4. النسخ الاحتياطي والاستعادة -->
             <MudItem xs="12" md="6">
                 <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
                     <div class="d-flex align-center justify-space-between mb-3">
@@ -281,7 +292,6 @@
                         </div>
                     </div>
 
-                    <!-- مسار النسخ الاحتياطي بمحاذاة أفقية متطابقة -->
                     <div class="d-flex gap-2 mb-2 align-start">
                         <MudTextField @bind-Value="_settings.BackupFolderPath"
                                       Label="مسار مجلد النسخ الاحتياطي (Backup Folder)"
@@ -300,7 +310,6 @@
                         </MudButton>
                     </div>
 
-                    <!-- خيار شمولية النسخ: قاعدة البيانات فقط أم كامل المجلدات -->
                     <div class="pa-3 mb-3 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
                         <MudRadioGroup @bind-Value="_backupScope">
                             <MudRadio Value="@("dbOnly")" Color="Color.Primary" Dense="true">
@@ -314,7 +323,6 @@
                         </MudRadioGroup>
                     </div>
 
-                    <!-- أزرار تنفيذ النسخ الاحتياطي الفوري -->
                     <div class="d-flex justify-space-between align-center mb-3">
                         <MudButton Variant="Variant.Filled"
                                    Color="Color.Warning"
@@ -338,10 +346,9 @@
                         </MudButton>
                     </div>
 
-                    <!-- قائمة النسخ المتوفرة للاستعادة -->
                     @if (!_backupFiles.Any())
                     {
-                        <MudAlert Severity="Severity.Info" Dense="true" Class="my-2" Style="font-size: 0.8rem;">
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="my-2" style="font-size: 0.8rem;">
                             لا توجد نسخ احتياطية في المسار المحدد حالياً.
                         </MudAlert>
                     }
@@ -385,7 +392,6 @@
                                    Color="Color.Primary"
                                    Label="تفعيل سجل التدقيق (Audit Log)" />
 
-                        <!-- استعادة من ملف خارجي يتم رفعه -->
                         <MudFileUpload T="IBrowserFile" FilesChanged="RestoreFromUploadedFile" Accept=".sqlite3, .zip">
                             <ActivatorContent>
                                 <MudButton Variant="Variant.Outlined"
@@ -445,6 +451,7 @@
 </div>
 
 @code {
+    private const string DefaultLogoPath = "images/default_logo.png";
     private SystemSetting _settings = new();
     private bool _loading = true;
     private bool _isSaving = false;
@@ -452,7 +459,7 @@
     private bool _isDuplex = false;
     private bool _autoBackup = false;
     private bool _auditLog = true;
-    private string _backupScope = "dbOnly"; // dbOnly أو full
+    private string _backupScope = "dbOnly";
     private List<ScannerInfo> _availableScanners = new();
     private List<FileInfo> _backupFiles = new();
 
@@ -476,7 +483,13 @@
             var s = await DbContext.SystemSettings.FirstOrDefaultAsync();
             if (s == null)
             {
-                s = new SystemSetting();
+                s = new SystemSetting
+                {
+                    DirectorateName = "ديوان الوقف الشيعي",
+                    DepartmentName = "شعبة تكنولوجيا المعلومات",
+                    BaseFolderPath = @"D:\الاضبارة الالكترونية للموظفين",
+                    LogoPath = DefaultLogoPath
+                };
                 DbContext.SystemSettings.Add(s);
                 await DbContext.SaveChangesAsync();
             }
@@ -496,6 +509,82 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    // ==========================================
+    // منطق إدارة الشعار
+    // ==========================================
+
+    private string GetEffectiveLogoUrl()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.LogoPath))
+            return DefaultLogoPath;
+
+        return _settings.LogoPath;
+    }
+
+    private bool IsCustomLogoActive()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.LogoPath))
+            return false;
+
+        return !_settings.LogoPath.TrimStart('/').Equals(DefaultLogoPath.TrimStart('/'), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ResetToDefaultLogo()
+    {
+        _settings.LogoPath = DefaultLogoPath;
+        try
+        {
+            DbContext.SystemSettings.Update(_settings);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "استعادة الشعار الافتراضي",
+                entityType: "إعدادات النظام",
+                entityId: _settings.SettingId,
+                description: "تمت استعادة الشعار الافتراضي الرسمي للنظام بنجاح."
+            );
+
+            Snackbar.Add("تمت استعادة الشعار الافتراضي بنجاح!", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء استعادة الشعار: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UploadLogo(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        try
+        {
+            using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            string base64 = Convert.ToBase64String(ms.ToArray());
+            _settings.LogoPath = $"data:{file.ContentType};base64,{base64}";
+
+            DbContext.SystemSettings.Update(_settings);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "تحديث الشعار",
+                entityType: "إعدادات النظام",
+                entityId: _settings.SettingId,
+                description: "تم رفع وتعيين شعار مخصص جديد للنظام."
+            );
+
+            Snackbar.Add("تم تحديث الشعار وتثبيته في النظام بنجاح!", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"خطأ أثناء رفع ملف الشعار: {ex.Message}", Severity.Error);
         }
     }
 
@@ -612,35 +701,6 @@
         catch (Exception ex)
         {
             Snackbar.Add($"تعذر إنشاء أو الوصول للمسار: {ex.Message}", Severity.Error);
-        }
-    }
-
-    private async Task UploadLogo(IBrowserFile file)
-    {
-        if (file == null) return;
-
-        try
-        {
-            var wwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
-            if (!Directory.Exists(wwwroot))
-            {
-                Directory.CreateDirectory(wwwroot);
-            }
-
-            var extension = Path.GetExtension(file.Name);
-            var fileName = $"logo{extension}";
-            var targetPath = Path.Combine(wwwroot, fileName);
-
-            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
-            await using var fileStream = new FileStream(targetPath, FileMode.Create);
-            await stream.CopyToAsync(fileStream);
-
-            _settings.LogoPath = $"/images/{fileName}";
-            Snackbar.Add("تم تحميل الشعار، يرجى الضغط على زر الحفظ لتثبيته في النظام.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"خطأ أثناء رفع ملف الشعار: {ex.Message}", Severity.Error);
         }
     }
 
@@ -781,7 +841,7 @@
     }
 
     // ==========================================
-    // منطق الاستعادة (Database & Full Archive Restore Engine)
+    // منطق الاستعادة (Restore Engine)
     // ==========================================
 
     private async Task RestoreFromLocalFile(string filePath, string fileName)

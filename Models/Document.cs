@@ -63,6 +63,12 @@ public class Document
 
     [Column("DeletedAt")]
     public DateTime? DeletedAt { get; set; }
+
+    [Column("DeletedBy")]
+    public int? DeletedBy { get; set; }
+
+    [Column("DeleteReason")]
+    public string? DeleteReason { get; set; }
 }
 
 [Table("TB_DocumentEmployees")]
@@ -83,4 +89,16 @@ public class DocumentEmployee
 
     [Column("CreatedAt")]
     public DateTime? CreatedAt { get; set; } = DateTime.Now;
+
+    [Column("IsDeleted")]
+    public int IsDeleted { get; set; } = 0;
+
+    [Column("DeletedAt")]
+    public DateTime? DeletedAt { get; set; }
+
+    [Column("DeletedBy")]
+    public int? DeletedBy { get; set; }
+
+    [Column("DeleteReason")]
+    public string? DeleteReason { get; set; }
 }

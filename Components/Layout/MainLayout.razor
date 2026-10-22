@@ -100,7 +100,7 @@
 </style>
 
 @code {
-    private bool _drawerOpen = true;
+    private bool _drawerOpen = false;
     private SystemSetting? _settings;
     private string _selectedFont = "Dubai";
     private MudTheme _customTheme = new();
@@ -109,7 +109,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        SessionService.OnSessionChanged += StateHasChanged;
+        SessionService.OnSessionChanged += HandleSessionChanged;
+
+        UpdateDrawerState();
 
         try
         {
@@ -134,6 +136,18 @@
                 }
             }
         };
+    }
+
+    private void HandleSessionChanged()
+    {
+        UpdateDrawerState();
+        StateHasChanged();
+    }
+
+    private void UpdateDrawerState()
+    {
+        // تفتح القائمة فقط إذا كان المستخدم مسجلاً وهو مدير (Admin)، وتغلق تلقائياً لأي مستخدم آخر
+        _drawerOpen = SessionService.IsLoggedIn && SessionService.IsAdmin;
     }
 
     private async Task OpenChangePasswordDialog()

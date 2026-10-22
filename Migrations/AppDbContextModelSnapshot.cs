@@ -73,9 +73,17 @@ namespace DossierArchiveApp.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("CreatedBy");
 
+                    b.Property<string>("DeleteReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("DeleteReason");
+
                     b.Property<string>("DeletedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("DeletedAt");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DeletedBy");
 
                     b.Property<string>("DocumentDate")
                         .HasColumnType("TEXT")
@@ -169,6 +177,18 @@ namespace DossierArchiveApp.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("CreatedAt");
 
+                    b.Property<string>("DeleteReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("DeleteReason");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("DeletedAt");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DeletedBy");
+
                     b.Property<int>("DocumentId")
                         .HasColumnType("INTEGER")
                         .HasColumnName("DocumentID");
@@ -181,6 +201,10 @@ namespace DossierArchiveApp.Migrations
                     b.Property<int>("EmployeeId")
                         .HasColumnType("INTEGER")
                         .HasColumnName("EmployeeID");
+
+                    b.Property<int>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("IsDeleted");
 
                     b.HasKey("DocumentEmployeeId");
 
@@ -208,9 +232,17 @@ namespace DossierArchiveApp.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("CreatedBy");
 
+                    b.Property<string>("DeleteReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("DeleteReason");
+
                     b.Property<string>("DeletedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("DeletedAt");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DeletedBy");
 
                     b.Property<string>("EmployeeFolderPath")
                         .IsRequired()

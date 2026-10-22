@@ -114,7 +114,7 @@ else if (_employee != null)
                                 <tr>
                                     <td class="text-center">@item.GlobalIndex</td>
                                     <td class="text-center fw-bold">@item.Doc.DocumentNumber</td>
-                                    <td class="text-center">@item.Doc.DocumentDate</td>
+                                    <td class="text-center">@(item.Doc.DocumentDate?.ToString("yyyy/MM/dd") ?? "-")</td>
                                     <td style="font-weight: 500;">@item.Doc.Subject</td>
                                     <td>@GetCategoryName(item.Doc)</td>
                                 </tr>
@@ -396,7 +396,7 @@ else if (_employee != null)
             if (_employee != null)
             {
                 var docIds = await DbContext.DocumentEmployees
-                    .Where(de => de.EmployeeId == EmployeeId)
+                    .Where(de => de.EmployeeId == EmployeeId && de.IsDeleted == 0)
                     .Select(de => de.DocumentId)
                     .ToListAsync();
 
@@ -428,8 +428,6 @@ else if (_employee != null)
             return;
         }
 
-        // الصفحة الأولى تتسع لـ 12 كتاباً مع الترويسة وجدول معلومات الموظف والتواقيع
-        // الصفحات اللاحقة تتسع لـ 18 كتاباً
         const int firstPageSize = 12;
         const int subsequentPageSize = 18;
 

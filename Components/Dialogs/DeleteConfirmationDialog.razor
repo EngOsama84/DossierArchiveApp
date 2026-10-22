@@ -1,0 +1,69 @@
+﻿@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2" style="color: #B71C1C;">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" />
+            <MudText Typo="Typo.h6" Class="fw-bold">@Title</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div dir="rtl" class="pa-1 text-right">
+            <MudText Typo="Typo.body2" Class="mb-3 text-secondary">
+                @Message
+            </MudText>
+
+            <MudTextField @bind-Value="_reason"
+                          Label="سبب الحذف (إلزامي)"
+                          Placeholder="يرجى كتابة سبب الحذف بالتفصيل لتقديمه للمسؤول..."
+                          Variant="Variant.Outlined"
+                          Lines="3"
+                          Immediate="true"
+                          Required="true"
+                          Error="@_hasError"
+                          ErrorText="لا يمكن المتابعة بدون كتابة سبب الحذف!"
+                          Class="mb-2" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <div dir="rtl" class="d-flex justify-end gap-2 w-100 pa-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Cancel">
+                إلغاء الأمر
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="ConfirmDelete">
+                تأكيد الحذف
+            </MudButton>
+        </div>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string Title { get; set; } = "تأكيد الحذف";
+
+    [Parameter]
+    public string Message { get; set; } = "هل أنت متأكد من رغبتك بالحذف؟";
+
+    private string _reason = string.Empty;
+    private bool _hasError = false;
+
+    private void ConfirmDelete()
+    {
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _hasError = true;
+            return;
+        }
+
+        _hasError = false;
+        MudDialog.Close(DialogResult.Ok(_reason.Trim()));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

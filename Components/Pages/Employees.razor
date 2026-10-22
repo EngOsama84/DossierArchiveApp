@@ -750,14 +750,17 @@
         try
         {
             var query = from de in DbContext.DocumentEmployees.AsNoTracking()
-                        where de.EmployeeId == employeeId
+                        where de.EmployeeId == employeeId && de.IsDeleted == 0
                         join d in DbContext.Documents.AsNoTracking() on de.DocumentId equals d.DocumentId
                         where d.IsDeleted == 0
                         orderby d.DocumentDate descending
                         select new
                         {
                             Doc = d,
-                            SharedCount = DbContext.DocumentEmployees.Count(x => x.DocumentId == d.DocumentId && x.EmployeeId != employeeId)
+                            SharedCount = DbContext.DocumentEmployees.Count(x =>
+                                x.DocumentId == d.DocumentId &&
+                                x.EmployeeId != employeeId &&
+                                x.IsDeleted == 0)
                         };
 
             var results = await query.ToListAsync();
@@ -941,14 +944,20 @@
             return;
         }
 
-        bool? confirm = await DialogService.ShowMessageBox(
-            "تأكيد نقل الموظف إلى سلة المحذوفات",
-            $"هل أنت متأكد من حذف إضبارة الموظف: ({_selectedEmployee.EmployeeName})؟\nسيتم نقله إلى سلة المحذوفات مع إمكانية استعادته لاحقاً بواسطة مدير النظام.",
-            yesText: "نعم، نقل للسلة",
-            cancelText: "إلغاء");
+        // عرض نافذة طلب سبب الحذف
+        var parameters = new DialogParameters
+        {
+            ["Title"] = "تأكيد نقل الموظف إلى سلة المحذوفات",
+            ["Message"] = $"أنت على وشك حذف إضبارة ({_selectedEmployee.EmployeeName}). سيتم تدوين سبب الحذف في سجل الرقابة وعرضه للمسؤول."
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<DeleteConfirmationDialog>("تأكيد الحذف", parameters, options);
+        var dialogResult = await dialog.Result;
 
-        if (confirm != true) return;
+        if (dialogResult is null || dialogResult.Canceled || dialogResult.Data == null)
+            return;
 
+        string deleteReason = dialogResult.Data.ToString()!;
         int deletedEmpId = _selectedEmployee.EmployeeId;
         string deletedEmpName = _selectedEmployee.EmployeeName;
         string deletedFileNum = _selectedEmployee.FileNumber;
@@ -960,6 +969,9 @@
             {
                 empDb.IsDeleted = 1;
                 empDb.DeletedAt = DateTime.Now;
+                empDb.DeletedBy = SessionService.CurrentUser?.UserId;
+                empDb.DeleteReason = deleteReason;
+
                 DbContext.Employees.Update(empDb);
                 await DbContext.SaveChangesAsync();
 
@@ -967,7 +979,7 @@
                     actionType: "حذف موظف (سلة المحذوفات)",
                     entityType: "موظف",
                     entityId: deletedEmpId,
-                    description: $"تم نقل إضبارة الموظف ({deletedEmpName}) ذات رقم الإضبارة ({deletedFileNum}) إلى سلة المحذوفات."
+                    description: $"تم حذف إضبارة ({deletedEmpName}) [رقم: {deletedFileNum}]. السبب المذكور: ({deleteReason})"
                 );
             }
 
@@ -1152,16 +1164,15 @@
 
         try
         {
-            var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
-            string baseFolder = settings?.BaseFolderPath ?? string.Empty;
-
-            var allLinks = await DbContext.DocumentEmployees
-                .Where(de => de.DocumentId == doc.DocumentId)
+            // 1. فحص الروابط الفعالة الحالية للكتاب
+            var activeLinks = await DbContext.DocumentEmployees
+                .Where(de => de.DocumentId == doc.DocumentId && de.IsDeleted == 0)
                 .ToListAsync();
 
-            int linkedEmployeesCount = allLinks.Count;
+            int linkedEmployeesCount = activeLinks.Count;
             bool deleteAll = false;
 
+            // 2. إذا كان الكتاب مشتركاً بين أكثر من موظف، نسأل المستخدم عن نوع الحذف
             if (linkedEmployeesCount > 1)
             {
                 var parameters = new DialogParameters
@@ -1177,70 +1188,110 @@
                 var result = await dialog.Result;
 
                 if (result is null || result.Canceled || result.Data == null)
-                {
                     return;
-                }
 
                 string choice = result.Data.ToString()!;
                 deleteAll = (choice == "all");
             }
             else
             {
-                bool? confirm = await DialogService.ShowMessageBox(
-                    "تأكيد نقل المستند إلى سلة المحذوفات",
-                    $"هل أنت متأكد من حذف المستند (رقم: {doc.DocumentNumber} - {doc.Subject})؟\nسيتم نقله إلى سلة المحذوفات مع إمكانية استعادته لاحقاً.",
-                    yesText: "نعم، حذف",
-                    cancelText: "إلغاء");
-
-                if (confirm != true) return;
+                // إذا كان مرتبطاً بموظف واحد فقط، فالحذف حتماً هو حذف كلي ونقل للسلة
                 deleteAll = true;
             }
 
+            // 3. طلب سبب الحذف إلزامياً في كل الحالات (موظف واحد أو مشترك)
+            string dialogTitle = deleteAll ? "تأكيد حذف المستند وإرساله للسلة" : "تأكيد استبعاد المستند من الموظف";
+            string dialogMessage = deleteAll
+                ? $"سيتم نقل كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) إلى سلة المحذوفات. يرجى تدوين سبب الحذف للمسؤول."
+                : $"سيتم استبعاد كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) من إضبارة ({_selectedEmployee.EmployeeName}) فقط.";
+
+            var reasonParams = new DialogParameters
+            {
+                ["Title"] = dialogTitle,
+                ["Message"] = dialogMessage
+            };
+            var reasonOptions = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+            var reasonDialog = await DialogService.ShowAsync<DeleteConfirmationDialog>("سبب الحذف", reasonParams, reasonOptions);
+            var reasonResult = await reasonDialog.Result;
+
+            if (reasonResult is null || reasonResult.Canceled || reasonResult.Data == null)
+                return;
+
+            string deleteReason = reasonResult.Data.ToString()!;
+            int? currentUserId = SessionService.CurrentUser?.UserId;
+            DateTime now = DateTime.Now;
+
             if (deleteAll)
             {
+                // أ) تحديث سجل المستند الأصلي
                 var docDb = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == doc.DocumentId);
                 if (docDb != null)
                 {
                     docDb.IsDeleted = 1;
-                    docDb.DeletedAt = DateTime.Now;
+                    docDb.DeletedAt = now;
+                    docDb.DeletedBy = currentUserId;
+                    docDb.DeleteReason = deleteReason;
+
                     DbContext.Documents.Update(docDb);
-                    await DbContext.SaveChangesAsync();
                 }
+
+                // ب) تحديث كافة روابط المستند لتصبح محذوفة أيضاً
+                var allDocLinks = await DbContext.DocumentEmployees
+                    .Where(de => de.DocumentId == doc.DocumentId)
+                    .ToListAsync();
+
+                foreach (var link in allDocLinks)
+                {
+                    link.IsDeleted = 1;
+                    link.DeletedAt = now;
+                    link.DeletedBy = currentUserId;
+                    link.DeleteReason = deleteReason;
+                    DbContext.DocumentEmployees.Update(link);
+                }
+
+                await DbContext.SaveChangesAsync();
 
                 await SessionService.LogActivityAsync(
                     actionType: "حذف مستند (سلة المحذوفات)",
                     entityType: "مستند",
                     entityId: doc.DocumentId,
-                    description: $"تم نقل كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) إلى سلة المحذوفات."
+                    description: $"تم نقل كتاب ({doc.Subject}) [رقم: {doc.DocumentNumber}] إلى السلة. السبب: ({deleteReason})"
                 );
 
                 Snackbar.Add("تم نقل المستند إلى سلة المحذوفات بنجاح", Severity.Success);
             }
             else
             {
-                var currentLink = allLinks.FirstOrDefault(de => de.EmployeeId == _selectedEmployee.EmployeeId);
+                // حذف فردي: إبقاء المستند نشطاً وتعديل رابط الموظف الحالي فقط
+                var currentLink = activeLinks.FirstOrDefault(de => de.EmployeeId == _selectedEmployee.EmployeeId);
                 if (currentLink != null)
                 {
-                    DbContext.DocumentEmployees.Remove(currentLink);
+                    currentLink.IsDeleted = 1;
+                    currentLink.DeletedAt = now;
+                    currentLink.DeletedBy = currentUserId;
+                    currentLink.DeleteReason = deleteReason;
+
+                    DbContext.DocumentEmployees.Update(currentLink);
                     await DbContext.SaveChangesAsync();
 
                     await SessionService.LogActivityAsync(
-                        actionType: "فك ارتباط مستند",
+                        actionType: "استبعاد مستند من موظف",
                         entityType: "مستند / موظف",
                         entityId: doc.DocumentId,
-                        description: $"تمت إزالة كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) من إضبارة الموظف ({_selectedEmployee.EmployeeName}) فقط."
+                        description: $"تم استبعاد كتاب ({doc.Subject}) من إضبارة ({_selectedEmployee.EmployeeName}). السبب: ({deleteReason})"
                     );
 
-                    Snackbar.Add($"تمت إزالة المستند من إضبارة ({_selectedEmployee.EmployeeName}) فقط", Severity.Success);
+                    Snackbar.Add($"تم استبعاد المستند من إضبارة ({_selectedEmployee.EmployeeName}) ونقله للسلة الفردية", Severity.Success);
                 }
             }
 
+            // تحديث واجهة إضبارة الموظف فوراً
             await LoadEmployeeDocuments(_selectedEmployee.EmployeeId);
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"حدث خطأ أثناء تنفيذ الحذف: {ex.Message}", Severity.Error);
+            Snackbar.Add($"حدث خطأ أثناء تنفيذ عملية الحذف: {ex.Message}", Severity.Error);
         }
     }
 

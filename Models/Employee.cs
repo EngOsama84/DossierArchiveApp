@@ -42,6 +42,11 @@ public class Employee
     [Column("DeletedAt")]
     public DateTime? DeletedAt { get; set; }
 
+    [Column("DeletedBy")]
+    public int? DeletedBy { get; set; }
+
+    [Column("DeleteReason")]
+    public string? DeleteReason { get; set; }
     // خاصية مساعدة لواجهة المستخدم
     [NotMapped]
     public bool ActiveStatus

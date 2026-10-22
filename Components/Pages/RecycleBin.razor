@@ -26,77 +26,211 @@
         </MudButton>
     </div>
 
-    <!-- التبويبات للفرز بين المستندات والموظفين -->
+    <!-- التبويبات للفرز بين المحذوفات -->
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Color="Color.Primary">
 
-        <!-- تبويب 1: المستندات المحذوفة -->
-        <MudTabPanel Text="المستندات المحذوفة" Icon="@Icons.Material.Filled.Description" BadgeData="@_deletedDocuments.Count" BadgeColor="Color.Error">
-            <MudTable Items="@_deletedDocuments" Dense="true" Hover="true" Striped="true" Filter="new Func<Document, bool>(FilterDocFunc)" Loading="@_isLoading">
+        <!-- تبويب 1: المستندات المحذوفة كلياً -->
+        <MudTabPanel Text="المستندات المحذوفة كلياً" Icon="@Icons.Material.Filled.Description" BadgeData="@_deletedDocuments.Count" BadgeColor="Color.Error">
+            <MudTable Items="@_deletedDocuments" Dense="true" Hover="true" Striped="true" Filter="new Func<FullDeletedDocItem, bool>(FilterFullDocFunc)" Loading="@_isLoading">
                 <ToolBarContent>
-                    <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة المستندات في السلة</MudText>
+                    <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة المستندات المحذوفة بالكامل</MudText>
                     <MudSpacer />
-                    <MudTextField @bind-Value="_searchDocString" Placeholder="بحث برقم الكتاب أو الموضوع..." Adornment="Adornment.Start"
+                    <MudTextField @bind-Value="_searchDocString" Placeholder="بحث برقم الكتاب، الموضوع، الموظف، أو الحاذف..." Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
                 </ToolBarContent>
                 <HeaderContent>
                     <MudTh>رقم الكتاب</MudTh>
                     <MudTh>تاريخ الكتاب</MudTh>
                     <MudTh>الموضوع</MudTh>
+                    <MudTh>صاحب الإضبارة / المرتبطين</MudTh>
+                    <MudTh>سبب الحذف</MudTh>
+                    <MudTh>حُذف بواسطة</MudTh>
                     <MudTh>تاريخ الحذف</MudTh>
                     <MudTh Style="text-align: center;">الإجراءات</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="رقم الكتاب" Class="fw-bold">@context.DocumentNumber</MudTd>
-                    <MudTd DataLabel="تاريخ الكتاب">@context.DocumentDate</MudTd>
-                    <MudTd DataLabel="الموضوع">@context.Subject</MudTd>
+                    <MudTd DataLabel="رقم الكتاب" Class="fw-bold">@context.Doc.DocumentNumber</MudTd>
+                    <MudTd DataLabel="تاريخ الكتاب">@(context.Doc.DocumentDate?.ToString("yyyy/MM/dd") ?? "-")</MudTd>
+                    <MudTd DataLabel="الموضوع">@context.Doc.Subject</MudTd>
+
+                    <!-- عرض الموظف والشارة المنسدلة لبقية المرتبطين -->
+                    <MudTd DataLabel="صاحب الإضبارة">
+                        @if (!context.EmployeeNames.Any())
+                        {
+                            <span class="text-secondary" style="font-size: 0.8rem;">لا يوجد ارتباط</span>
+                        }
+                        else if (context.EmployeeNames.Count == 1)
+                        {
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #1B4D3E;">
+                                @context.EmployeeNames.First()
+                            </span>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-center gap-1">
+                                <span style="font-size: 0.85rem; font-weight: bold; color: #1B4D3E;">
+                                    @context.EmployeeNames.First()
+                                </span>
+
+                                <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" Dense="true">
+                                    <ActivatorContent>
+                                        <MudTooltip Text="عرض بقية الموظفين المرتبطين بهذا الكتاب">
+                                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Style="cursor: pointer; height: 22px; font-weight: bold;">
+                                                +@(context.EmployeeNames.Count - 1) آخرين
+                                            </MudChip>
+                                        </MudTooltip>
+                                    </ActivatorContent>
+                                    <ChildContent>
+                                        <div class="pa-2" dir="rtl" style="min-width: 200px;">
+                                            <MudText Typo="Typo.caption" Class="fw-bold text-secondary d-block mb-1">الموظفون المشتركون في الكتاب:</MudText>
+                                            <MudDivider Class="mb-1" />
+                                            @foreach (var empName in context.EmployeeNames)
+                                            {
+                                                <div class="d-flex align-center gap-2 py-1">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Primary" />
+                                                    <span style="font-size: 0.82rem;">@empName</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </ChildContent>
+                                </MudMenu>
+                            </div>
+                        }
+                    </MudTd>
+
+                    <MudTd DataLabel="سبب الحذف">
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                            @(string.IsNullOrWhiteSpace(context.Doc.DeleteReason) ? "لم يذكر سبب" : context.Doc.DeleteReason)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="حُذف بواسطة">
+                        <MudChip T="string" Color="Color.Dark" Size="Size.Small" Variant="Variant.Outlined">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="me-1" />
+                            @context.DeletedByUserName
+                        </MudChip>
+                    </MudTd>
                     <MudTd DataLabel="تاريخ الحذف">
-                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">@context.DeletedAt</MudChip>
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">
+                            @(context.Doc.DeletedAt?.ToString("yyyy/MM/dd") ?? "-")
+                        </MudChip>
                     </MudTd>
                     <MudTd Style="text-align: center;">
                         <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreDocument(context))" Class="me-2">
-                            استعادة
+                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreDocument(context.Doc))" Class="me-2">
+                            استعادة للجميع
                         </MudButton>
                         <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteDocument(context))">
+                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteDocument(context.Doc))">
                             حذف نهائي
                         </MudButton>
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
-                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد مستندات في سلة المحذوفات حالياً.</MudText>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد مستندات محذوفة كلياً في السلة.</MudText>
                 </NoRecordsContent>
             </MudTable>
         </MudTabPanel>
 
-        <!-- تبويب 2: إضبارات الموظفين المحذوفة -->
+        <!-- تبويب 2: المستندات المستبعدة من موظف معين (حذف فردي) -->
+        <MudTabPanel Text="مستندات مستبعدة فردياً" Icon="@Icons.Material.Filled.LinkOff" BadgeData="@_singleDeletedLinks.Count" BadgeColor="Color.Warning">
+            <MudTable Items="@_singleDeletedLinks" Dense="true" Hover="true" Striped="true" Filter="new Func<SingleDeletedLinkItem, bool>(FilterSingleLinkFunc)" Loading="@_isLoading">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold text-secondary">مستندات محذوفة من أضابير موظفين محددين</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchSingleString" Placeholder="بحث باسم الموظف، رقم الكتاب، الحاذف..." Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh>اسم الموظف</MudTh>
+                    <MudTh>رقم الكتاب</MudTh>
+                    <MudTh>تاريخ الكتاب</MudTh>
+                    <MudTh>الموضوع</MudTh>
+                    <MudTh>سبب الاستبعاد</MudTh>
+                    <MudTh>حُذف بواسطة</MudTh>
+                    <MudTh>تاريخ الحذف</MudTh>
+                    <MudTh Style="text-align: center;">الإجراءات</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="اسم الموظف" Class="fw-bold" Style="color: #1B4D3E;">@context.EmployeeName</MudTd>
+                    <MudTd DataLabel="رقم الكتاب">@context.DocumentNumber</MudTd>
+                    <MudTd DataLabel="تاريخ الكتاب">@(context.DocumentDate?.ToString("yyyy/MM/dd") ?? "-")</MudTd>
+                    <MudTd DataLabel="الموضوع">@context.Subject</MudTd>
+                    <MudTd DataLabel="سبب الاستبعاد">
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                            @(string.IsNullOrWhiteSpace(context.DeleteReason) ? "لم يذكر سبب" : context.DeleteReason)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="حُذف بواسطة">
+                        <MudChip T="string" Color="Color.Dark" Size="Size.Small" Variant="Variant.Outlined">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="me-1" />
+                            @context.DeletedByUserName
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="تاريخ الحذف">
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">
+                            @(context.DeletedAt?.ToString("yyyy/MM/dd") ?? "-")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd Style="text-align: center;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreSingleLink(context))" Class="me-2">
+                            استعادة للموظف
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteSingleLink(context))">
+                            حذف نهائي
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد ارتباطات مستبعدة فردياً حالياً.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        <!-- تبويب 3: إضبارات الموظفين المحذوفة -->
         <MudTabPanel Text="أضابير الموظفين المحذوفة" Icon="@Icons.Material.Filled.Badge" BadgeData="@_deletedEmployees.Count" BadgeColor="Color.Error">
-            <MudTable Items="@_deletedEmployees" Dense="true" Hover="true" Striped="true" Filter="new Func<Employee, bool>(FilterEmpFunc)" Loading="@_isLoading">
+            <MudTable Items="@_deletedEmployees" Dense="true" Hover="true" Striped="true" Filter="new Func<DeletedEmployeeItem, bool>(FilterEmpFunc)" Loading="@_isLoading">
                 <ToolBarContent>
                     <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة الموظفين في السلة</MudText>
                     <MudSpacer />
-                    <MudTextField @bind-Value="_searchEmpString" Placeholder="بحث باسم الموظف أو رقم الإضبارة..." Adornment="Adornment.Start"
+                    <MudTextField @bind-Value="_searchEmpString" Placeholder="بحث باسم الموظف، رقم الإضبارة، الحاذف..." Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
                 </ToolBarContent>
                 <HeaderContent>
                     <MudTh>رقم الإضبارة</MudTh>
                     <MudTh>اسم الموظف</MudTh>
+                    <MudTh>سبب الحذف</MudTh>
+                    <MudTh>حُذف بواسطة</MudTh>
                     <MudTh>تاريخ الحذف</MudTh>
                     <MudTh Style="text-align: center;">الإجراءات</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="رقم الإضبارة" Class="fw-bold">@context.FileNumber</MudTd>
-                    <MudTd DataLabel="اسم الموظف">@context.EmployeeName</MudTd>
+                    <MudTd DataLabel="رقم الإضبارة" Class="fw-bold">@context.Emp.FileNumber</MudTd>
+                    <MudTd DataLabel="اسم الموظف">@context.Emp.EmployeeName</MudTd>
+                    <MudTd DataLabel="سبب الحذف">
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                            @(string.IsNullOrWhiteSpace(context.Emp.DeleteReason) ? "لم يذكر سبب" : context.Emp.DeleteReason)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="حُذف بواسطة">
+                        <MudChip T="string" Color="Color.Dark" Size="Size.Small" Variant="Variant.Outlined">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="me-1" />
+                            @context.DeletedByUserName
+                        </MudChip>
+                    </MudTd>
                     <MudTd DataLabel="تاريخ الحذف">
-                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">@context.DeletedAt</MudChip>
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">
+                            @(context.Emp.DeletedAt?.ToString("yyyy/MM/dd") ?? "-")
+                        </MudChip>
                     </MudTd>
                     <MudTd Style="text-align: center;">
                         <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreEmployee(context))" Class="me-2">
+                                   StartIcon="@Icons.Material.Filled.Restore" OnClick="@(() => RestoreEmployee(context.Emp))" Class="me-2">
                             استعادة
                         </MudButton>
                         <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteEmployee(context))">
+                                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="@(() => HardDeleteEmployee(context.Emp))">
                             حذف نهائي
                         </MudButton>
                     </MudTd>
@@ -111,15 +245,43 @@
 </div>
 
 @code {
-    private List<Document> _deletedDocuments = new();
-    private List<Employee> _deletedEmployees = new();
+    public class FullDeletedDocItem
+    {
+        public Document Doc { get; set; } = new();
+        public List<string> EmployeeNames { get; set; } = new();
+        public string DeletedByUserName { get; set; } = "غير محدد";
+    }
+
+    public class SingleDeletedLinkItem
+    {
+        public int DocumentEmployeeId { get; set; }
+        public int DocumentId { get; set; }
+        public int EmployeeId { get; set; }
+        public string EmployeeName { get; set; } = string.Empty;
+        public string DocumentNumber { get; set; } = string.Empty;
+        public DateTime? DocumentDate { get; set; }
+        public string Subject { get; set; } = string.Empty;
+        public string? DeleteReason { get; set; }
+        public string DeletedByUserName { get; set; } = "غير محدد";
+        public DateTime? DeletedAt { get; set; }
+    }
+
+    public class DeletedEmployeeItem
+    {
+        public Employee Emp { get; set; } = new();
+        public string DeletedByUserName { get; set; } = "غير محدد";
+    }
+
+    private List<FullDeletedDocItem> _deletedDocuments = new();
+    private List<SingleDeletedLinkItem> _singleDeletedLinks = new();
+    private List<DeletedEmployeeItem> _deletedEmployees = new();
     private bool _isLoading = false;
     private string _searchDocString = string.Empty;
+    private string _searchSingleString = string.Empty;
     private string _searchEmpString = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        // حماية الصفحة: مقتصرة حصرياً على مدير النظام
         if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
         {
             Snackbar.Add("عذراً، الوصول إلى سلة المحذوفات مقتصر على مدير النظام فقط!", Severity.Error);
@@ -135,18 +297,102 @@
         _isLoading = true;
         try
         {
-            // تجاوز الفلتر العام وجلب العناصر المحذوفة فقط
-            _deletedDocuments = await DbContext.Documents
+            // خريطة المستخدمين لتحويل UserId إلى الاسم الظاهر
+            var usersMap = await DbContext.Users
+                .AsNoTracking()
+                .ToDictionaryAsync(u => u.UserId, u => string.IsNullOrWhiteSpace(u.FullName) ? u.UserName : u.FullName);
+
+            // خريطة أسماء الموظفين مع كسر الفلتر العام
+            var empsMap = await DbContext.Employees
                 .IgnoreQueryFilters()
+                .AsNoTracking()
+                .ToDictionaryAsync(e => e.EmployeeId, e => e.EmployeeName);
+
+            // 1. المستندات المحذوفة كلياً
+            var rawDeletedDocs = await DbContext.Documents
+                .IgnoreQueryFilters()
+                .AsNoTracking()
                 .Where(d => d.IsDeleted == 1)
                 .OrderByDescending(d => d.DeletedAt)
                 .ToListAsync();
 
-            _deletedEmployees = await DbContext.Employees
+            var docIds = rawDeletedDocs.Select(d => d.DocumentId).ToList();
+
+            // روابط المستندات لمعرفة أصحاب الإضابير
+            var docLinks = await DbContext.DocumentEmployees
                 .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(de => docIds.Contains(de.DocumentId))
+                .ToListAsync();
+
+            // تجميع الأسماء كقائمة List<string> لكل كتاب
+            var docToEmpList = docLinks
+                .GroupBy(l => l.DocumentId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => empsMap.TryGetValue(x.EmployeeId, out var name) ? name : $"#{x.EmployeeId}").Distinct().ToList()
+                );
+
+            _deletedDocuments = rawDeletedDocs.Select(d => new FullDeletedDocItem
+            {
+                Doc = d,
+                EmployeeNames = docToEmpList.TryGetValue(d.DocumentId, out var empList) ? empList : new List<string>(),
+                DeletedByUserName = d.DeletedBy.HasValue && usersMap.TryGetValue(d.DeletedBy.Value, out var uName) ? uName : (SessionService.CurrentUser?.UserName ?? "المدير")
+            }).ToList();
+
+            // 2. المستندات المفكوكة فردياً (المستند حي IsDeleted == 0 ولكن رابطه بهذا الموظف محذوف IsDeleted == 1)
+            var allDeletedLinks = await DbContext.DocumentEmployees
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(de => de.IsDeleted == 1)
+                .ToListAsync();
+
+            if (allDeletedLinks.Any())
+            {
+                var singleDocIds = allDeletedLinks.Select(l => l.DocumentId).Distinct().ToList();
+
+                var activeDocs = await DbContext.Documents
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(d => singleDocIds.Contains(d.DocumentId) && d.IsDeleted == 0)
+                    .ToDictionaryAsync(d => d.DocumentId, d => d);
+
+                _singleDeletedLinks = allDeletedLinks
+                    .Where(l => activeDocs.ContainsKey(l.DocumentId) && empsMap.ContainsKey(l.EmployeeId))
+                    .Select(l => new SingleDeletedLinkItem
+                    {
+                        DocumentEmployeeId = l.DocumentEmployeeId,
+                        DocumentId = l.DocumentId,
+                        EmployeeId = l.EmployeeId,
+                        EmployeeName = empsMap[l.EmployeeId],
+                        DocumentNumber = activeDocs[l.DocumentId].DocumentNumber,
+                        DocumentDate = activeDocs[l.DocumentId].DocumentDate,
+                        Subject = activeDocs[l.DocumentId].Subject,
+                        DeleteReason = l.DeleteReason,
+                        DeletedByUserName = l.DeletedBy.HasValue && usersMap.TryGetValue(l.DeletedBy.Value, out var uName) ? uName : (SessionService.CurrentUser?.UserName ?? "المدير"),
+                        DeletedAt = l.DeletedAt
+                    })
+                    .OrderByDescending(x => x.DeletedAt)
+                    .ToList();
+            }
+            else
+            {
+                _singleDeletedLinks.Clear();
+            }
+
+            // 3. الموظفون المحذوفون
+            var rawDeletedEmps = await DbContext.Employees
+                .IgnoreQueryFilters()
+                .AsNoTracking()
                 .Where(e => e.IsDeleted == 1)
                 .OrderByDescending(e => e.DeletedAt)
                 .ToListAsync();
+
+            _deletedEmployees = rawDeletedEmps.Select(e => new DeletedEmployeeItem
+            {
+                Emp = e,
+                DeletedByUserName = e.DeletedBy.HasValue && usersMap.TryGetValue(e.DeletedBy.Value, out var uName) ? uName : (SessionService.CurrentUser?.UserName ?? "المدير")
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -159,27 +405,47 @@
     }
 
     // ==========================================
-    // إجراءات المستندات (استعادة / حذف نهائي)
+    // إجراءات المستندات الكلية
     // ==========================================
 
     private async Task RestoreDocument(Document doc)
     {
         try
         {
-            doc.IsDeleted = 0;
-            doc.DeletedAt = null;
+            var docDb = await DbContext.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.DocumentId == doc.DocumentId);
+            if (docDb != null)
+            {
+                docDb.IsDeleted = 0;
+                docDb.DeletedAt = null;
+                docDb.DeleteReason = null;
+                docDb.DeletedBy = null;
+                DbContext.Documents.Update(docDb);
+            }
 
-            DbContext.Documents.Update(doc);
+            var links = await DbContext.DocumentEmployees
+                .IgnoreQueryFilters()
+                .Where(de => de.DocumentId == doc.DocumentId)
+                .ToListAsync();
+
+            foreach (var link in links)
+            {
+                link.IsDeleted = 0;
+                link.DeletedAt = null;
+                link.DeleteReason = null;
+                link.DeletedBy = null;
+                DbContext.DocumentEmployees.Update(link);
+            }
+
             await DbContext.SaveChangesAsync();
 
             await SessionService.LogActivityAsync(
-                actionType: "استعادة مستند",
+                actionType: "استعادة مستند كلي",
                 entityType: "مستند",
                 entityId: doc.DocumentId,
-                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) باستعادة المستند ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) من سلة المحذوفات."
+                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) باستعادة المستند ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) وإرجاعه لكافة الأضابير."
             );
 
-            _deletedDocuments.Remove(doc);
+            await LoadDeletedData();
             Snackbar.Add("تمت استعادة المستند بنجاح إلى كافة الأضابير المرتبطة به", Severity.Success);
         }
         catch (Exception ex)
@@ -203,8 +469,8 @@
             var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
             string baseFolder = settings?.BaseFolderPath ?? string.Empty;
 
-            // جلب كافة روابط المستند لمسح ملفاته الفيزيائية من مجلدات الأضابير
             var links = await DbContext.DocumentEmployees
+                .IgnoreQueryFilters()
                 .Where(de => de.DocumentId == doc.DocumentId)
                 .ToListAsync();
 
@@ -223,9 +489,13 @@
                 }
             }
 
-            // حذف سجلات الربط وسجل المستند نهائياً
             DbContext.DocumentEmployees.RemoveRange(links);
-            DbContext.Documents.Remove(doc);
+            var docDb = await DbContext.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.DocumentId == doc.DocumentId);
+            if (docDb != null)
+            {
+                DbContext.Documents.Remove(docDb);
+            }
+
             await DbContext.SaveChangesAsync();
 
             await SessionService.LogActivityAsync(
@@ -235,7 +505,7 @@
                 description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) بالحذف والإتلاف النهائي للمستند ({doc.Subject}) وملفاته الفيزيائية."
             );
 
-            _deletedDocuments.Remove(doc);
+            await LoadDeletedData();
             Snackbar.Add("تم إتلاف المستند وحذف ملفاته نهائياً من القرص والقاعدة", Severity.Success);
         }
         catch (Exception ex)
@@ -245,28 +515,122 @@
     }
 
     // ==========================================
-    // إجراءات الموظفين (استعادة / حذف نهائي)
+    // إجراءات الاستعادة والحذف الفردي لموظف محدد
+    // ==========================================
+
+    private async Task RestoreSingleLink(SingleDeletedLinkItem item)
+    {
+        try
+        {
+            var linkDb = await DbContext.DocumentEmployees.IgnoreQueryFilters().FirstOrDefaultAsync(de => de.DocumentEmployeeId == item.DocumentEmployeeId);
+            if (linkDb != null)
+            {
+                linkDb.IsDeleted = 0;
+                linkDb.DeletedAt = null;
+                linkDb.DeleteReason = null;
+                linkDb.DeletedBy = null;
+
+                DbContext.DocumentEmployees.Update(linkDb);
+                await DbContext.SaveChangesAsync();
+
+                await SessionService.LogActivityAsync(
+                    actionType: "استعادة مستند لموظف",
+                    entityType: "مستند / موظف",
+                    entityId: item.DocumentId,
+                    description: $"تمت استعادة كتاب ({item.Subject}) [رقم: {item.DocumentNumber}] إلى إضبارة الموظف ({item.EmployeeName}) بنجاح."
+                );
+
+                await LoadDeletedData();
+                Snackbar.Add($"تمت استعادة المستند إلى إضبارة ({item.EmployeeName}) بنجاح", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"فشلت الاستعادة الفردية: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HardDeleteSingleLink(SingleDeletedLinkItem item)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد الحذف النهائي من إضبارة الموظف",
+            $"تحذير:\nأنت على وشك حذف قيد ربط الكتاب (رقم: {item.DocumentNumber} - {item.Subject}) بإضبارة الموظف ({item.EmployeeName}) نهائياً.\nسيتم مسح الملف من مجلد الموظف ولن يمكن استعادته لهذا الموظف مجدداً.\n\n(ملاحظة: إذا كان الكتاب مرتبطاً بموظفين آخرين فسيظل محفوظاً لديهم ويعمل بشكل طبيعي دون أي تأثر).\n\nهل ترغب بالمتابعة؟",
+            yesText: "نعم، حذف نهائي",
+            cancelText: "إلغاء");
+
+        if (confirm != true) return;
+
+        try
+        {
+            var linkDb = await DbContext.DocumentEmployees
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(de => de.DocumentEmployeeId == item.DocumentEmployeeId);
+
+            if (linkDb != null)
+            {
+                // مسح الملف الفيزيائي من مجلد الموظف المعني فقط
+                var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+                string baseFolder = settings?.BaseFolderPath ?? string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(baseFolder) && !string.IsNullOrWhiteSpace(linkDb.EmployeeFilePath))
+                {
+                    string fullPath = Path.Combine(baseFolder, linkDb.EmployeeFilePath);
+                    if (File.Exists(fullPath))
+                    {
+                        try { File.Delete(fullPath); } catch { }
+                    }
+                }
+
+                // حذف سجل الارتباط الفردي فقط من قاعدة البيانات دون المساس بسجل الكتاب الأصلي
+                DbContext.DocumentEmployees.Remove(linkDb);
+                await DbContext.SaveChangesAsync();
+
+                await SessionService.LogActivityAsync(
+                    actionType: "إتلاف ارتباط مستند نهائي",
+                    entityType: "مستند / موظف",
+                    entityId: item.DocumentId,
+                    description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) بالحذف والإتلاف النهائي لقيد كتاب ({item.Subject}) [رقم: {item.DocumentNumber}] من إضبارة الموظف ({item.EmployeeName}) فقط."
+                );
+
+                await LoadDeletedData();
+                Snackbar.Add($"تم إتلاف القيد وحذفه نهائياً من إضبارة ({item.EmployeeName}) وبقاء الكتاب لباقي الموظفين", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"حدث خطأ أثناء الحذف النهائي: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // ==========================================
+    // إجراءات الموظفين
     // ==========================================
 
     private async Task RestoreEmployee(Employee emp)
     {
         try
         {
-            emp.IsDeleted = 0;
-            emp.DeletedAt = null;
+            var empDb = await DbContext.Employees.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.EmployeeId == emp.EmployeeId);
+            if (empDb != null)
+            {
+                empDb.IsDeleted = 0;
+                empDb.DeletedAt = null;
+                empDb.DeleteReason = null;
+                empDb.DeletedBy = null;
 
-            DbContext.Employees.Update(emp);
-            await DbContext.SaveChangesAsync();
+                DbContext.Employees.Update(empDb);
+                await DbContext.SaveChangesAsync();
 
-            await SessionService.LogActivityAsync(
-                actionType: "استعادة موظف",
-                entityType: "موظف",
-                entityId: emp.EmployeeId,
-                description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) باستعادة إضبارة الموظف ({emp.EmployeeName}) من سلة المحذوفات."
-            );
+                await SessionService.LogActivityAsync(
+                    actionType: "استعادة موظف",
+                    entityType: "موظف",
+                    entityId: emp.EmployeeId,
+                    description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) باستعادة إضبارة الموظف ({emp.EmployeeName}) من سلة المحذوفات."
+                );
 
-            _deletedEmployees.Remove(emp);
-            Snackbar.Add($"تمت استعادة إضبارة الموظف ({emp.EmployeeName}) بنجاح", Severity.Success);
+                await LoadDeletedData();
+                Snackbar.Add($"تمت استعادة إضبارة الموظف ({emp.EmployeeName}) بنجاح", Severity.Success);
+            }
         }
         catch (Exception ex)
         {
@@ -296,8 +660,12 @@
                 }
             }
 
-            DbContext.Employees.Remove(emp);
-            await DbContext.SaveChangesAsync();
+            var empDb = await DbContext.Employees.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.EmployeeId == emp.EmployeeId);
+            if (empDb != null)
+            {
+                DbContext.Employees.Remove(empDb);
+                await DbContext.SaveChangesAsync();
+            }
 
             await SessionService.LogActivityAsync(
                 actionType: "إتلاف موظف نهائي",
@@ -306,7 +674,7 @@
                 description: $"قام مدير النظام ({SessionService.CurrentUser?.UserName}) بحذف إضبارة الموظف ({emp.EmployeeName}) ومجلدها الفيزيائي نهائياً."
             );
 
-            _deletedEmployees.Remove(emp);
+            await LoadDeletedData();
             Snackbar.Add($"تم إتلاف إضبارة الموظف ({emp.EmployeeName}) ومجلدها نهائياً", Severity.Success);
         }
         catch (Exception ex)
@@ -315,9 +683,26 @@
         }
     }
 
-    // دوال فلترة البحث في الجداول
-    private bool FilterDocFunc(Document doc) => Filter(doc.DocumentNumber, _searchDocString) || Filter(doc.Subject, _searchDocString);
-    private bool FilterEmpFunc(Employee emp) => Filter(emp.EmployeeName, _searchEmpString) || Filter(emp.FileNumber, _searchEmpString);
+    // دوال الفلترة
+    private bool FilterFullDocFunc(FullDeletedDocItem item) =>
+        Filter(item.Doc.DocumentNumber, _searchDocString) ||
+        Filter(item.Doc.Subject, _searchDocString) ||
+        item.EmployeeNames.Any(name => Filter(name, _searchDocString)) ||
+        Filter(item.Doc.DeleteReason, _searchDocString) ||
+        Filter(item.DeletedByUserName, _searchDocString);
+
+    private bool FilterSingleLinkFunc(SingleDeletedLinkItem item) =>
+        Filter(item.EmployeeName, _searchSingleString) ||
+        Filter(item.DocumentNumber, _searchSingleString) ||
+        Filter(item.Subject, _searchSingleString) ||
+        Filter(item.DeleteReason, _searchSingleString) ||
+        Filter(item.DeletedByUserName, _searchSingleString);
+
+    private bool FilterEmpFunc(DeletedEmployeeItem item) =>
+        Filter(item.Emp.EmployeeName, _searchEmpString) ||
+        Filter(item.Emp.FileNumber, _searchEmpString) ||
+        Filter(item.Emp.DeleteReason, _searchEmpString) ||
+        Filter(item.DeletedByUserName, _searchEmpString);
 
     private bool Filter(string? field, string search)
     {

@@ -21,6 +21,14 @@
     <!-- 2. محتوى الحقول والصلاحيات -->
     <DialogContent>
         <div class="px-5 py-3">
+            <!-- الاسم الكامل -->
+            <div class="mb-3">
+                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">الاسم الكامل (اختياري)</MudText>
+                <MudTextField @bind-Value="UserToEdit.FullName"
+                              Placeholder="اسم الموظف أو المستخدم الثلاثي"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+            </div>
 
             <!-- اسم المستخدم -->
             <div class="mb-3">
@@ -30,15 +38,6 @@
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Immediate="true" />
-            </div>
-
-            <!-- الاسم الكامل -->
-            <div class="mb-3">
-                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">الاسم الكامل (اختياري)</MudText>
-                <MudTextField @bind-Value="UserToEdit.FullName"
-                              Placeholder="اسم الموظف أو المستخدم الثلاثي"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense" />
             </div>
 
             <!-- كلمة المرور -->

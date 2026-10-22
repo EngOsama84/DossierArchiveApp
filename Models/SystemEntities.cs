@@ -72,4 +72,8 @@ public class SystemSetting
 
     [Column("KeepAuditLog")]
     public int KeepAuditLog { get; set; } = 1;
+    [NotMapped]
+    public string DisplayLogoPath => string.IsNullOrWhiteSpace(LogoPath)
+        ? "images/default_logo.png"
+        : LogoPath;
 }
