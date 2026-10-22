@@ -2,7 +2,9 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
+@using System.IO
 @using System.Globalization
+@using System.Text.RegularExpressions
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
@@ -369,7 +371,6 @@
     private int? _selectedTertiaryCatId;
     private bool _isTertiaryEnabled = false;
 
-    // 1. خريطة علاقات: التصنيف الرئيسي -> قائمة التصنيفات الفرعية الأولى المسموحة
     private readonly Dictionary<string, string[]> _primaryToSecondaryMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["أمر إداري"] = new[] { "مباشرة", "انفكاك", "علاوة", "ترفيع", "شكر", "عقوبة", "لجنة", "تكليف", "تنسيب", "ترشيح", "تقييم", "احتساب", "إضافة", "إعفاء", "دورة", "غير ذلك" },
@@ -378,13 +379,11 @@
         ["اعتيادية"] = new[] { "مخاطبات", "تبليغ", "استدعاء", "نتيجة", "غير ذلك" }
     };
 
-    // 2. قوائم عناصر الفرعي الثاني حسب نوع الفرعي الأول
     private readonly string[] _tertiaryForEnfakak = new[] { "دورة", "مؤتمر", "ورشة", "إجازة", "نقل", "تنسيب", "تقاعد", "تكليف", "غير ذلك" };
     private readonly string[] _tertiaryForEhtisab = new[] { "شهادة", "خدمة", "علاوة", "ترفيع", "شكر", "غير ذلك" };
     private readonly string[] _tertiaryForTakleef = new[] { "منصب", "لجنة", "مهام", "تنسيب", "تكليف", "غير ذلك" };
     private readonly string[] _tertiaryForTarsheeh = new[] { "دورة", "مؤتمر", "ورشة", "تكليف", "لجنة", "غير ذلك" };
 
-    // 3. قائمة اللجان الرسمية
     private readonly List<string> _iraqiCommittees = new()
     {
         "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
@@ -452,7 +451,6 @@
                 _selectedSecondaryCatId = _document.SecondaryCategoryId;
                 _selectedTertiaryCatId = _document.TertiaryCategoryId;
 
-                // إعداد القوائم الابتدائية استناداً إلى بيانات المستند المخزنة
                 if (_selectedMainCatId.HasValue)
                 {
                     _availablePrimaryCategories = _allPrimaryCategories
@@ -627,12 +625,21 @@
         }
     }
 
+    // استخراج رقم وتاريخ وموضوع الكتاب ذكياً عند اختيار ملف PDF بديل من الحاسوب
     private async Task OnNewPdfSelected(IBrowserFile file)
     {
         if (file == null) return;
 
         try
         {
+            // استخراج وتعبئة البيانات من اسم الملف تلقائياً
+            string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
+            var parsed = ParseFileNameUltra(fileNameWithoutExt);
+
+            _documentNumber = parsed.DocNum;
+            _subject = parsed.Subject;
+            _documentDate = parsed.DocDate ?? DateTime.Today;
+
             using var ms = new MemoryStream();
             await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(ms);
             _newReplacementBytes = ms.ToArray();
@@ -649,12 +656,116 @@
                 "application/pdf"
             );
 
-            Snackbar.Add("تم تحميل الملف البديل للمعاينة. سيتم استبدال الملف نهائياً عند الضغط على حفظ التعديلات.", Severity.Info);
+            Snackbar.Add("تم تحميل الملف البديل واستخراج رقم وتاريخ وموضوع الكتاب بنجاح!", Severity.Success);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"تعذر قراءة الملف البديل: {ex.Message}", Severity.Error);
         }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    // دالة التحليل الذكي الفائقة
+    private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameUltra(string rawName)
+    {
+        string name = rawName.Trim();
+        DateTime? detectedDate = null;
+
+        var dateRegex = new Regex(@"(?:^|[\s\-_])(\d{1,2}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*(?:19|20)\d{2})(?:$|[\s\-_])");
+        var match = dateRegex.Match(name);
+
+        if (match.Success)
+        {
+            string rawDateStr = match.Groups[1].Value;
+            string cleanDate = Regex.Replace(rawDateStr, @"\s+", "").Replace('/', '-').Replace('.', '-');
+            string[] formats = { "d-M-yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd-M-yyyy", "d-MM-yyyy" };
+
+            if (DateTime.TryParseExact(cleanDate, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                detectedDate = dt;
+            }
+
+            name = name.Remove(match.Index, match.Length).Trim();
+        }
+        else
+        {
+            var isoRegex = new Regex(@"(?:^|[\s\-_])((?:19|20)\d{2}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*\d{1,2})(?:$|[\s\-_])");
+            var isoMatch = isoRegex.Match(name);
+            if (isoMatch.Success)
+            {
+                string rawDateStr = isoMatch.Groups[1].Value;
+                string cleanDate = Regex.Replace(rawDateStr, @"\s+", "").Replace('/', '-').Replace('.', '-');
+                if (DateTime.TryParseExact(cleanDate, new[] { "yyyy-M-d", "yyyy-MM-dd" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtIso))
+                {
+                    detectedDate = dtIso;
+                }
+                name = name.Remove(isoMatch.Index, isoMatch.Length).Trim();
+            }
+        }
+
+        name = name.Trim('-', '_', ' ');
+
+        string docNum = string.Empty;
+        string subject = string.Empty;
+
+        var parts = name.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+
+        if (parts.Count == 0)
+        {
+            docNum = "1";
+            subject = "مستند";
+        }
+        else if (parts.Count == 1)
+        {
+            string single = parts[0];
+            var numMatch = Regex.Match(single, @"\b\d+\b");
+            if (numMatch.Success)
+            {
+                docNum = numMatch.Value;
+                subject = single.Replace(numMatch.Value, "").Trim();
+            }
+            else
+            {
+                subject = single;
+                docNum = "1";
+            }
+        }
+        else
+        {
+            int numIndex = parts.FindIndex(p => Regex.IsMatch(p, @"^\d+$"));
+            if (numIndex != -1)
+            {
+                docNum = parts[numIndex];
+                var subParts = parts.Where((p, i) => i != numIndex);
+                subject = string.Join(" - ", subParts);
+            }
+            else
+            {
+                int mixedIndex = parts.FindIndex(p => Regex.IsMatch(p, @"\d+"));
+                if (mixedIndex != -1)
+                {
+                    var m = Regex.Match(parts[mixedIndex], @"\d+");
+                    docNum = m.Value;
+                    parts[mixedIndex] = parts[mixedIndex].Replace(docNum, "").Trim();
+                    subject = string.Join(" - ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+                }
+                else
+                {
+                    docNum = parts[0];
+                    subject = string.Join(" - ", parts.Skip(1));
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(subject)) subject = "مستند مؤرشف";
+        if (string.IsNullOrWhiteSpace(docNum)) docNum = "1";
+
+        return (docNum.Trim(), subject.Trim(), detectedDate ?? DateTime.Today);
     }
 
     private async Task StartScannerReplacement()
@@ -727,7 +838,6 @@
             _selectedEmployeeIds.Add(empId);
     }
 
-    // 1. عند تغيير نوع الكتاب
     private void OnMainCategoryChanged(int? mainId)
     {
         _selectedMainCatId = mainId;
@@ -752,7 +862,6 @@
         StateHasChanged();
     }
 
-    // 2. عند تغيير التصنيف الرئيسي: تصفية الفرعي الأول طبقاً للهيكلية المحددة
     private void OnPrimaryCategoryChanged(int? primId)
     {
         _selectedPrimaryCatId = primId;
@@ -773,7 +882,6 @@
         StateHasChanged();
     }
 
-    // 3. عند تغيير التصنيف الفرعي الأول: تصفية الفرعي الثاني بدقة
     private void OnSecondaryCategoryChanged(int? secId)
     {
         _selectedSecondaryCatId = secId;
@@ -985,7 +1093,7 @@
             // 4. تحديث سجل المستند الرئيسي
             _document.Subject = _subject.Trim();
             _document.DocumentNumber = _documentNumber.Trim();
-            _document.DocumentDate = _documentDate;
+            _documentDate = _documentDate;
             _document.StoredFileName = newFileName;
             if (_newReplacementBytes != null && !string.IsNullOrEmpty(_replacementFileName))
             {

@@ -3,7 +3,9 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
+@using System.IO
 @using System.Globalization
+@using System.Text.RegularExpressions
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
@@ -382,7 +384,6 @@
     private int? _selectedTertiaryCatId;
     private bool _isTertiaryEnabled = false;
 
-    // 1. تعريف خريطة علاقات: التصنيف الرئيسي -> قائمة التصنيفات الفرعية الأولى
     private readonly Dictionary<string, string[]> _primaryToSecondaryMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["أمر إداري"] = new[] { "مباشرة", "انفكاك", "علاوة", "ترفيع", "شكر", "عقوبة", "لجنة", "تكليف", "تنسيب", "ترشيح", "تقييم", "احتساب", "إضافة", "إعفاء", "دورة", "غير ذلك" },
@@ -391,13 +392,11 @@
         ["اعتيادية"] = new[] { "مخاطبات", "تبليغ", "استدعاء", "نتيجة", "غير ذلك" }
     };
 
-    // 2. قوائم عناصر الفرعي الثاني حسب نوع الفرعي الأول
     private readonly string[] _tertiaryForEnfakak = new[] { "دورة", "مؤتمر", "ورشة", "إجازة", "نقل", "تنسيب", "تقاعد", "تكليف", "غير ذلك" };
     private readonly string[] _tertiaryForEhtisab = new[] { "شهادة", "خدمة", "علاوة", "ترفيع", "شكر", "غير ذلك" };
     private readonly string[] _tertiaryForTakleef = new[] { "منصب", "لجنة", "مهام", "تنسيب", "تكليف", "غير ذلك" };
     private readonly string[] _tertiaryForTarsheeh = new[] { "دورة", "مؤتمر", "ورشة", "تكليف", "لجنة", "غير ذلك" };
 
-    // 3. قائمة اللجان الرسمية
     private readonly List<string> _iraqiCommittees = new()
     {
         "تحقيقية", "تدقيقية", "فتح وتحليل العطاءات", "استلام وإنجاز",
@@ -496,7 +495,6 @@
             _selectedEmployeeIds.Add(empId);
     }
 
-    // 1. عند تغيير نوع الكتاب (وارد / صادر)
     private void OnMainCategoryChanged(int? mainId)
     {
         _selectedMainCatId = mainId;
@@ -520,7 +518,6 @@
         StateHasChanged();
     }
 
-    // 2. عند تغيير التصنيف الرئيسي: تصفية الفرعي الأول طبقاً للهيكلية المحددة
     private void OnPrimaryCategoryChanged(int? primId)
     {
         _selectedPrimaryCatId = primId;
@@ -533,10 +530,8 @@
             var primCat = _allPrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == primId.Value);
             string primName = primCat?.Name?.Trim() ?? string.Empty;
 
-            // جلب عناصر الفرعي الأول المرتبطة بهذا الرئيسي من قاعدة البيانات
             var dbList = _allSecondaryCategories.Where(s => s.PrimaryCategoryId == primId.Value).ToList();
 
-            // فحص المطابقة مع الهيكلية المحددة
             string? matchedKey = _primaryToSecondaryMap.Keys.FirstOrDefault(k => primName.Contains(k));
             if (matchedKey != null)
             {
@@ -544,14 +539,12 @@
 
                 if (dbList.Any())
                 {
-                    // ترتيب وتصفية المسجل بالقاعدة وفق المسموح
                     _availableSecondaryCategories = dbList
                         .Where(s => allowedSecNames.Any(a => s.Name.Trim().Contains(a)))
                         .OrderBy(s => Array.IndexOf(allowedSecNames, allowedSecNames.FirstOrDefault(a => s.Name.Trim().Contains(a))))
                         .ToList();
                 }
 
-                // إذا كانت القاعدة لا تحتوي على كل العناصر، نولّد الناقص منها برمجياً
                 if (!_availableSecondaryCategories.Any())
                 {
                     int vId = -200;
@@ -577,7 +570,6 @@
         StateHasChanged();
     }
 
-    // 3. عند تغيير التصنيف الفرعي الأول: تصفية وتحديد الفرعي الثاني بدقة تامة
     private void OnSecondaryCategoryChanged(int? secId)
     {
         _selectedSecondaryCatId = secId;
@@ -592,37 +584,31 @@
 
             string secName = secCat?.Name?.Trim() ?? string.Empty;
 
-            // أ) انفكاك
             if (secName.Contains("انفكاك"))
             {
                 _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForEnfakak);
                 _isTertiaryEnabled = true;
             }
-            // ب) احتساب أو إضافة
             else if (secName.Contains("احتساب") || secName.Contains("إضافة") || secName.Contains("اضافة"))
             {
                 _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForEhtisab);
                 _isTertiaryEnabled = true;
             }
-            // ج) تكليف أو إعفاء
             else if (secName.Contains("تكليف") || secName.Contains("إعفاء") || secName.Contains("اعفاء"))
             {
                 _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForTakleef);
                 _isTertiaryEnabled = true;
             }
-            // د) ترشيح
             else if (secName.Contains("ترشيح"))
             {
                 _availableTertiaryCategories = BuildTertiaryList(secId.Value, _tertiaryForTarsheeh);
                 _isTertiaryEnabled = true;
             }
-            // هـ) لجنة (لجان التحقيق والتدقيق المعتمدة)
             else if (secName.Contains("لجنة"))
             {
                 _availableTertiaryCategories = BuildTertiaryList(secId.Value, _iraqiCommittees.ToArray());
                 _isTertiaryEnabled = true;
             }
-            // و) أي فرعي أول آخر: يتم إغلاق وتعطيل الفرعي الثاني لعدم الحاجة إليه
             else
             {
                 _isTertiaryEnabled = false;
@@ -633,7 +619,6 @@
         StateHasChanged();
     }
 
-    // دالة مساعدة لتجهيز قائمة الفرعي الثاني بمطابقة قاعدة البيانات والتوليد الذكي
     private List<TertiaryCategory> BuildTertiaryList(int secId, string[] definedNames)
     {
         var result = new List<TertiaryCategory>();
@@ -660,6 +645,7 @@
         return result;
     }
 
+    // استخراج رقم وتاريخ وموضوع الكتاب ذكياً عند اختيار ملف PDF من الحاسوب
     private async Task OnPdfFileSelected(IBrowserFile file)
     {
         if (file == null) return;
@@ -668,6 +654,14 @@
         {
             _selectedFile = file;
             _finalExtension = Path.GetExtension(file.Name).ToLower();
+
+            // تطبيق التحليل الذكي على اسم الملف المختار وحقن البيانات تلقائياً
+            string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
+            var parsed = ParseFileNameUltra(fileNameWithoutExt);
+
+            _documentNumber = parsed.DocNum;
+            _subject = parsed.Subject;
+            _documentDate = parsed.DocDate ?? DateTime.Today;
 
             using var memoryStream = new MemoryStream();
             await file.OpenReadStream(50 * 1024 * 1024).CopyToAsync(memoryStream);
@@ -684,12 +678,116 @@
                 "application/pdf"
             );
 
-            Snackbar.Add("تم تحميل الملف للمعاينة بنجاح", Severity.Success);
+            Snackbar.Add("تم تحميل الملف واستخراج رقم وتاريخ وموضوع الكتاب بنجاح!", Severity.Success);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"خطأ أثناء قراءة الملف: {ex.Message}", Severity.Error);
         }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    // دالة التحليل الذكي المعتمدة في الأرشفة المجمعة
+    private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameUltra(string rawName)
+    {
+        string name = rawName.Trim();
+        DateTime? detectedDate = null;
+
+        var dateRegex = new Regex(@"(?:^|[\s\-_])(\d{1,2}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*(?:19|20)\d{2})(?:$|[\s\-_])");
+        var match = dateRegex.Match(name);
+
+        if (match.Success)
+        {
+            string rawDateStr = match.Groups[1].Value;
+            string cleanDate = Regex.Replace(rawDateStr, @"\s+", "").Replace('/', '-').Replace('.', '-');
+            string[] formats = { "d-M-yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd-M-yyyy", "d-MM-yyyy" };
+
+            if (DateTime.TryParseExact(cleanDate, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                detectedDate = dt;
+            }
+
+            name = name.Remove(match.Index, match.Length).Trim();
+        }
+        else
+        {
+            var isoRegex = new Regex(@"(?:^|[\s\-_])((?:19|20)\d{2}\s*[\-\/\.]\s*\d{1,2}\s*[\-\/\.]\s*\d{1,2})(?:$|[\s\-_])");
+            var isoMatch = isoRegex.Match(name);
+            if (isoMatch.Success)
+            {
+                string rawDateStr = isoMatch.Groups[1].Value;
+                string cleanDate = Regex.Replace(rawDateStr, @"\s+", "").Replace('/', '-').Replace('.', '-');
+                if (DateTime.TryParseExact(cleanDate, new[] { "yyyy-M-d", "yyyy-MM-dd" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtIso))
+                {
+                    detectedDate = dtIso;
+                }
+                name = name.Remove(isoMatch.Index, isoMatch.Length).Trim();
+            }
+        }
+
+        name = name.Trim('-', '_', ' ');
+
+        string docNum = string.Empty;
+        string subject = string.Empty;
+
+        var parts = name.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+
+        if (parts.Count == 0)
+        {
+            docNum = "1";
+            subject = "مستند";
+        }
+        else if (parts.Count == 1)
+        {
+            string single = parts[0];
+            var numMatch = Regex.Match(single, @"\b\d+\b");
+            if (numMatch.Success)
+            {
+                docNum = numMatch.Value;
+                subject = single.Replace(numMatch.Value, "").Trim();
+            }
+            else
+            {
+                subject = single;
+                docNum = "1";
+            }
+        }
+        else
+        {
+            int numIndex = parts.FindIndex(p => Regex.IsMatch(p, @"^\d+$"));
+            if (numIndex != -1)
+            {
+                docNum = parts[numIndex];
+                var subParts = parts.Where((p, i) => i != numIndex);
+                subject = string.Join(" - ", subParts);
+            }
+            else
+            {
+                int mixedIndex = parts.FindIndex(p => Regex.IsMatch(p, @"\d+"));
+                if (mixedIndex != -1)
+                {
+                    var m = Regex.Match(parts[mixedIndex], @"\d+");
+                    docNum = m.Value;
+                    parts[mixedIndex] = parts[mixedIndex].Replace(docNum, "").Trim();
+                    subject = string.Join(" - ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+                }
+                else
+                {
+                    docNum = parts[0];
+                    subject = string.Join(" - ", parts.Skip(1));
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(subject)) subject = "مستند مؤرشف";
+        if (string.IsNullOrWhiteSpace(docNum)) docNum = "1";
+
+        return (docNum.Trim(), subject.Trim(), detectedDate ?? DateTime.Today);
     }
 
     private async Task ClearPreview()
@@ -806,7 +904,6 @@
                 }
             }
 
-            // معالجة التصنيفات الفرعية الأولى والثانية إذا كانت افتراضية سالبة
             int? actualSecondaryId = _selectedSecondaryCatId;
             if (actualSecondaryId.HasValue && actualSecondaryId.Value < 0)
             {
