@@ -1,0 +1,58 @@
+﻿@using DossierArchiveApp.Models
+@inject ISnackbar Snackbar
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <div class="d-flex align-center gap-2" style="color: #1B4D3E;">
+            <MudIcon Icon="@(Department.DepartmentId == 0 ? Icons.Material.Filled.AddBusiness : Icons.Material.Filled.EditNote)" />
+            <MudText Typo="Typo.h6" Class="fw-bold">
+                @(Department.DepartmentId == 0 ? "إضافة شعبة جديدة" : "تعديل بيانات الشعبة")
+            </MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div dir="rtl" class="pa-2">
+            <MudTextField @bind-Value="Department.Name"
+                          Label="اسم الشعبة"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Required="true"
+                          Class="mb-3" />
+
+            <MudCheckBox T="int"
+                         Checked="@(Department.IsActive == 1)"
+                         CheckedChanged="@((bool val) => Department.IsActive = val ? 1 : 0)"
+                         Color="Color.Primary"
+                         Label="الشعبة نشطة وفعالة" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">إلغاء</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="Submit"
+                   Style="background-color: #1B4D3E; color: white;">
+            حفظ
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Department Department { get; set; } = new();
+
+    private void Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Department.Name))
+        {
+            Snackbar.Add("يرجى إدخال اسم الشعبة!", Severity.Warning);
+            return;
+        }
+        MudDialog.Close(DialogResult.Ok(Department));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

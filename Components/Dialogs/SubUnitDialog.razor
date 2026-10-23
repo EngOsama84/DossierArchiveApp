@@ -1,0 +1,75 @@
+﻿@using DossierArchiveApp.Models
+@inject ISnackbar Snackbar
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <div class="d-flex align-center gap-2" style="color: #1B4D3E;">
+            <MudIcon Icon="@(SubUnit.SubUnitId == 0 ? Icons.Material.Filled.AddHomeWork : Icons.Material.Filled.EditNote)" />
+            <MudText Typo="Typo.h6" Class="fw-bold">
+                @(SubUnit.SubUnitId == 0 ? "إضافة وحدة إدارية" : "تعديل بيانات الوحدة")
+            </MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div dir="rtl" class="pa-2">
+            <MudTextField @bind-Value="SubUnit.Name"
+                          Label="اسم الوحدة"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Required="true"
+                          Class="mb-3" />
+
+            <MudSelect T="int?"
+                       @bind-Value="SubUnit.DepartmentId"
+                       Label="الشعبة التابعة لها (اتركه فارغاً إذا كانت مستقلة)"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Dense="true"
+                       Clearable="true"
+                       Class="mb-3">
+                @foreach (var dept in Departments)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudCheckBox T="int"
+                         Checked="@(SubUnit.IsActive == 1)"
+                         CheckedChanged="@((bool val) => SubUnit.IsActive = val ? 1 : 0)"
+                         Color="Color.Primary"
+                         Label="الوحدة نشطة وفعالة" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">إلغاء</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="Submit"
+                   Style="background-color: #1B4D3E; color: white;">
+            حفظ
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public SubUnit SubUnit { get; set; } = new();
+
+    [Parameter]
+    public List<Department> Departments { get; set; } = new();
+
+    private void Submit()
+    {
+        if (string.IsNullOrWhiteSpace(SubUnit.Name))
+        {
+            Snackbar.Add("يرجى إدخال اسم الوحدة!", Severity.Warning);
+            return;
+        }
+        MudDialog.Close(DialogResult.Ok(SubUnit));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

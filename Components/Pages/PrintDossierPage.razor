@@ -5,8 +5,11 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
 @inject NavigationManager Navigation
+@inject UserSessionService SessionService
+@inject ISnackbar Snackbar
 
 <PageTitle>طباعة استمارة إضبارة - @(_employee?.EmployeeName ?? "")</PageTitle>
 
@@ -54,7 +57,9 @@ else if (_employee != null)
                         <div style="text-align: right; min-width: 190px;">
                             <div style="font-size: 12pt; font-weight: bold; color: #1B4D3E;">ديوان الوقف الشيعي</div>
                             <div style="font-size: 10.5pt; font-weight: bold;">@(_settings?.DirectorateName ?? "مديرية الوقف الشيعي في ديالى")</div>
-                            <div style="font-size: 9.5pt; color: #444;">@(_settings?.DepartmentName ?? "شعبة تكنولوجيا المعلومات")</div>
+                            <div style="font-size: 9.5pt; color: #1B4D3E; font-weight: 600;">
+                                @(_employee.Department?.Name ?? _settings?.DepartmentName ?? "الشعبة الإدارية والمالية")
+                            </div>
                         </div>
 
                         <div style="text-align: center;">
@@ -89,10 +94,16 @@ else if (_employee != null)
                                 <td class="val" style="font-weight: bold;">@_employee.FileNumber</td>
                             </tr>
                             <tr>
+                                <td class="lbl">الشعبة التابع لها:</td>
+                                <td class="val" style="font-weight: bold; color: #1B4D3E;">
+                                    @(_employee.Department?.Name ?? "المديرية العامة")
+                                </td>
                                 <td class="lbl">الحالة الوظيفية:</td>
                                 <td class="val">@(_employee.IsActive == 1 ? "فعال مستمر بالخدمة" : "غير فعال / متوقف")</td>
+                            </tr>
+                            <tr>
                                 <td class="lbl">إجمالي الكتب المسجلة:</td>
-                                <td class="val fw-bold" style="color: #1B4D3E;">@_allDocuments.Count كتاباً</td>
+                                <td class="val fw-bold" style="color: #1B4D3E;" colspan="3">@_allDocuments.Count كتاباً</td>
                             </tr>
                         </table>
                     }
@@ -168,6 +179,9 @@ else if (_employee != null)
 }
 
 <style>
+    /* إلزام المتصفح والطابعة بمقاس A4 والهوامش دون إطلاق تحذير CSS102 */
+    @((MarkupString)"@page { size: A 4 portrait; margin: 8 m m 12mm 8 m m 12mm; } ")
+
     body {
         margin: 0;
         padding: 0;
@@ -200,10 +214,10 @@ else if (_employee != null)
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 25px; /* مسافة واضحة بين الصفحات في وضع المعاينة */
+        gap: 25px;
     }
 
-    /* مواصفات صفحة A4 القياسية */
+    /* مواصفات صفحة A4 القياسية للعرض */
     .a4-sheet {
         background-color: white;
         width: 210mm;
@@ -328,7 +342,7 @@ else if (_employee != null)
         color: #555;
     }
 
-    /* قواعد الطباعة الصارمة */
+    /* قواعد نافذة الطباعة الفعلية */
     @@media print {
         .no-print {
             display: none !important;
@@ -360,11 +374,6 @@ else if (_employee != null)
                 break-after: avoid !important;
             }
 
-        @@page {
-            size: A4 portrait;
-            margin: 8mm 12mm 8mm 12mm;
-        }
-
         .docs-table th {
             background-color: #1B4D3E !important;
             color: white !important;
@@ -392,25 +401,53 @@ else if (_employee != null)
     {
         try
         {
-            _employee = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == EmployeeId);
-            if (_employee != null)
+            // 1. التحقق من تسجيل الدخول وصلاحية التصدير والطباعة
+            if (SessionService.CurrentUser == null || !SessionService.CanExport)
             {
-                var docIds = await DbContext.DocumentEmployees
-                    .Where(de => de.EmployeeId == EmployeeId && de.IsDeleted == 0)
-                    .Select(de => de.DocumentId)
-                    .ToListAsync();
-
-                _allDocuments = await DbContext.Documents
-                    .Where(d => docIds.Contains(d.DocumentId) && d.IsDeleted == 0)
-                    .OrderByDescending(d => d.DocumentDate)
-                    .ToListAsync();
-
-                _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
-                _mainCategories = await DbContext.MainCategories.ToListAsync();
-                _primaryCategories = await DbContext.PrimaryCategories.ToListAsync();
-
-                PaginateDocuments();
+                Snackbar.Add("عذراً، حسابك لا يمتلك صلاحية طباعة وتصدير الأضابير!", Severity.Error);
+                Navigation.NavigateTo("/employees");
+                return;
             }
+
+            // 2. التحقق من وجود الموظف وتطبيق فحص الصلاحية الإدارية
+            _employee = await DbContext.Employees
+                .Include(e => e.Department)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == EmployeeId);
+
+            if (_employee == null || !SessionService.CanAccessEmployee(_employee))
+            {
+                Snackbar.Add("عذراً، لا تمتلك الصلاحية للوصول إلى إضبارة هذا الموظف أو طباعتها!", Severity.Error);
+                Navigation.NavigateTo("/employees");
+                return;
+            }
+
+            // 3. جلب الكتب المرتبطة بالإضبارة
+            var docIds = await DbContext.DocumentEmployees
+                .AsNoTracking()
+                .Where(de => de.EmployeeId == EmployeeId && de.IsDeleted == 0)
+                .Select(de => de.DocumentId)
+                .ToListAsync();
+
+            _allDocuments = await DbContext.Documents
+                .AsNoTracking()
+                .Where(d => docIds.Contains(d.DocumentId) && d.IsDeleted == 0)
+                .OrderByDescending(d => d.DocumentDate)
+                .ToListAsync();
+
+            _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            _mainCategories = await DbContext.MainCategories.AsNoTracking().ToListAsync();
+            _primaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
+
+            PaginateDocuments();
+
+            // 4. توثيق العملية في سجل النشاطات (Audit Log)
+            await SessionService.LogActivityAsync(
+                actionType: "طباعة استمارة إضبارة",
+                entityType: "إضبارة موظف",
+                entityId: _employee.EmployeeId,
+                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بفتح استمارة فهرس إضبارة الموظف ({_employee.EmployeeName}) للطباعة وتضم ({_allDocuments.Count}) كتاباً."
+            );
         }
         finally
         {
@@ -428,7 +465,7 @@ else if (_employee != null)
             return;
         }
 
-        const int firstPageSize = 12;
+        const int firstPageSize = 11;
         const int subsequentPageSize = 18;
 
         int currentGlobalIndex = 1;

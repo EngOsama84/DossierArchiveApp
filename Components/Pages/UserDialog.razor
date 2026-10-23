@@ -1,232 +1,392 @@
-﻿@using Microsoft.EntityFrameworkCore
-@using DossierArchiveApp.Data
-@using DossierArchiveApp.Models
+﻿@using DossierArchiveApp.Models
 @using DossierArchiveApp.Services
-@inject AppDbContext DbContext
-@inject UserSessionService SessionService
 @inject ISnackbar Snackbar
+@inject UserSessionService SessionService
 
-<MudDialog DisableSidePadding="true" Style="direction: rtl; text-align: right; min-width: 460px; max-width: 520px; border-radius: 8px;">
-
-    <!-- 1. شريط العنوان -->
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true">
     <TitleContent>
-        <div class="d-flex align-center gap-2 px-4 pt-3 pb-2" style="border-bottom: 1px solid #e0e0e0;">
-            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Color="Color.Primary" Size="Size.Medium" />
-            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">
-                @(UserToEdit.UserId == 0 ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم")
-            </MudText>
+        <div class="d-flex align-center gap-2" style="color: #1B4D3E;">
+            <MudIcon Icon="@(User.UserId == 0 ? Icons.Material.Filled.PersonAdd : Icons.Material.Filled.ManageAccounts)" Size="Size.Large" />
+            <div>
+                <MudText Typo="Typo.h6" Class="fw-bold">
+                    @(User.UserId == 0 ? "إنشاء حساب مستخدم جديد" : "تعديل بيانات الحساب ومستوى الصلاحيات")
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    تحديد التبعية التنظيمية وحزم الأذونات الممنوحة للنظام
+                </MudText>
+            </div>
         </div>
     </TitleContent>
 
-    <!-- 2. محتوى الحقول والصلاحيات -->
     <DialogContent>
-        <div class="px-5 py-3">
-            <!-- الاسم الكامل -->
-            <div class="mb-3">
-                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">الاسم الكامل (اختياري)</MudText>
-                <MudTextField @bind-Value="UserToEdit.FullName"
-                              Placeholder="اسم الموظف أو المستخدم الثلاثي"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense" />
-            </div>
+        <div dir="rtl" class="pa-2">
+            <!-- 1. البيانات الأساسية -->
+            <MudGrid Spacing="2" Class="mb-3">
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="User.FullName"
+                                  Label="الاسم الكامل للمستخدم"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Badge" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="User.UserName"
+                                  Label="اسم المستخدم (لتسجيل الدخول)"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  Disabled="@(User.UserId != 0 && User.UserName.ToLower() == "admin")"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.AccountCircle" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_password"
+                                  Label="@(User.UserId == 0 ? "كلمة المرور الأولية" : "تغيير كلمة المرور (اترك الحقل فارغاً للإبقاء على الحالية)")"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Required="@(User.UserId == 0)"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Lock" />
+                </MudItem>
+            </MudGrid>
 
-            <!-- اسم المستخدم -->
-            <div class="mb-3">
-                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">اسم المستخدم للدخول *</MudText>
-                <MudTextField @bind-Value="UserToEdit.UserName"
-                              Placeholder="أدخل اسم المستخدم بالإنجليزية"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Immediate="true" />
-            </div>
+            <MudDivider Class="my-3" />
 
-            <!-- كلمة المرور -->
-            <div class="mb-3">
-                <MudText Typo="Typo.caption" Class="fw-bold mb-1 d-block text-secondary">
-                    @(UserToEdit.UserId == 0 ? "كلمة المرور *" : "كلمة المرور الجديدة")
-                </MudText>
-                <MudTextField @bind-Value="_rawPassword"
-                              Placeholder="@(UserToEdit.UserId == 0 ? "أدخل كلمة المرور" : "اتركها فارغة إذا لا ترغب بالتغيير")"
-                              InputType="InputType.Password"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense" />
-            </div>
+            <!-- 2. التبعية التنظيمية -->
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2" Style="color: #1B4D3E;">
+                <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Class="ml-1" /> التبعية الإدارية ونطاق العزل
+            </MudText>
 
-            <!-- خيار تغيير كلمة المرور عند أول دخول -->
-            <div class="mb-3">
-                <MudCheckBox T="bool"
-                             @bind-Value="UserToEdit.MustChangePassword"
-                             Color="Color.Primary"
-                             Dense="true">
-                    <span style="font-size: 0.85rem;">إلزام المستخدم بتغيير كلمة المرور عند أول تسجيل دخول</span>
-                </MudCheckBox>
-            </div>
-
-            <!-- قسم الصلاحيات -->
-            <MudPaper Outlined="true" Class="pa-3 mb-3" Style="background-color: #fafafa; border-radius: 6px;">
-                <div class="d-flex justify-space-between align-center mb-2 pb-2" style="border-bottom: 1px dashed #ccc;">
-                    <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
-                        صلاحية مدير النظام (تحكم كامل)
-                    </MudText>
-                    <MudSwitch T="bool"
-                               Value="@(UserToEdit.IsAdmin == 1)"
-                               ValueChanged="@((val) => SetAdminState(val))"
-                               Color="Color.Success" />
-                </div>
-
-                @if (UserToEdit.IsAdmin == 1)
+            <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background-color: #fbfbfb; border: 1px solid #e0e0e0; border-radius: 8px;">
+                @if (SessionService.IsSuperAdmin)
                 {
-                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-1" Style="font-size: 0.8rem;">
-                        مدير النظام يمتلك كافة صلاحيات الإضافة والتعديل والحذف والتصدير وإدارة الحسابات تلقائياً.
-                    </MudAlert>
+                    <div class="d-flex align-center justify-space-between mb-3">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="fw-bold">صلاحية مدير عام شامل (Super Admin)</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">الاطلاع الكامل والتحكم بكافة الشُعب والأضابير وتفعيل الصلاحيات كلياً</MudText>
+                        </div>
+                        <MudSwitch T="bool"
+                                   Value="@(User.IsSuperAdmin == 1)"
+                                   ValueChanged="OnSuperAdminToggled"
+                                   Color="Color.Warning" />
+                    </div>
+
+                    @if (User.IsSuperAdmin == 0)
+                    {
+                        <MudSelect T="int?"
+                                   @bind-Value="User.DepartmentId"
+                                   Label="الشعبة المخصصة للمستخدم *"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Dense="true"
+                                   Clearable="true"
+                                   HelperText="حصر رؤية الأضابير والكتب وسجلات الحركات بهذه الشعبة فقط">
+                            @foreach (var dept in Departments)
+                            {
+                                <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-1" NoIcon="false">
+                            الحساب يمتلك صلاحيات إدارة عليا شاملة لكافة أقسام وشُعب المديرية.
+                        </MudAlert>
+                    }
                 }
                 else
                 {
-                    <MudText Typo="Typo.caption" Class="fw-bold d-block mb-2 text-secondary">
-                        الصلاحيات المخصصة للنظام:
-                    </MudText>
-                    <div class="d-flex flex-column gap-1">
-                        <MudCheckBox T="bool"
-                                     Value="@(UserToEdit.CanAdd == 1)"
-                                     ValueChanged="@((val) => UserToEdit.CanAdd = val ? 1 : 0)"
-                                     Color="Color.Info"
-                                     Dense="true">
-                            <span style="font-size: 0.85rem;">صلاحية إضافة أضابير ومستندات جديدة</span>
-                        </MudCheckBox>
-
-                        <MudCheckBox T="bool"
-                                     Value="@(UserToEdit.CanEdit == 1)"
-                                     ValueChanged="@((val) => UserToEdit.CanEdit = val ? 1 : 0)"
-                                     Color="Color.Warning"
-                                     Dense="true">
-                            <span style="font-size: 0.85rem;">صلاحية تعديل بيانات الموظفين والمستندات</span>
-                        </MudCheckBox>
-
-                        <MudCheckBox T="bool"
-                                     Value="@(UserToEdit.CanDelete == 1)"
-                                     ValueChanged="@((val) => UserToEdit.CanDelete = val ? 1 : 0)"
-                                     Color="Color.Error"
-                                     Dense="true">
-                            <span style="font-size: 0.85rem;">صلاحية حذف الأضابير والمستندات</span>
-                        </MudCheckBox>
-
-                        <MudCheckBox T="bool"
-                                     Value="@(UserToEdit.CanExport == 1)"
-                                     ValueChanged="@((val) => UserToEdit.CanExport = val ? 1 : 0)"
-                                     Color="Color.Secondary"
-                                     Dense="true">
-                            <span style="font-size: 0.85rem;">صلاحية تصدير البيانات والتقارير والطباعة</span>
-                        </MudCheckBox>
+                    <!-- لمدير الشعبة: تثبيت شعبته تلقائياً وحظر تغييرها نهائياً -->
+                    <div class="pa-2 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">نطاق الشُعبة التابع لها الحساب:</MudText>
+                        <MudText Typo="Typo.body2" Class="fw-bold" Style="color: #1B4D3E;">
+                            @(!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? SessionService.CurrentDepartmentName : "الشعبة الحالية")
+                        </MudText>
+                        <MudText Typo="Typo.caption" Style="color: #666; display: block; margin-top: 2px;">
+                            * يتم حصر الحساب الجديد ضمن نطاق هذه الشعبة حصراً.
+                        </MudText>
                     </div>
                 }
             </MudPaper>
 
-            <!-- مفتاح تفعيل الحساب -->
-            <div class="d-flex justify-space-between align-center px-3 py-2 rounded" style="background-color: #f8f9fa; border: 1px solid #e9ecef;">
-                <MudText Typo="Typo.body2" Class="fw-bold">حالة الحساب</MudText>
-                <MudSwitch T="bool"
-                           Value="@(UserToEdit.IsActive == 1)"
-                           ValueChanged="@((val) => UserToEdit.IsActive = val ? 1 : 0)"
-                           Color="Color.Success"
-                           Label="@(UserToEdit.IsActive == 1 ? "مفعل" : "معطل")" />
+            <MudDivider Class="my-3" />
+
+            <!-- 3. باقة الصلاحيات التنفيذية -->
+            <div class="d-flex justify-space-between align-center mb-2">
+                <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #1B4D3E;">
+                    <MudIcon Icon="@Icons.Material.Filled.Security" Size="Size.Small" Class="ml-1" /> الصلاحيات والأذونات التشغيلية
+                </MudText>
+                @if (User.IsSuperAdmin == 0)
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick="GrantAllAllowedPermissions">
+                        تفعيل المتاح
+                    </MudButton>
+                }
             </div>
 
+            <MudGrid Spacing="2">
+                <!-- بطاقة مدير شعبة (متاحة فقط للمدير العام لتعيين مدراء للشعب) -->
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Elevation="0"
+                                  Class="@($"pa-2 d-flex justify-space-between align-center perm-card {(User.IsAdmin == 1 ? "active-card" : "")}")">
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@Icons.Material.Filled.SupervisorAccount" Color="@(User.IsAdmin == 1 ? Color.Primary : Color.Default)" />
+                                <div>
+                                    <span class="d-block fw-bold" style="font-size: 0.85rem;">مدير شُعبة</span>
+                                    <span class="text-muted" style="font-size: 0.72rem;">إدارة مستخدمي وإعدادات الشعبة</span>
+                                </div>
+                            </div>
+                            <MudSwitch T="bool"
+                                       Value="@(User.IsAdmin == 1)"
+                                       ValueChanged="OnDepartmentManagerToggled"
+                                       Disabled="@(User.IsSuperAdmin == 1)"
+                                       Color="Color.Primary" />
+                        </MudPaper>
+                    </MudItem>
+                }
+
+                <!-- بطاقة إضافة أضابير وكتب -->
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0"
+                              Class="@($"pa-2 d-flex justify-space-between align-center perm-card {(User.CanAdd == 1 ? "active-card" : "")}")">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Color="@(User.CanAdd == 1 ? Color.Success : Color.Default)" />
+                            <div>
+                                <span class="d-block fw-bold" style="font-size: 0.85rem;">إضافة أضابير وكتب</span>
+                                <span class="text-muted" style="font-size: 0.72rem;">تسجيل موظف أو كتاب جديد</span>
+                            </div>
+                        </div>
+                        <MudSwitch T="bool"
+                                   Value="@(User.CanAdd == 1)"
+                                   ValueChanged="@((bool val) => User.CanAdd = val ? 1 : 0)"
+                                   Disabled="@(User.IsSuperAdmin == 1)"
+                                   Color="Color.Success" />
+                    </MudPaper>
+                </MudItem>
+
+                <!-- بطاقة تعديل -->
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0"
+                              Class="@($"pa-2 d-flex justify-space-between align-center perm-card {(User.CanEdit == 1 ? "active-card" : "")}")">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Edit" Color="@(User.CanEdit == 1 ? Color.Info : Color.Default)" />
+                            <div>
+                                <span class="d-block fw-bold" style="font-size: 0.85rem;">تعديل البيانات</span>
+                                <span class="text-muted" style="font-size: 0.72rem;">تعديل معلومات الكتب والأضابير</span>
+                            </div>
+                        </div>
+                        <MudSwitch T="bool"
+                                   Value="@(User.CanEdit == 1)"
+                                   ValueChanged="@((bool val) => User.CanEdit = val ? 1 : 0)"
+                                   Disabled="@(User.IsSuperAdmin == 1)"
+                                   Color="Color.Info" />
+                    </MudPaper>
+                </MudItem>
+
+                <!-- بطاقة حذف -->
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0"
+                              Class="@($"pa-2 d-flex justify-space-between align-center perm-card {(User.CanDelete == 1 ? "active-card" : "")}")">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Color="@(User.CanDelete == 1 ? Color.Error : Color.Default)" />
+                            <div>
+                                <span class="d-block fw-bold" style="font-size: 0.85rem;">حذف الأضابير والكتب</span>
+                                <span class="text-muted" style="font-size: 0.72rem;">نقل السجلات إلى الأرشيف المحذوف</span>
+                            </div>
+                        </div>
+                        <MudSwitch T="bool"
+                                   Value="@(User.CanDelete == 1)"
+                                   ValueChanged="@((bool val) => User.CanDelete = val ? 1 : 0)"
+                                   Disabled="@(User.IsSuperAdmin == 1)"
+                                   Color="Color.Error" />
+                    </MudPaper>
+                </MudItem>
+
+                <!-- بطاقة تصدير وطباعة -->
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0"
+                              Class="@($"pa-2 d-flex justify-space-between align-center perm-card {(User.CanExport == 1 ? "active-card" : "")}")">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Print" Color="@(User.CanExport == 1 ? Color.Secondary : Color.Default)" />
+                            <div>
+                                <span class="d-block fw-bold" style="font-size: 0.85rem;">تصدير وطباعة</span>
+                                <span class="text-muted" style="font-size: 0.72rem;">استخراج الفهارس وتقارير PDF</span>
+                            </div>
+                        </div>
+                        <MudSwitch T="bool"
+                                   Value="@(User.CanExport == 1)"
+                                   ValueChanged="@((bool val) => User.CanExport = val ? 1 : 0)"
+                                   Disabled="@(User.IsSuperAdmin == 1)"
+                                   Color="Color.Secondary" />
+                    </MudPaper>
+                </MudItem>
+
+                <!-- بطاقة حالة الحساب (نشط) -->
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0"
+                              Class="@($"pa-2 d-flex justify-space-between align-center perm-card {(User.IsActive == 1 ? "active-card" : "")}")">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="@(User.IsActive == 1 ? Color.Dark : Color.Default)" />
+                            <div>
+                                <span class="d-block fw-bold" style="font-size: 0.85rem;">حالة الحساب</span>
+                                <span class="text-muted" style="font-size: 0.72rem;">السماح للمستخدم بالدخول</span>
+                            </div>
+                        </div>
+                        <MudSwitch T="bool"
+                                   Value="@(User.IsActive == 1)"
+                                   ValueChanged="@((bool val) => User.IsActive = val ? 1 : 0)"
+                                   Color="Color.Dark" />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
         </div>
     </DialogContent>
 
-    <!-- 3. أزرار الإجراءات -->
     <DialogActions>
-        <div class="d-flex justify-end gap-2 px-5 pb-3 w-100">
-            <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Secondary" Style="border-radius: 4px;">إلغاء</MudButton>
-            <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Style="background-color: #1B4D3E; color: white; padding: 6px 28px; border-radius: 4px; font-weight: bold;">
-                حفظ
-            </MudButton>
-        </div>
+        <MudButton OnClick="Cancel">إلغاء</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="Submit"
+                   Style="background-color: #1B4D3E; color: white; min-width: 130px; font-weight: bold;">
+            حفظ البيانات
+        </MudButton>
     </DialogActions>
-
 </MudDialog>
+
+<style>
+    .perm-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background-color: #fafafa;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .active-card {
+        border-color: #c8e6c9 !important;
+        background-color: #f1f8f5 !important;
+    }
+</style>
 
 @code {
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter]
-    public User UserToEdit { get; set; } = new();
+    public User User { get; set; } = new();
 
-    private string _rawPassword = string.Empty;
+    [Parameter]
+    public List<Department> Departments { get; set; } = new();
 
-    private void SetAdminState(bool isAdmin)
+    private string _password = string.Empty;
+
+    protected override void OnInitialized()
     {
-        UserToEdit.IsAdmin = isAdmin ? 1 : 0;
-        if (isAdmin)
+        // إذا كان المستخدم الحالي مدير شعبة وليس مديراً عاماً:
+        // تثبيت الشعبة تلقائياً ومنع خيارات السوبر أدمن
+        if (!SessionService.IsSuperAdmin)
         {
-            UserToEdit.CanAdd = 1;
-            UserToEdit.CanEdit = 1;
-            UserToEdit.CanDelete = 1;
-            UserToEdit.CanExport = 1;
+            User.IsSuperAdmin = 0;
+            User.DepartmentId = SessionService.CurrentDepartmentId;
+            User.IsAdmin = 0; // لا يستطيع منح رتبة مدير شعبة
         }
+    }
+
+    private void OnSuperAdminToggled(bool isSuper)
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        User.IsSuperAdmin = isSuper ? 1 : 0;
+        if (isSuper)
+        {
+            User.DepartmentId = null;
+            User.IsAdmin = 1;
+            User.CanAdd = 1;
+            User.CanEdit = 1;
+            User.CanDelete = 1;
+            User.CanExport = 1;
+            User.IsActive = 1;
+        }
+    }
+
+    private void OnDepartmentManagerToggled(bool isDeptManager)
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        User.IsAdmin = isDeptManager ? 1 : 0;
+        if (isDeptManager)
+        {
+            User.CanAdd = 1;
+            User.CanEdit = 1;
+            User.CanDelete = 1;
+            User.CanExport = 1;
+        }
+    }
+
+    private void GrantAllAllowedPermissions()
+    {
+        User.CanAdd = 1;
+        User.CanEdit = 1;
+        User.CanDelete = 1;
+        User.CanExport = 1;
+        User.IsActive = 1;
+
+        if (SessionService.IsSuperAdmin)
+        {
+            User.IsAdmin = 1;
+        }
+    }
+
+    private void Submit()
+    {
+        if (string.IsNullOrWhiteSpace(User.FullName) || string.IsNullOrWhiteSpace(User.UserName))
+        {
+            Snackbar.Add("يرجى ملء الاسم الكامل واسم المستخدم!", Severity.Warning);
+            return;
+        }
+
+        if (User.UserId == 0 && string.IsNullOrWhiteSpace(_password))
+        {
+            Snackbar.Add("يرجى تحديد كلمة المرور الأولية للمستخدم الجديد!", Severity.Warning);
+            return;
+        }
+
+        // قفل أمني مشدد: حظر التلاعب من مدير الشعبة
+        if (!SessionService.IsSuperAdmin)
+        {
+            User.IsSuperAdmin = 0;
+            User.DepartmentId = SessionService.CurrentDepartmentId;
+            User.IsAdmin = 0; // تأكيد عدم إنشاء مدير شعبة آخر
+        }
+
+        if (User.IsSuperAdmin == 0 && !User.DepartmentId.HasValue)
+        {
+            Snackbar.Add("يرجى تحديد الشعبة التابع لها المستخدم!", Severity.Warning);
+            return;
+        }
+
+        if (User.IsSuperAdmin == 1)
+        {
+            User.DepartmentId = null;
+            User.IsAdmin = 1;
+            User.CanAdd = 1;
+            User.CanEdit = 1;
+            User.CanDelete = 1;
+            User.CanExport = 1;
+            User.IsActive = 1;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_password))
+        {
+            User.PasswordHash = UserSessionService.HashPassword(_password);
+        }
+
+        MudDialog.Close(DialogResult.Ok(User));
     }
 
     private void Cancel() => MudDialog.Cancel();
-
-    private async Task Save()
-    {
-        if (string.IsNullOrWhiteSpace(UserToEdit.UserName))
-        {
-            Snackbar.Add("يرجى إدخال اسم المستخدم", Severity.Warning);
-            return;
-        }
-
-        // التحقق من عدم تكرار اسم المستخدم
-        bool isDuplicate = await DbContext.Users
-            .AnyAsync(u => u.UserName.ToLower() == UserToEdit.UserName.Trim().ToLower() && u.UserId != UserToEdit.UserId);
-
-        if (isDuplicate)
-        {
-            Snackbar.Add("اسم المستخدم موجود مسبقاً، يرجى اختيار اسم آخر!", Severity.Error);
-            return;
-        }
-
-        if (UserToEdit.UserId == 0 && string.IsNullOrWhiteSpace(_rawPassword))
-        {
-            Snackbar.Add("يرجى إدخال كلمة مرور للحساب الجديد", Severity.Warning);
-            return;
-        }
-
-        // تشفير كلمة المرور في حال تم إدخالها
-        if (!string.IsNullOrWhiteSpace(_rawPassword))
-        {
-            UserToEdit.PasswordHash = UserSessionService.HashPassword(_rawPassword);
-        }
-
-        bool isNew = UserToEdit.UserId == 0;
-        DateTime now = DateTime.Now;
-
-        if (isNew)
-        {
-            UserToEdit.CreatedAt = now;
-            UserToEdit.UpdatedAt = now;
-            DbContext.Users.Add(UserToEdit);
-        }
-        else
-        {
-            UserToEdit.UpdatedAt = now;
-            DbContext.Users.Update(UserToEdit);
-        }
-
-        await DbContext.SaveChangesAsync();
-
-        // توثيق العملية في سجل التدقيق
-        await SessionService.LogActivityAsync(
-            actionType: isNew ? "إضافة مستخدم" : "تعديل مستخدم",
-            entityType: "مستخدم",
-            entityId: UserToEdit.UserId,
-            description: isNew
-                ? $"قام ({SessionService.CurrentUser?.UserName}) بإنشاء حساب جديد للمستخدم ({UserToEdit.UserName})."
-                : $"قام ({SessionService.CurrentUser?.UserName}) بتعديل بيانات حساب المستخدم ({UserToEdit.UserName})."
-        );
-
-        Snackbar.Add("تم حفظ بيانات المستخدم بنجاح", Severity.Success);
-        MudDialog.Close(DialogResult.Ok(true));
-    }
 }

@@ -3,7 +3,9 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
+@inject UserSessionService SessionService
 
 <MudDialog MaxWidth="MaxWidth.ExtraSmall" FullWidth="true">
     <TitleContent>
@@ -40,7 +42,15 @@
                     {
                         <MudListItem Icon="@Icons.Material.Filled.Person">
                             <div class="d-flex justify-space-between align-center w-100">
-                                <MudText Typo="Typo.body2" Class="fw-bold">@emp.EmployeeName</MudText>
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="fw-bold">@emp.EmployeeName</MudText>
+                                    @if (SessionService.IsSuperAdmin && emp.Department != null)
+                                    {
+                                        <span style="font-size: 0.7rem; color: #1B4D3E; background-color: #E8F5E9; padding: 1px 5px; border-radius: 4px;">
+                                            @emp.Department.Name
+                                        </span>
+                                    }
+                                </div>
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Style="background-color: #E8EAF6;">
                                     إضبارة: @emp.FileNumber
                                 </MudChip>
@@ -86,13 +96,14 @@
         {
             var sharedEmployeeIds = await DbContext.DocumentEmployees
                 .AsNoTracking()
-                .Where(de => de.DocumentId == DocumentId && de.EmployeeId != CurrentEmployeeId)
+                .Where(de => de.DocumentId == DocumentId && de.EmployeeId != CurrentEmployeeId && de.IsDeleted == 0)
                 .Select(de => de.EmployeeId)
                 .ToListAsync();
 
             if (sharedEmployeeIds.Any())
             {
                 _sharedEmployees = await DbContext.Employees
+                    .Include(e => e.Department)
                     .AsNoTracking()
                     .Where(e => sharedEmployeeIds.Contains(e.EmployeeId))
                     .OrderBy(e => e.FileNumber)

@@ -2,10 +2,10 @@
 @using DossierArchiveApp.Models
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Services
+@using System.IO
 @inject UserSessionService SessionService
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
-
 
 <MudRTLProvider RightToLeft="true">
     <MudDialog Style="direction: rtl; text-align: right;">
@@ -17,6 +17,34 @@
         </TitleContent>
         <DialogContent>
             <MudForm @ref="_form" @bind-IsValid="_isValid">
+
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <MudSelect T="int?"
+                               @bind-Value="_selectedDepartmentId"
+                               Label="الشعبة التابع لها الموظف"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Required="true"
+                               RequiredError="يرجى تحديد الشعبة التابع لها الموظف"
+                               Dense="true"
+                               Class="mb-4">
+                        @foreach (var dept in _departments)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <div class="pa-2 mb-3 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">الشعبة المسجلة للإضبارة:</MudText>
+                        <MudText Typo="Typo.body2" Class="fw-bold" Style="color: #1B4D3E;">
+                            @(string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? "المديرية العامة" : SessionService.CurrentDepartmentName)
+                        </MudText>
+                    </div>
+                }
+
                 <MudTextField T="string"
                               Label="اسم الموظف الكامل"
                               @bind-Value="_newEmployee.EmployeeName"
@@ -74,6 +102,9 @@
     private bool _isSaving;
     private bool _isActive = true;
 
+    private int? _selectedDepartmentId;
+    private List<Department> _departments = new();
+
     private Employee _newEmployee = new()
     {
         CreatedAt = DateTime.Now,
@@ -85,7 +116,22 @@
     {
         try
         {
-            var maxId = await DbContext.Employees.MaxAsync(e => (int?)e.EmployeeId) ?? 0;
+            if (SessionService.IsSuperAdmin)
+            {
+                _departments = await DbContext.Departments
+                    .AsNoTracking()
+                    .Where(d => d.IsActive == 1)
+                    .OrderBy(d => d.DepartmentId)
+                    .ToListAsync();
+
+                _selectedDepartmentId = _departments.FirstOrDefault()?.DepartmentId;
+            }
+            else
+            {
+                _selectedDepartmentId = SessionService.CurrentDepartmentId;
+            }
+
+            var maxId = await DbContext.Employees.IgnoreQueryFilters().MaxAsync(e => (int?)e.EmployeeId) ?? 0;
             _newEmployee.FileNumber = (maxId + 1).ToString("D4");
         }
         catch
@@ -100,6 +146,14 @@
     {
         await _form.Validate();
         if (!_isValid) return;
+
+        int? targetDeptId = SessionService.IsSuperAdmin ? _selectedDepartmentId : SessionService.CurrentDepartmentId;
+
+        if (SessionService.IsSuperAdmin && !targetDeptId.HasValue)
+        {
+            Snackbar.Add("يرجى اختيار الشعبة التي يتبع لها الموظف!", Severity.Warning);
+            return;
+        }
 
         string trimmedName = _newEmployee.EmployeeName.Trim();
         string trimmedFile = _newEmployee.FileNumber.Trim();
@@ -122,7 +176,8 @@
                 return;
             }
 
-            bool nameExists = await DbContext.Employees.AnyAsync(e => e.EmployeeName == trimmedName);
+            // التحقق من تكرار الاسم ورقم الإضبارة
+            bool nameExists = await DbContext.Employees.IgnoreQueryFilters().AnyAsync(e => e.EmployeeName == trimmedName);
             if (nameExists)
             {
                 Snackbar.Add("اسم الموظف مسجل مسبقاً، يرجى التأكد من الاسم!", Severity.Warning);
@@ -130,7 +185,7 @@
                 return;
             }
 
-            bool fileExists = await DbContext.Employees.AnyAsync(e => e.FileNumber == trimmedFile);
+            bool fileExists = await DbContext.Employees.IgnoreQueryFilters().AnyAsync(e => e.FileNumber == trimmedFile);
             if (fileExists)
             {
                 Snackbar.Add("رقم الأضبارة مستخدم مسبقاً لموظف آخر!", Severity.Warning);
@@ -142,8 +197,19 @@
             string cleanName = string.Concat(trimmedName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
             string cleanFile = string.Concat(trimmedFile.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
 
-            // 1. إنشاء المجلد الرئيسي للموظف (رقم_اسم)
-            string employeeFolderRelPath = $"{cleanFile}_{cleanName}";
+            // تحديد اسم مجلد الشعبة الفيزيائي بأمان
+            string deptFolderName = "المديرية العامة";
+            if (targetDeptId.HasValue)
+            {
+                var targetDept = await DbContext.Departments.AsNoTracking().FirstOrDefaultAsync(d => d.DepartmentId == targetDeptId.Value);
+                if (targetDept != null && !string.IsNullOrWhiteSpace(targetDept.Name))
+                {
+                    deptFolderName = string.Concat(targetDept.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                }
+            }
+
+            // 1. المسار النسبي والكامل مع عزل مجلد الشعبة
+            string employeeFolderRelPath = Path.Combine(deptFolderName, $"{cleanFile}_{cleanName}");
             string employeeFolderFullPath = Path.Combine(settings.BaseFolderPath, employeeFolderRelPath);
 
             if (!Directory.Exists(employeeFolderFullPath))
@@ -151,25 +217,23 @@
                 Directory.CreateDirectory(employeeFolderFullPath);
             }
 
-            // 2. المجلدان الأساسيان فقط: الصادر والوارد
+            // 2. المجلدان الأساسيان: الصادر والوارد
             string[] rootBranches = { "الصادر", "الوارد" };
 
-            // 3. جلب التصنيفات الفعلية من PrimaryCategories واستبعاد الصادر والوارد
+            // 3. جلب التصنيفات الفعلية
             var primaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
-
             List<string> categoryNames = primaryCategories
                 .Select(c => c.Name.Trim())
                 .Where(name => name != "صادر" && name != "وارد" && name != "الصادر" && name != "الوارد")
                 .Distinct()
                 .ToList();
 
-            // في حال كانت قاعدة البيانات فارغة نستخدم التصنيفات الافتراضية الأربعة
             if (!categoryNames.Any())
             {
                 categoryNames = new List<string> { "أوامر إدارية", "استمارات ومستمسكات", "طلبات شخصية", "كتب اعتيادية" };
             }
 
-            // 4. إنشاء المجلدات الهرمية (صادر/وارد وبداخلهما التصنيفات الأربعة فقط)
+            // 4. بناء الهيكلية داخل مجلد الموظف
             foreach (var branch in rootBranches)
             {
                 string branchFullPath = Path.Combine(employeeFolderFullPath, branch);
@@ -190,9 +254,10 @@
                 }
             }
 
-            // 5. حفظ بيانات الموظف في قاعدة البيانات
+            // 5. حفظ الموظف مع DepartmentId
             _newEmployee.EmployeeName = trimmedName;
             _newEmployee.FileNumber = trimmedFile;
+            _newEmployee.DepartmentId = targetDeptId;
             _newEmployee.IsActive = _isActive ? 1 : 0;
             _newEmployee.EmployeeFolderPath = employeeFolderRelPath;
 
@@ -203,10 +268,10 @@
                 actionType: "إضافة موظف",
                 entityType: "موظف",
                 entityId: _newEmployee.EmployeeId,
-                description: $"تمت إضافة الموظف ({_newEmployee.EmployeeName}) برقم إضبارة ({_newEmployee.FileNumber})."
+                description: $"تمت إضافة الموظف ({_newEmployee.EmployeeName}) برقم إضبارة ({_newEmployee.FileNumber}) وربطه بـ ({deptFolderName})."
             );
 
-            Snackbar.Add($"تم حفظ الموظف وإنشاء هيكلية مجلدات إضباره (صادر / وارد) بنجاح", Severity.Success);
+            Snackbar.Add($"تم حفظ الموظف وإنشاء هيكلية مجلدات إضباره ضمن ({deptFolderName}) بنجاح", Severity.Success);
             MudDialog.Close(DialogResult.Ok(_newEmployee));
         }
         catch (DbUpdateException)

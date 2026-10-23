@@ -13,6 +13,7 @@ public class UserSessionService
     private readonly IServiceScopeFactory _scopeFactory;
     private static readonly PasswordHasher<User> _passwordHasher = new();
 
+    public int? LastSelectedEmployeeId { get; set; }
     // المستخدم النشط حالياً (null يعني لم يتم تسجيل الدخول بعد)
     public User? CurrentUser { get; private set; }
 
@@ -35,14 +36,39 @@ public class UserSessionService
         get
         {
             if (CurrentUser == null) return string.Empty;
-            if (CurrentUser.IsAdmin == 1) return "مدير نظام (تحكم كامل)";
-            return "مستخدم مخصص الصلاحيات";
+            if (IsSuperAdmin) return "مدير عام النظام (وصول شامل لكافة الشُعب)";
+            if (CurrentUser.IsAdmin == 1) return $"مدير شعبة ({CurrentDepartmentName})";
+            return $"مستخدم شعبة ({CurrentDepartmentName})";
         }
     }
 
     // دوال فحص الصلاحيات المباشرة
     public bool IsAdmin => CurrentUser != null && CurrentUser.IsAdmin == 1;
     public bool CanAccessSettingsOrUsers => IsAdmin;
+
+    // خصائص عزل البيانات والشُعب
+    public int? CurrentDepartmentId => CurrentUser?.DepartmentId;
+    public string CurrentDepartmentName => CurrentUser?.Department?.Name ?? "المديرية العامة (مستقل)";
+    public string CurrentUserDisplayName =>
+    !string.IsNullOrWhiteSpace(CurrentUser?.FullName)
+        ? CurrentUser.FullName
+        : (CurrentUser?.UserName ?? "مستخدم");
+    /// <summary>
+    /// تحديد ما إذا كان المستخدم يمتلك صلاحية الرؤية العامة لكافة الشُعب والأضابير
+    /// </summary>
+    public bool IsSuperAdmin => CurrentUser != null &&
+                               ((CurrentUser.IsAdmin == 1 && CurrentUser.IsSuperAdmin == 1) ||
+                                CurrentUser.UserName.ToLower() == "admin");
+
+    /// <summary>
+    /// التحقق مما إذا كان للمستخدم صلاحية عرض أو تعديل إضبارة موظف محدد
+    /// </summary>
+    public bool CanAccessEmployee(Employee? employee)
+    {
+        if (employee == null) return false;
+        if (IsSuperAdmin) return true;
+        return employee.DepartmentId == CurrentDepartmentId;
+    }
 
     public bool CanAdd => CurrentUser != null && (CurrentUser.IsAdmin == 1 || CurrentUser.CanAdd == 1);
     public bool CanEdit => CurrentUser != null && (CurrentUser.IsAdmin == 1 || CurrentUser.CanEdit == 1);
@@ -64,14 +90,17 @@ public class UserSessionService
     }
 
     /// <summary>
-    /// التحقق الآمن من كلمة المرور عبر PBKDF2 وإلغاء أي قبول للنصوص الصريحة
+    /// التحقق الآمن من كلمة المرور عبر PBKDF2 وتحميل الشُعبة التابع لها المستخدم
     /// </summary>
     public async Task<User?> ValidateUserCredentialsAsync(string username, string password)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.UserName.ToLower() == username.Trim().ToLower() && u.IsActive == 1);
+        var user = await db.Users
+            .Include(u => u.Department)
+            .FirstOrDefaultAsync(u => u.UserName.ToLower() == username.Trim().ToLower() && u.IsActive == 1);
+
         if (user == null || string.IsNullOrEmpty(user.PasswordHash)) return null;
 
         var verificationResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
@@ -97,7 +126,7 @@ public class UserSessionService
     {
         CurrentUser = user;
         NotifySessionChanged();
-        await LogActivityAsync("تسجيل دخول", "النظام", user.UserId, $"قام المستخدم ({user.UserName}) بتسجيل الدخول للنظام.");
+        await LogActivityAsync("تسجيل دخول", "النظام", user.UserId, $"قام المستخدم ({user.UserName}) التابع لـ ({CurrentDepartmentName}) بتسجيل الدخول.");
     }
 
     // تسجيل خروج المستخدم وإنهاء الجلسة

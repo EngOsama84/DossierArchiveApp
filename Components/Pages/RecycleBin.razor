@@ -13,7 +13,7 @@
 
 <div dir="rtl" class="pa-4">
     <!-- الترويسة الرئيسية -->
-    <div class="d-flex align-center justify-space-between mb-4 pb-2" style="border-bottom: 2px solid #1B4D3E;">
+    <div class="d-flex flex-wrap align-center justify-space-between gap-3 mb-4 pb-2" style="border-bottom: 2px solid #1B4D3E;">
         <div class="d-flex align-center gap-2">
             <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" Style="font-size: 2.2rem; color: #d32f2f;" />
             <div>
@@ -21,17 +21,37 @@
                 <MudText Typo="Typo.caption" Class="text-secondary">إدارة واستعادة أو إتلاف المستندات وإضبارات الموظفين المحذوفة مؤقتاً</MudText>
             </div>
         </div>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadDeletedData">
-            تحديث البيانات
-        </MudButton>
+
+        <div class="d-flex align-center gap-2">
+            <!-- فلتر الشعب للأدمن العام -->
+            <MudSelect T="int?"
+                       Value="_selectedDepartmentFilter"
+                       ValueChanged="OnDepartmentFilterChanged"
+                       Label="تصفية حسب الشُعبة"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Dense="true"
+                       Clearable="true"
+                       Style="min-width: 180px; background-color: white;">
+                <MudSelectItem T="int?" Value="@((int?)null)">كافة الشُعب</MudSelectItem>
+                @foreach (var dept in _departments)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadDeletedData">
+                تحديث البيانات
+            </MudButton>
+        </div>
     </div>
 
     <!-- التبويبات للفرز بين المحذوفات -->
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Color="Color.Primary">
 
         <!-- تبويب 1: المستندات المحذوفة كلياً -->
-        <MudTabPanel Text="المستندات المحذوفة كلياً" Icon="@Icons.Material.Filled.Description" BadgeData="@_deletedDocuments.Count" BadgeColor="Color.Error">
-            <MudTable Items="@_deletedDocuments" Dense="true" Hover="true" Striped="true" Filter="new Func<FullDeletedDocItem, bool>(FilterFullDocFunc)" Loading="@_isLoading">
+        <MudTabPanel Text="المستندات المحذوفة كلياً" Icon="@Icons.Material.Filled.Description" BadgeData="@FilteredDeletedDocuments.Count" BadgeColor="Color.Error">
+            <MudTable Items="@FilteredDeletedDocuments" Dense="true" Hover="true" Striped="true" Filter="new Func<FullDeletedDocItem, bool>(FilterFullDocFunc)" Loading="@_isLoading">
                 <ToolBarContent>
                     <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة المستندات المحذوفة بالكامل</MudText>
                     <MudSpacer />
@@ -42,7 +62,7 @@
                     <MudTh>رقم الكتاب</MudTh>
                     <MudTh>تاريخ الكتاب</MudTh>
                     <MudTh>الموضوع</MudTh>
-                    <MudTh>صاحب الإضبارة / المرتبطين</MudTh>
+                    <MudTh>صاحب الإضبارة / الشُعبة</MudTh>
                     <MudTh>سبب الحذف</MudTh>
                     <MudTh>حُذف بواسطة</MudTh>
                     <MudTh>تاريخ الحذف</MudTh>
@@ -53,42 +73,61 @@
                     <MudTd DataLabel="تاريخ الكتاب">@(context.Doc.DocumentDate?.ToString("yyyy/MM/dd") ?? "-")</MudTd>
                     <MudTd DataLabel="الموضوع">@context.Doc.Subject</MudTd>
 
-                    <!-- عرض الموظف والشارة المنسدلة لبقية المرتبطين -->
+                    <!-- عرض الموظف وشارة الشعبة -->
                     <MudTd DataLabel="صاحب الإضبارة">
-                        @if (!context.EmployeeNames.Any())
+                        @if (!context.EmployeeDetails.Any())
                         {
                             <span class="text-secondary" style="font-size: 0.8rem;">لا يوجد ارتباط</span>
                         }
-                        else if (context.EmployeeNames.Count == 1)
+                        else if (context.EmployeeDetails.Count == 1)
                         {
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #1B4D3E;">
-                                @context.EmployeeNames.First()
-                            </span>
+                            var emp = context.EmployeeDetails.First();
+                            <div class="d-flex align-center gap-1">
+                                <span style="font-size: 0.85rem; font-weight: bold; color: #1B4D3E;">@emp.Name</span>
+                                @if (!string.IsNullOrWhiteSpace(emp.DepartmentName))
+                                {
+                                    <span style="font-size: 0.7rem; color: #2e7d32; background-color: #e8f5e9; padding: 1px 6px; border-radius: 4px;">
+                                        @emp.DepartmentName
+                                    </span>
+                                }
+                            </div>
                         }
                         else
                         {
+                            var firstEmp = context.EmployeeDetails.First();
                             <div class="d-flex align-center gap-1">
-                                <span style="font-size: 0.85rem; font-weight: bold; color: #1B4D3E;">
-                                    @context.EmployeeNames.First()
-                                </span>
-
+                                <span style="font-size: 0.85rem; font-weight: bold; color: #1B4D3E;">@firstEmp.Name</span>
+                                @if (!string.IsNullOrWhiteSpace(firstEmp.DepartmentName))
+                                {
+                                    <span style="font-size: 0.7rem; color: #2e7d32; background-color: #e8f5e9; padding: 1px 6px; border-radius: 4px;">
+                                        @firstEmp.DepartmentName
+                                    </span>
+                                }
                                 <MudMenu AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" Dense="true">
                                     <ActivatorContent>
                                         <MudTooltip Text="عرض بقية الموظفين المرتبطين بهذا الكتاب">
                                             <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Style="cursor: pointer; height: 22px; font-weight: bold;">
-                                                +@(context.EmployeeNames.Count - 1) آخرين
+                                                +@(context.EmployeeDetails.Count - 1) آخرين
                                             </MudChip>
                                         </MudTooltip>
                                     </ActivatorContent>
                                     <ChildContent>
-                                        <div class="pa-2" dir="rtl" style="min-width: 200px;">
+                                        <div class="pa-2" dir="rtl" style="min-width: 220px;">
                                             <MudText Typo="Typo.caption" Class="fw-bold text-secondary d-block mb-1">الموظفون المشتركون في الكتاب:</MudText>
                                             <MudDivider Class="mb-1" />
-                                            @foreach (var empName in context.EmployeeNames)
+                                            @foreach (var emp in context.EmployeeDetails)
                                             {
-                                                <div class="d-flex align-center gap-2 py-1">
-                                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Primary" />
-                                                    <span style="font-size: 0.82rem;">@empName</span>
+                                                <div class="d-flex align-center justify-space-between py-1">
+                                                    <div class="d-flex align-center gap-1">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Primary" />
+                                                        <span style="font-size: 0.82rem;">@emp.Name</span>
+                                                    </div>
+                                                    @if (!string.IsNullOrWhiteSpace(emp.DepartmentName))
+                                                    {
+                                                        <span style="font-size: 0.68rem; color: #1B4D3E; background-color: #f1f8f5; padding: 1px 4px; border-radius: 3px;">
+                                                            @emp.DepartmentName
+                                                        </span>
+                                                    }
                                                 </div>
                                             }
                                         </div>
@@ -126,14 +165,14 @@
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
-                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد مستندات محذوفة كلياً في السلة.</MudText>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد مستندات محذوفة كلياً مطابقة للبحث أو الفلتر.</MudText>
                 </NoRecordsContent>
             </MudTable>
         </MudTabPanel>
 
         <!-- تبويب 2: المستندات المستبعدة من موظف معين (حذف فردي) -->
-        <MudTabPanel Text="مستندات مستبعدة فردياً" Icon="@Icons.Material.Filled.LinkOff" BadgeData="@_singleDeletedLinks.Count" BadgeColor="Color.Warning">
-            <MudTable Items="@_singleDeletedLinks" Dense="true" Hover="true" Striped="true" Filter="new Func<SingleDeletedLinkItem, bool>(FilterSingleLinkFunc)" Loading="@_isLoading">
+        <MudTabPanel Text="مستندات مستبعدة فردياً" Icon="@Icons.Material.Filled.LinkOff" BadgeData="@FilteredSingleDeletedLinks.Count" BadgeColor="Color.Warning">
+            <MudTable Items="@FilteredSingleDeletedLinks" Dense="true" Hover="true" Striped="true" Filter="new Func<SingleDeletedLinkItem, bool>(FilterSingleLinkFunc)" Loading="@_isLoading">
                 <ToolBarContent>
                     <MudText Typo="Typo.h6" Class="fw-bold text-secondary">مستندات محذوفة من أضابير موظفين محددين</MudText>
                     <MudSpacer />
@@ -142,6 +181,7 @@
                 </ToolBarContent>
                 <HeaderContent>
                     <MudTh>اسم الموظف</MudTh>
+                    <MudTh>الشعبة</MudTh>
                     <MudTh>رقم الكتاب</MudTh>
                     <MudTh>تاريخ الكتاب</MudTh>
                     <MudTh>الموضوع</MudTh>
@@ -152,6 +192,18 @@
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="اسم الموظف" Class="fw-bold" Style="color: #1B4D3E;">@context.EmployeeName</MudTd>
+                    <MudTd DataLabel="الشعبة">
+                        @if (!string.IsNullOrWhiteSpace(context.DepartmentName))
+                        {
+                            <span style="font-size: 0.78rem; color: #1B4D3E; background-color: #E8F5E9; padding: 2px 6px; border-radius: 4px;">
+                                @context.DepartmentName
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="text-muted" style="font-size: 0.75rem;">غير محدد</span>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="رقم الكتاب">@context.DocumentNumber</MudTd>
                     <MudTd DataLabel="تاريخ الكتاب">@(context.DocumentDate?.ToString("yyyy/MM/dd") ?? "-")</MudTd>
                     <MudTd DataLabel="الموضوع">@context.Subject</MudTd>
@@ -183,14 +235,14 @@
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
-                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد ارتباطات مستبعدة فردياً حالياً.</MudText>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد ارتباطات مستبعدة فردياً مطابقة للبحث أو الفلتر.</MudText>
                 </NoRecordsContent>
             </MudTable>
         </MudTabPanel>
 
         <!-- تبويب 3: إضبارات الموظفين المحذوفة -->
-        <MudTabPanel Text="أضابير الموظفين المحذوفة" Icon="@Icons.Material.Filled.Badge" BadgeData="@_deletedEmployees.Count" BadgeColor="Color.Error">
-            <MudTable Items="@_deletedEmployees" Dense="true" Hover="true" Striped="true" Filter="new Func<DeletedEmployeeItem, bool>(FilterEmpFunc)" Loading="@_isLoading">
+        <MudTabPanel Text="أضابير الموظفين المحذوفة" Icon="@Icons.Material.Filled.Badge" BadgeData="@FilteredDeletedEmployees.Count" BadgeColor="Color.Error">
+            <MudTable Items="@FilteredDeletedEmployees" Dense="true" Hover="true" Striped="true" Filter="new Func<DeletedEmployeeItem, bool>(FilterEmpFunc)" Loading="@_isLoading">
                 <ToolBarContent>
                     <MudText Typo="Typo.h6" Class="fw-bold text-secondary">قائمة الموظفين في السلة</MudText>
                     <MudSpacer />
@@ -200,6 +252,7 @@
                 <HeaderContent>
                     <MudTh>رقم الإضبارة</MudTh>
                     <MudTh>اسم الموظف</MudTh>
+                    <MudTh>الشعبة</MudTh>
                     <MudTh>سبب الحذف</MudTh>
                     <MudTh>حُذف بواسطة</MudTh>
                     <MudTh>تاريخ الحذف</MudTh>
@@ -208,6 +261,18 @@
                 <RowTemplate>
                     <MudTd DataLabel="رقم الإضبارة" Class="fw-bold">@context.Emp.FileNumber</MudTd>
                     <MudTd DataLabel="اسم الموظف">@context.Emp.EmployeeName</MudTd>
+                    <MudTd DataLabel="الشعبة">
+                        @if (context.Emp.Department != null)
+                        {
+                            <span style="font-size: 0.78rem; color: #1B4D3E; background-color: #E8F5E9; padding: 2px 6px; border-radius: 4px;">
+                                @context.Emp.Department.Name
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="text-muted" style="font-size: 0.75rem;">غير محدد</span>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="سبب الحذف">
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
                             @(string.IsNullOrWhiteSpace(context.Emp.DeleteReason) ? "لم يذكر سبب" : context.Emp.DeleteReason)
@@ -236,7 +301,7 @@
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
-                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد إضبارات موظفين في سلة المحذوفات حالياً.</MudText>
+                    <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا توجد إضبارات موظفين مطابقة للبحث أو الفلتر.</MudText>
                 </NoRecordsContent>
             </MudTable>
         </MudTabPanel>
@@ -245,10 +310,18 @@
 </div>
 
 @code {
+    public class EmployeeSummaryInfo
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int? DepartmentId { get; set; }
+        public string? DepartmentName { get; set; }
+    }
+
     public class FullDeletedDocItem
     {
         public Document Doc { get; set; } = new();
-        public List<string> EmployeeNames { get; set; } = new();
+        public List<EmployeeSummaryInfo> EmployeeDetails { get; set; } = new();
         public string DeletedByUserName { get; set; } = "غير محدد";
     }
 
@@ -258,6 +331,8 @@
         public int DocumentId { get; set; }
         public int EmployeeId { get; set; }
         public string EmployeeName { get; set; } = string.Empty;
+        public int? DepartmentId { get; set; }
+        public string? DepartmentName { get; set; }
         public string DocumentNumber { get; set; } = string.Empty;
         public DateTime? DocumentDate { get; set; }
         public string Subject { get; set; } = string.Empty;
@@ -275,6 +350,9 @@
     private List<FullDeletedDocItem> _deletedDocuments = new();
     private List<SingleDeletedLinkItem> _singleDeletedLinks = new();
     private List<DeletedEmployeeItem> _deletedEmployees = new();
+    private List<Department> _departments = new();
+    private int? _selectedDepartmentFilter = null;
+
     private bool _isLoading = false;
     private string _searchDocString = string.Empty;
     private string _searchSingleString = string.Empty;
@@ -289,24 +367,55 @@
             return;
         }
 
+        _departments = await DbContext.Departments
+            .AsNoTracking()
+            .Where(d => d.IsActive == 1)
+            .OrderBy(d => d.DepartmentId)
+            .ToListAsync();
+
         await LoadDeletedData();
     }
+
+    private void OnDepartmentFilterChanged(int? deptId)
+    {
+        _selectedDepartmentFilter = deptId;
+    }
+
+    private List<FullDeletedDocItem> FilteredDeletedDocuments =>
+        _deletedDocuments.Where(d =>
+            !_selectedDepartmentFilter.HasValue ||
+            d.EmployeeDetails.Any(e => e.DepartmentId == _selectedDepartmentFilter.Value)).ToList();
+
+    private List<SingleDeletedLinkItem> FilteredSingleDeletedLinks =>
+        _singleDeletedLinks.Where(l =>
+            !_selectedDepartmentFilter.HasValue ||
+            l.DepartmentId == _selectedDepartmentFilter.Value).ToList();
+
+    private List<DeletedEmployeeItem> FilteredDeletedEmployees =>
+        _deletedEmployees.Where(e =>
+            !_selectedDepartmentFilter.HasValue ||
+            e.Emp.DepartmentId == _selectedDepartmentFilter.Value).ToList();
 
     private async Task LoadDeletedData()
     {
         _isLoading = true;
         try
         {
-            // خريطة المستخدمين لتحويل UserId إلى الاسم الظاهر
             var usersMap = await DbContext.Users
                 .AsNoTracking()
                 .ToDictionaryAsync(u => u.UserId, u => string.IsNullOrWhiteSpace(u.FullName) ? u.UserName : u.FullName);
 
-            // خريطة أسماء الموظفين مع كسر الفلتر العام
             var empsMap = await DbContext.Employees
                 .IgnoreQueryFilters()
+                .Include(e => e.Department)
                 .AsNoTracking()
-                .ToDictionaryAsync(e => e.EmployeeId, e => e.EmployeeName);
+                .ToDictionaryAsync(e => e.EmployeeId, e => new EmployeeSummaryInfo
+                {
+                    Id = e.EmployeeId,
+                    Name = e.EmployeeName,
+                    DepartmentId = e.DepartmentId,
+                    DepartmentName = e.Department?.Name
+                });
 
             // 1. المستندات المحذوفة كلياً
             var rawDeletedDocs = await DbContext.Documents
@@ -318,29 +427,31 @@
 
             var docIds = rawDeletedDocs.Select(d => d.DocumentId).ToList();
 
-            // روابط المستندات لمعرفة أصحاب الإضابير
             var docLinks = await DbContext.DocumentEmployees
                 .IgnoreQueryFilters()
                 .AsNoTracking()
                 .Where(de => docIds.Contains(de.DocumentId))
                 .ToListAsync();
 
-            // تجميع الأسماء كقائمة List<string> لكل كتاب
             var docToEmpList = docLinks
                 .GroupBy(l => l.DocumentId)
                 .ToDictionary(
                     g => g.Key,
-                    g => g.Select(x => empsMap.TryGetValue(x.EmployeeId, out var name) ? name : $"#{x.EmployeeId}").Distinct().ToList()
+                    g => g.Select(x => empsMap.TryGetValue(x.EmployeeId, out var info)
+                            ? info
+                            : new EmployeeSummaryInfo { Id = x.EmployeeId, Name = $"#{x.EmployeeId}" })
+                          .DistinctBy(x => x.Id)
+                          .ToList()
                 );
 
             _deletedDocuments = rawDeletedDocs.Select(d => new FullDeletedDocItem
             {
                 Doc = d,
-                EmployeeNames = docToEmpList.TryGetValue(d.DocumentId, out var empList) ? empList : new List<string>(),
+                EmployeeDetails = docToEmpList.TryGetValue(d.DocumentId, out var empList) ? empList : new List<EmployeeSummaryInfo>(),
                 DeletedByUserName = d.DeletedBy.HasValue && usersMap.TryGetValue(d.DeletedBy.Value, out var uName) ? uName : (SessionService.CurrentUser?.UserName ?? "المدير")
             }).ToList();
 
-            // 2. المستندات المفكوكة فردياً (المستند حي IsDeleted == 0 ولكن رابطه بهذا الموظف محذوف IsDeleted == 1)
+            // 2. المستندات المفكوكة فردياً
             var allDeletedLinks = await DbContext.DocumentEmployees
                 .IgnoreQueryFilters()
                 .AsNoTracking()
@@ -364,7 +475,9 @@
                         DocumentEmployeeId = l.DocumentEmployeeId,
                         DocumentId = l.DocumentId,
                         EmployeeId = l.EmployeeId,
-                        EmployeeName = empsMap[l.EmployeeId],
+                        EmployeeName = empsMap[l.EmployeeId].Name,
+                        DepartmentId = empsMap[l.EmployeeId].DepartmentId,
+                        DepartmentName = empsMap[l.EmployeeId].DepartmentName,
                         DocumentNumber = activeDocs[l.DocumentId].DocumentNumber,
                         DocumentDate = activeDocs[l.DocumentId].DocumentDate,
                         Subject = activeDocs[l.DocumentId].Subject,
@@ -383,6 +496,7 @@
             // 3. الموظفون المحذوفون
             var rawDeletedEmps = await DbContext.Employees
                 .IgnoreQueryFilters()
+                .Include(e => e.Department)
                 .AsNoTracking()
                 .Where(e => e.IsDeleted == 1)
                 .OrderByDescending(e => e.DeletedAt)
@@ -568,7 +682,6 @@
 
             if (linkDb != null)
             {
-                // مسح الملف الفيزيائي من مجلد الموظف المعني فقط
                 var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
                 string baseFolder = settings?.BaseFolderPath ?? string.Empty;
 
@@ -581,7 +694,6 @@
                     }
                 }
 
-                // حذف سجل الارتباط الفردي فقط من قاعدة البيانات دون المساس بسجل الكتاب الأصلي
                 DbContext.DocumentEmployees.Remove(linkDb);
                 await DbContext.SaveChangesAsync();
 
@@ -642,7 +754,7 @@
     {
         bool? confirm = await DialogService.ShowMessageBox(
             "إتلاف إضبارة موظف نهائياً",
-            $"تحذير أمني: هل أنت متأكد من الحذف النهائي لإضبارة الموظف ({emp.EmployeeName})؟\nسيتم حذف مجلد الإضبارة الفيزيائي الفارغ وسجله نهائياً.",
+            $"تحذير أمني: هل أنت متأكد من الحذف النهائي لإضبارة الموظف ({emp.EmployeeName})؟\nسيتم حذف مجلد الإضبارة الفيزيائي وسجله نهائياً.",
             yesText: "نعم، حذف نهائي الآن",
             cancelText: "إلغاء");
 
@@ -687,12 +799,13 @@
     private bool FilterFullDocFunc(FullDeletedDocItem item) =>
         Filter(item.Doc.DocumentNumber, _searchDocString) ||
         Filter(item.Doc.Subject, _searchDocString) ||
-        item.EmployeeNames.Any(name => Filter(name, _searchDocString)) ||
+        item.EmployeeDetails.Any(e => Filter(e.Name, _searchDocString) || Filter(e.DepartmentName, _searchDocString)) ||
         Filter(item.Doc.DeleteReason, _searchDocString) ||
         Filter(item.DeletedByUserName, _searchDocString);
 
     private bool FilterSingleLinkFunc(SingleDeletedLinkItem item) =>
         Filter(item.EmployeeName, _searchSingleString) ||
+        Filter(item.DepartmentName, _searchSingleString) ||
         Filter(item.DocumentNumber, _searchSingleString) ||
         Filter(item.Subject, _searchSingleString) ||
         Filter(item.DeleteReason, _searchSingleString) ||
@@ -701,6 +814,7 @@
     private bool FilterEmpFunc(DeletedEmployeeItem item) =>
         Filter(item.Emp.EmployeeName, _searchEmpString) ||
         Filter(item.Emp.FileNumber, _searchEmpString) ||
+        Filter(item.Emp.Department?.Name, _searchEmpString) ||
         Filter(item.Emp.DeleteReason, _searchEmpString) ||
         Filter(item.DeletedByUserName, _searchEmpString);
 

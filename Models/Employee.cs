@@ -47,6 +47,8 @@ public class Employee
 
     [Column("DeleteReason")]
     public string? DeleteReason { get; set; }
+    public int? DepartmentId { get; set; }
+    public Department? Department { get; set; }
     // خاصية مساعدة لواجهة المستخدم
     [NotMapped]
     public bool ActiveStatus

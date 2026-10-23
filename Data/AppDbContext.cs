@@ -7,7 +7,8 @@ namespace DossierArchiveApp.Data;
 
 public class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
     {
     }
 
@@ -21,17 +22,19 @@ public class AppDbContext : DbContext
     public DbSet<DocumentEmployee> DocumentEmployees => Set<DocumentEmployee>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<SubUnit> SubUnits => Set<SubUnit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // 1. تصفية السجلات غير المحذوفة تلقائياً على مستوى كامل النظام
+        // 1. تصفية السجلات غير المحذوفة فقط لضمان سلامة واستقرار الاستعلامات
         modelBuilder.Entity<Document>().HasQueryFilter(d => d.IsDeleted == 0);
         modelBuilder.Entity<Employee>().HasQueryFilter(e => e.IsDeleted == 0);
+        modelBuilder.Entity<DocumentEmployee>().HasQueryFilter(de => de.IsDeleted == 0);
 
         // 2. فهارس تحسين الأداء وسرعة الاستعلامات (Indexes)
-        // أ. جدول الموظفين
         modelBuilder.Entity<Employee>()
             .HasIndex(e => e.FileNumber)
             .HasDatabaseName("IX_Employees_FileNumber");
@@ -40,7 +43,10 @@ public class AppDbContext : DbContext
             .HasIndex(e => e.EmployeeName)
             .HasDatabaseName("IX_Employees_EmployeeName");
 
-        // ب. جدول المستندات
+        modelBuilder.Entity<Employee>()
+            .HasIndex(e => e.DepartmentId)
+            .HasDatabaseName("IX_Employees_DepartmentId");
+
         modelBuilder.Entity<Document>()
             .HasIndex(d => d.DocumentNumber)
             .HasDatabaseName("IX_Documents_DocumentNumber");
@@ -53,7 +59,6 @@ public class AppDbContext : DbContext
             .HasIndex(d => new { d.MainCategoryId, d.PrimaryCategoryId })
             .HasDatabaseName("IX_Documents_Categories");
 
-        // ج. جدول ربط المستندات بالموظفين (فهرس فائق الأهمية للاستعلامات والـ Join)
         modelBuilder.Entity<DocumentEmployee>()
             .HasIndex(de => new { de.EmployeeId, de.DocumentId })
             .HasDatabaseName("IX_DocumentEmployees_Employee_Document");
@@ -62,12 +67,11 @@ public class AppDbContext : DbContext
             .HasIndex(de => de.DocumentId)
             .HasDatabaseName("IX_DocumentEmployees_DocumentId");
 
-        // د. جدول سجل النشاطات (لتسريع تقرير المراقبة والطباعة)
         modelBuilder.Entity<AuditLog>()
             .HasIndex(a => a.CreatedAt)
             .HasDatabaseName("IX_AuditLogs_CreatedAt");
 
-        // 3. محوّل قياسي يعتمد دوال مساعدة ساكنة لتجنب قيود Expression Trees مع معلمات out
+        // 3. محوّل قياسي للتواريخ
         var dateTimeConverter = new ValueConverter<DateTime, string>(
             v => v.ToString("yyyy-MM-dd HH:mm:ss"),
             v => ParseDateTimeSafe(v)
@@ -78,7 +82,7 @@ public class AppDbContext : DbContext
             v => ParseNullableDateTimeSafe(v)
         );
 
-        // 4. تطبيق المحول تلقائياً على جميع خصائص التواريخ في كافة جداول النظام
+        // 4. تطبيق المحول تلقائياً على جميع التواريخ
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())

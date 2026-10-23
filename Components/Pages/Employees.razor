@@ -21,29 +21,54 @@
 
     <!-- الشريط العلوي المتجاوب -->
     <div class="d-flex flex-wrap align-center justify-space-between gap-2 mb-3">
-        <!-- فلاتر وبحث الموظفين (في اليمين) -->
-        <div class="d-flex flex-grow-1 align-center gap-2" style="max-width: 650px; min-width: 260px;">
-            <MudTextField @bind-Value="_employeeSearchText"
-                          Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Clearable="true"
-                          Immediate="true"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          Class="flex-grow-1"
-                          Style="background-color: white;" />
+        <!-- شريط الفلاتر والبحث في اليمين -->
+        <div class="d-flex align-center gap-1 flex-wrap flex-grow-1">
 
-            <MudSelect T="string"
-                       @bind-Value="_employeeStatusFilter"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Dense="true"
-                       Style="background-color: white; min-width: 110px; max-width: 130px;">
-                <MudSelectItem Value="@("Active")">الفعالون</MudSelectItem>
-                <MudSelectItem Value="@("Inactive")">غير الفعالين</MudSelectItem>
-                <MudSelectItem Value="@("All")">الكل</MudSelectItem>
-            </MudSelect>
+            <!-- حقل البحث: مثبت ومطابق لعرض بطاقة قائمة الأسماء (md=4 / lg=3) -->
+            <div style="width: 100%; max-width: 280px; min-width: 200px;">
+                <MudTextField @bind-Value="_employeeSearchText"
+                              Placeholder="بحث باسم الموظف أو رقم الأضبارة..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Clearable="true"
+                              Immediate="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Style="background-color: white;" />
+            </div>
+
+            <!-- تجميع القائمتين ملتصقتين بجانب حقل البحث دون تباعد -->
+            <div class="d-flex align-center gap-1 flex-shrink-0">
+                <MudSelect T="string"
+                           @bind-Value="_employeeStatusFilter"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           Style="background-color: white; width: 140px;">
+                    <MudSelectItem Value="@("Active")">الفعالون</MudSelectItem>
+                    <MudSelectItem Value="@("Inactive")">غير الفعالين</MudSelectItem>
+                    <MudSelectItem Value="@("All")">الكل</MudSelectItem>
+                </MudSelect>
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <MudSelect T="int?"
+                               Value="_selectedDepartmentFilter"
+                               ValueChanged="OnDepartmentFilterChanged"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Style="background-color: white; width: 250px;">
+                        <MudSelectItem Value="@((int?)null)">كافة الشُعب</MudSelectItem>
+                        @foreach (var dept in _departments)
+                        {
+                            <MudSelectItem Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+
+
+            </div>
+
         </div>
 
         <!-- أزرار الإجراءات بالترتيب: إضافة مستند -> أرشفة مجمعة -> خط فاصل -> زر منسدل -->
@@ -156,7 +181,7 @@
                     }
                 </div>
 
-                <!-- قائمة الموظفين مدعومة بـ Virtualize بدون أي تحذيرات CSS -->
+                <!-- قائمة الموظفين مدعومة بـ Virtualize -->
                 <div class="dynamic-employee-scroll pa-1" style="height: calc(100vh - 275px); overflow-y: auto;">
                     @if (_loadingEmployees)
                     {
@@ -167,7 +192,7 @@
                     else if (!FilteredEmployees.Any())
                     {
                         <div class="pa-4 text-center">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">لا يوجد موظفون مطابقون لبحثك.</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">لا يوجد موظفون مطابقون للبحث أو الفلتر.</MudText>
                         </div>
                     }
                     else
@@ -180,13 +205,21 @@
                                 <div class="employee-card pa-2 mb-2 @(isSelected ? "selected-card" : "normal-card")"
                                      @onclick="@(() => SelectEmployee(emp))">
                                     <div class="d-flex justify-space-between align-center">
-                                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%;">
                                             <MudText Typo="Typo.body2" Class="fw-bold" Style="@(isSelected ? "color: #1B4D3E;" : "color: #212121;")">
                                                 @emp.EmployeeName
                                             </MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                الأضبارة: @emp.FileNumber
-                                            </MudText>
+                                            <div class="d-flex align-center gap-1 mt-1">
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    الأضبارة: @emp.FileNumber
+                                                </MudText>
+                                                @if (SessionService.IsSuperAdmin && emp.Department != null)
+                                                {
+                                                    <span style="font-size: 0.7rem; color: #1B4D3E; background-color: #E8F5E9; padding: 1px 5px; border-radius: 4px;">
+                                                        @emp.Department.Name
+                                                    </span>
+                                                }
+                                            </div>
                                         </div>
                                         @if (emp.IsActive != 1)
                                         {
@@ -206,10 +239,28 @@
             <MudPaper Elevation="1" Class="pa-3 pa-md-4" Style="border-radius: 8px; min-height: calc(100vh - 170px); background-color: white;">
                 @if (_selectedEmployee != null)
                 {
-                    <div class="d-flex align-center justify-start mb-3">
-                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2c3e50;">
-                            كتب @_selectedEmployee.EmployeeName (@FilteredDocuments.Count())
-                        </MudText>
+                    <div class="d-flex justify-space-between align-center px-3 py-1 rounded-pill w-100 mb-3"
+                         style="background-color: #f1f8f5; border: 1px solid #d0e7dc;">
+
+                        <!-- الطرف الأيمن: اسم الموظف وعدد الكتب -->
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Style="color: #1B4D3E;" Class="ml-1" />
+                            <span class="fw-bold" style="color: #1B4D3E; font-size: 0.95rem;">@_selectedEmployee.EmployeeName</span>
+                            <span class="mx-2 text-muted" style="font-size: 0.8rem;">|</span>
+                            <span style="font-size: 0.85rem; color: #555;">الكتب المؤرشفة:</span>
+                            <span class="fw-bold mr-1" style="color: #1B4D3E; font-size: 0.95rem;">(@FilteredDocuments.Count())</span>
+                        </div>
+
+                        <!-- الطرف الأيسر: الشُعبة -->
+                        @if (_selectedEmployee.Department != null)
+                        {
+                            <div>
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" Class="ml-1" />
+                                    @_selectedEmployee.Department.Name
+                                </MudChip>
+                            </div>
+                        }
                     </div>
 
                     <!-- السطر الأول: القوائم الأربع المنسدلة تتبع الهيكلية المعتمدة -->
@@ -431,10 +482,14 @@
                 }
                 else
                 {
+                    <!-- واجهة الحالة الفارغة الأنيقة عند عدم اختيار موظف -->
                     <div class="d-flex flex-column align-center justify-center" style="height: 60vh;">
-                        <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" Color="Color.Secondary" Style="font-size: 4.5rem;" />
-                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-3 text-center">
-                            يرجى اختيار موظف من القائمة لعرض إضبارته ومستنداته
+                        <MudIcon Icon="@Icons.Material.Filled.FolderShared" Size="Size.Large" Style="font-size: 5rem; color: #b0bec5;" />
+                        <MudText Typo="Typo.h6" Class="fw-bold mt-3" Style="color: #546e7a;">
+                            لم يتم تحديد أي إضبارة موظف
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="mt-1" Style="color: #78909c;">
+                            يرجى النقر على اسم الموظف من القائمة الجانبية لتصفح أضبارته وكتبه المؤرشفة
                         </MudText>
                     </div>
                 }
@@ -531,6 +586,9 @@
 
 @code {
     private List<Employee> _employees = new();
+    private List<Department> _departments = new();
+    private int? _selectedDepartmentFilter = null;
+
     private Employee? _selectedEmployee;
     private bool _loadingEmployees = true;
     private string _employeeSearchText = "";
@@ -546,7 +604,7 @@
     private bool _loadingDocs = false;
     private bool _isExporting = false;
 
-    // خريطة علاقات: التصنيف الرئيسي -> قائمة التصنيفات الفرعية الأولى المسموحة
+    // خريطة علاقات التصنيفات
     private readonly Dictionary<string, string[]> _primaryToSecondaryMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["أمر إداري"] = new[] { "مباشرة", "انفكاك", "علاوة", "ترفيع", "شكر", "عقوبة", "لجنة", "تكليف", "تنسيب", "ترشيح", "تقييم", "احتساب", "إضافة", "إعفاء", "دورة", "غير ذلك" },
@@ -579,6 +637,13 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadCategories();
+        if (SessionService.IsSuperAdmin)
+        {
+            _departments = await DbContext.Departments
+                .Where(d => d.IsActive == 1)
+                .OrderBy(d => d.DepartmentId)
+                .ToListAsync();
+        }
         await LoadEmployees();
     }
 
@@ -712,20 +777,75 @@
         _selectedTertiaryCatId = null;
     }
 
+    private void OnDepartmentFilterChanged(int? deptId)
+    {
+        _selectedDepartmentFilter = deptId;
+
+        if (_selectedEmployee != null && _selectedDepartmentFilter.HasValue && _selectedEmployee.DepartmentId != _selectedDepartmentFilter.Value)
+        {
+            _selectedEmployee = null;
+            SessionService.LastSelectedEmployeeId = null;
+            _documents.Clear();
+            _sharedCounts.Clear();
+        }
+    }
+
     private async Task LoadEmployees()
     {
         _loadingEmployees = true;
         try
         {
-            _employees = await DbContext.Employees
+            if (SessionService.CurrentUser == null)
+            {
+                _employees = new List<Employee>();
+                return;
+            }
+
+            var query = DbContext.Employees
+                .Include(e => e.Department)
                 .AsNoTracking()
+                .Where(e => e.IsActive == 1 && e.IsDeleted == 0);
+
+            // العزل الإداري للشعب
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (SessionService.CurrentDepartmentId.HasValue)
+                {
+                    int myDeptId = SessionService.CurrentDepartmentId.Value;
+                    query = query.Where(e => e.DepartmentId == myDeptId);
+                }
+                else
+                {
+                    query = query.Where(e => false);
+                }
+            }
+
+            _employees = await query
                 .OrderBy(e => e.FileNumber)
                 .ToListAsync();
 
-            if (_employees.Any() && _selectedEmployee == null)
+            // فحص الاحتفاظ بالتأشير السابق: إذا كان هناك موظف محدد مسبقاً في الجلسة، نستعيده
+            if (SessionService.LastSelectedEmployeeId.HasValue)
             {
-                var first = FilteredEmployees.FirstOrDefault() ?? _employees.First();
-                await SelectEmployee(first);
+                var prevEmp = _employees.FirstOrDefault(e => e.EmployeeId == SessionService.LastSelectedEmployeeId.Value);
+                if (prevEmp != null)
+                {
+                    await SelectEmployee(prevEmp);
+                }
+                else
+                {
+                    _selectedEmployee = null;
+                    SessionService.LastSelectedEmployeeId = null;
+                    _documents.Clear();
+                    _sharedCounts.Clear();
+                }
+            }
+            else
+            {
+                // لا نختار أي موظف تلقائياً عند فتح النظام
+                _selectedEmployee = null;
+                _documents.Clear();
+                _sharedCounts.Clear();
             }
         }
         catch (Exception ex)
@@ -741,6 +861,7 @@
     private async Task SelectEmployee(Employee emp)
     {
         _selectedEmployee = emp;
+        SessionService.LastSelectedEmployeeId = emp.EmployeeId; // حفظ التحديد في الجلسة
         await LoadEmployeeDocuments(emp.EmployeeId);
     }
 
@@ -803,6 +924,10 @@
     {
         if (_employeeStatusFilter == "Active" && e.IsActive != 1) return false;
         if (_employeeStatusFilter == "Inactive" && e.IsActive == 1) return false;
+
+        // تصفية حسب الشعبة للمدير العام فقط
+        if (SessionService.IsSuperAdmin && _selectedDepartmentFilter.HasValue && e.DepartmentId != _selectedDepartmentFilter.Value)
+            return false;
 
         if (!string.IsNullOrWhiteSpace(_employeeSearchText))
         {
@@ -912,12 +1037,8 @@
 
         if (result is not null && !result.Canceled && result.Data is Employee updatedEmp)
         {
-            var index = _employees.FindIndex(e => e.EmployeeId == updatedEmp.EmployeeId);
-            if (index != -1)
-            {
-                _employees[index] = updatedEmp;
-            }
-            _selectedEmployee = updatedEmp;
+            await LoadEmployees();
+            _selectedEmployee = _employees.FirstOrDefault(e => e.EmployeeId == updatedEmp.EmployeeId);
             StateHasChanged();
         }
     }
@@ -933,7 +1054,7 @@
         }
 
         bool hasDocuments = await DbContext.DocumentEmployees
-            .AnyAsync(de => de.EmployeeId == _selectedEmployee.EmployeeId);
+            .AnyAsync(de => de.EmployeeId == _selectedEmployee.EmployeeId && de.IsDeleted == 0);
 
         if (hasDocuments)
         {
@@ -944,7 +1065,6 @@
             return;
         }
 
-        // عرض نافذة طلب سبب الحذف
         var parameters = new DialogParameters
         {
             ["Title"] = "تأكيد نقل الموظف إلى سلة المحذوفات",
@@ -984,17 +1104,12 @@
             }
 
             _employees.Remove(_selectedEmployee);
-            _selectedEmployee = _employees.FirstOrDefault();
 
-            if (_selectedEmployee != null)
-            {
-                await SelectEmployee(_selectedEmployee);
-            }
-            else
-            {
-                _documents.Clear();
-                _sharedCounts.Clear();
-            }
+            // عند حذف الموظف المحدد: نلغي التحديد بالكامل ولا نقفز للموظف الأول
+            _selectedEmployee = null;
+            SessionService.LastSelectedEmployeeId = null;
+            _documents.Clear();
+            _sharedCounts.Clear();
 
             Snackbar.Add($"تم نقل إضبارة الموظف ({deletedEmpName}) إلى سلة المحذوفات بنجاح", Severity.Success);
         }
@@ -1164,7 +1279,6 @@
 
         try
         {
-            // 1. فحص الروابط الفعالة الحالية للكتاب
             var activeLinks = await DbContext.DocumentEmployees
                 .Where(de => de.DocumentId == doc.DocumentId && de.IsDeleted == 0)
                 .ToListAsync();
@@ -1172,7 +1286,6 @@
             int linkedEmployeesCount = activeLinks.Count;
             bool deleteAll = false;
 
-            // 2. إذا كان الكتاب مشتركاً بين أكثر من موظف، نسأل المستخدم عن نوع الحذف
             if (linkedEmployeesCount > 1)
             {
                 var parameters = new DialogParameters
@@ -1195,11 +1308,9 @@
             }
             else
             {
-                // إذا كان مرتبطاً بموظف واحد فقط، فالحذف حتماً هو حذف كلي ونقل للسلة
                 deleteAll = true;
             }
 
-            // 3. طلب سبب الحذف إلزامياً في كل الحالات (موظف واحد أو مشترك)
             string dialogTitle = deleteAll ? "تأكيد حذف المستند وإرساله للسلة" : "تأكيد استبعاد المستند من الموظف";
             string dialogMessage = deleteAll
                 ? $"سيتم نقل كتاب ({doc.Subject}) ذي الرقم ({doc.DocumentNumber}) إلى سلة المحذوفات. يرجى تدوين سبب الحذف للمسؤول."
@@ -1223,7 +1334,6 @@
 
             if (deleteAll)
             {
-                // أ) تحديث سجل المستند الأصلي
                 var docDb = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == doc.DocumentId);
                 if (docDb != null)
                 {
@@ -1235,7 +1345,6 @@
                     DbContext.Documents.Update(docDb);
                 }
 
-                // ب) تحديث كافة روابط المستند لتصبح محذوفة أيضاً
                 var allDocLinks = await DbContext.DocumentEmployees
                     .Where(de => de.DocumentId == doc.DocumentId)
                     .ToListAsync();
@@ -1262,7 +1371,6 @@
             }
             else
             {
-                // حذف فردي: إبقاء المستند نشطاً وتعديل رابط الموظف الحالي فقط
                 var currentLink = activeLinks.FirstOrDefault(de => de.EmployeeId == _selectedEmployee.EmployeeId);
                 if (currentLink != null)
                 {
@@ -1285,7 +1393,6 @@
                 }
             }
 
-            // تحديث واجهة إضبارة الموظف فوراً
             await LoadEmployeeDocuments(_selectedEmployee.EmployeeId);
             StateHasChanged();
         }

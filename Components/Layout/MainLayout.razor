@@ -47,20 +47,23 @@
 
                 <MudSpacer />
 
-                <!-- قائمة المستخدم: عند الضغط تفتح خيارات (تغيير كلمة المرور / تسجيل الخروج) -->
+                <!-- قائمة المستخدم: عرض الاسم الكامل وتسمية الشعبة بدقة -->
                 <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Dense="true">
                     <ActivatorContent>
                         <div class="d-flex align-center gap-2 px-3 py-1 rounded" style="cursor: pointer; background-color: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2);">
-                            <MudAvatar Color="Color.Surface" Size="Size.Small" Style="background-color: white; color: #1B4D3E; font-weight: bold; width: 28px; height: 28px; font-size: 0.85rem;">
-                                @(SessionService.CurrentUser?.UserName.FirstOrDefault().ToString().ToUpper() ?? "U")
+
+                            <!-- الأفاتار: أول حرف من الاسم الكامل -->
+                            <MudAvatar Color="Color.Surface" Size="Size.Small" Style="background-color: white; color: #1B4D3E; font-weight: bold; width: 30px; height: 30px; font-size: 0.9rem;">
+                                @GetAvatarInitial()
                             </MudAvatar>
 
+                            <!-- تفاصيل المستخدم: الاسم الكامل والشعبة -->
                             <div class="d-flex flex-column text-end">
-                                <span class="fw-bold" style="font-size: 0.85rem; line-height: 1.1; color: white;">
-                                    @SessionService.CurrentUser?.UserName
+                                <span class="fw-bold" style="font-size: 0.88rem; line-height: 1.2; color: white;">
+                                    @GetUserDisplayName()
                                 </span>
-                                <span style="font-size: 0.7rem; color: #e0f2f1; opacity: 0.9;">
-                                    @SessionService.RoleName
+                                <span style="font-size: 0.72rem; color: #c8e6c9; line-height: 1.1;">
+                                    @GetUserSubTitle()
                                 </span>
                             </div>
 
@@ -138,6 +141,48 @@
         };
     }
 
+    private string GetAvatarInitial()
+    {
+        var fullName = SessionService.CurrentUser?.FullName?.Trim();
+        if (!string.IsNullOrWhiteSpace(fullName))
+        {
+            return fullName[0].ToString().ToUpper();
+        }
+
+        var userName = SessionService.CurrentUser?.UserName?.Trim();
+        if (!string.IsNullOrWhiteSpace(userName))
+        {
+            return userName[0].ToString().ToUpper();
+        }
+
+        return "م";
+    }
+
+    private string GetUserDisplayName()
+    {
+        if (!string.IsNullOrWhiteSpace(SessionService.CurrentUser?.FullName))
+        {
+            return SessionService.CurrentUser.FullName;
+        }
+
+        return SessionService.CurrentUser?.UserName ?? "المستخدم";
+    }
+
+    private string GetUserSubTitle()
+    {
+        if (SessionService.IsSuperAdmin)
+        {
+            return "الإدارة العامة (مدير النظام)";
+        }
+
+        if (!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName))
+        {
+            return SessionService.CurrentDepartmentName;
+        }
+
+        return SessionService.RoleName;
+    }
+
     private void HandleSessionChanged()
     {
         UpdateDrawerState();
@@ -146,7 +191,6 @@
 
     private void UpdateDrawerState()
     {
-        // تفتح القائمة فقط إذا كان المستخدم مسجلاً وهو مدير (Admin)، وتغلق تلقائياً لأي مستخدم آخر
         _drawerOpen = SessionService.IsLoggedIn && SessionService.IsAdmin;
     }
 

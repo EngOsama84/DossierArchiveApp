@@ -16,22 +16,29 @@
 <div dir="rtl" class="pa-4" style="background-color: #f8f9fa; min-height: 90vh; text-align: right;">
 
     <!-- العنوان وشريط الإجراءات -->
-    <div class="d-flex justify-space-between align-center mb-4">
+    <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-4">
         <div>
             <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">
                 <MudIcon Icon="@Icons.Material.Filled.History" Class="ml-2" /> سجل حركات النظام
             </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                متابعة وتدقيق العمليات المنفذة على الأضابير والمستندات
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <span>متابعة وتدقيق العمليات والرقابة الأمنية المنفذة على أضابير وكتب كافة الشُعب</span>
+                }
+                else
+                {
+                    <span>متابعة الحركات والعمليات المنفذة ضمن اختصاص (@(!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? SessionService.CurrentDepartmentName : "الشعبة"))</span>
+                }
             </MudText>
         </div>
 
-        <div class="d-flex gap-2">
+        <div class="d-flex align-center gap-2">
             <MudButton Variant="Variant.Filled"
                        Color="Color.Primary"
                        StartIcon="@Icons.Material.Filled.Print"
                        OnClick="OpenPrintLogs"
-                       Disabled="_isLoading || !_logs.Any()"
+                       Disabled="_isLoading || !FilteredLogs.Any()"
                        Style="background-color: #1B4D3E; color: white; font-weight: bold; border-radius: 6px;">
                 طباعة التقرير
             </MudButton>
@@ -47,10 +54,12 @@
         </div>
     </div>
 
-    <!-- شريط البحث والفلترة مع محددات التاريخ -->
+    <!-- شريط البحث والفلترة -->
     <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background-color: white; border: 1px solid #e0e0e0; border-radius: 6px;">
         <MudGrid Spacing="2" Class="align-center">
-            <MudItem xs="12" sm="4">
+
+            <!-- 1. البحث النصي -->
+            <MudItem xs="12" sm="@(SessionService.IsSuperAdmin ? 3 : 5)">
                 <MudTextField @bind-Value="_searchString"
                               Placeholder="بحث في الوصف، اسم المستخدم، أو نوع الكيان..."
                               Variant="Variant.Outlined"
@@ -60,7 +69,28 @@
                               AdornmentIcon="@Icons.Material.Filled.Search" />
             </MudItem>
 
-            <MudItem xs="12" sm="3">
+            <!-- 2. فلتر الشعبة (يظهر فقط للمدير العام) -->
+            @if (SessionService.IsSuperAdmin)
+            {
+                <MudItem xs="12" sm="2">
+                    <MudSelect T="int?"
+                               @bind-Value="_selectedDepartmentId"
+                               Label="الشعبة"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Clearable="true">
+                        <MudSelectItem T="int?" Value="@((int?)null)">كافة الشُعب</MudSelectItem>
+                        @foreach (var dept in _departments)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+
+            <!-- 3. نوع الإجراء -->
+            <MudItem xs="12" sm="@(SessionService.IsSuperAdmin ? 2 : 2)">
                 <MudSelect T="string" @bind-Value="_selectedActionType"
                            Label="نوع الإجراء"
                            Variant="Variant.Outlined"
@@ -71,11 +101,13 @@
                     <MudSelectItem Value="@("إضافة")">إضافة</MudSelectItem>
                     <MudSelectItem Value="@("تعديل")">تعديل</MudSelectItem>
                     <MudSelectItem Value="@("حذف")">حذف</MudSelectItem>
+                    <MudSelectItem Value="@("استرجاع")">استرجاع</MudSelectItem>
                     <MudSelectItem Value="@("استعراض")">استعراض / فتح</MudSelectItem>
                     <MudSelectItem Value="@("دخول")">تسجيل دخول</MudSelectItem>
                 </MudSelect>
             </MudItem>
 
+            <!-- 4. من تاريخ -->
             <MudItem xs="12" sm="2">
                 <MudDatePicker @bind-Date="_dateFrom"
                                Label="من تاريخ"
@@ -85,6 +117,7 @@
                                Clearable="true" />
             </MudItem>
 
+            <!-- 5. إلى تاريخ -->
             <MudItem xs="12" sm="2">
                 <MudDatePicker @bind-Date="_dateTo"
                                Label="إلى تاريخ"
@@ -94,6 +127,7 @@
                                Clearable="true" />
             </MudItem>
 
+            <!-- 6. تفريغ الفلاتر -->
             <MudItem xs="12" sm="1" Class="d-flex justify-center">
                 <MudIconButton Icon="@Icons.Material.Filled.ClearAll"
                                Title="إعادة تعيين الفلاتر"
@@ -108,7 +142,7 @@
         <MudTable Items="FilteredLogs" Dense="true" Hover="true" Striped="true" Loading="_isLoading" Elevation="0">
             <HeaderContent>
                 <MudTh Style="font-weight: bold; width: 170px;">التاريخ والوقت</MudTh>
-                <MudTh Style="font-weight: bold; width: 140px;">المستخدم</MudTh>
+                <MudTh Style="font-weight: bold; width: 170px;">المستخدم / الشُعبة</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center; width: 120px;">نوع الإجراء</MudTh>
                 <MudTh Style="font-weight: bold; width: 130px;">الكيان المستهدف</MudTh>
                 <MudTh Style="font-weight: bold;">تفاصيل العملية</MudTh>
@@ -118,9 +152,17 @@
                     @context.CreatedAtFormatted
                 </MudTd>
                 <MudTd DataLabel="المستخدم">
-                    <div class="d-flex align-center gap-1">
-                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Small" Color="Color.Default" />
-                        <span class="fw-bold">@context.UserName</span>
+                    <div>
+                        <div class="d-flex align-center gap-1">
+                            <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Small" Color="Color.Default" />
+                            <span class="fw-bold">@context.UserName</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(context.DepartmentName))
+                        {
+                            <span style="font-size: 0.72rem; color: #1B4D3E; background-color: #E8F5E9; padding: 1px 6px; border-radius: 4px; display: inline-block; margin-top: 2px;">
+                                @context.DepartmentName
+                            </span>
+                        }
                     </div>
                 </MudTd>
                 <MudTd DataLabel="نوع الإجراء" Style="text-align: center;">
@@ -156,20 +198,36 @@
 </div>
 
 @code {
-    public record AuditLogView(int LogId, string UserName, string ActionType, string? EntityType, int? EntityId, string Description, DateTime? RawCreatedAt, string CreatedAtFormatted);
+    public record AuditLogView(
+        int LogId,
+        string UserName,
+        int? DepartmentId,
+        string? DepartmentName,
+        string ActionType,
+        string? EntityType,
+        int? EntityId,
+        string Description,
+        DateTime? RawCreatedAt,
+        string CreatedAtFormatted
+    );
 
     private List<AuditLogView> _logs = new();
+    private List<Department> _departments = new();
     private bool _isLoading = true;
+
     private string _searchString = string.Empty;
+    private int? _selectedDepartmentId;
     private string _selectedActionType = "الكل";
     private DateTime? _dateFrom;
     private DateTime? _dateTo;
 
     private IEnumerable<AuditLogView> FilteredLogs => _logs.Where(l =>
         (_selectedActionType == "الكل" || string.IsNullOrEmpty(_selectedActionType) || l.ActionType.Contains(_selectedActionType)) &&
+        (!SessionService.IsSuperAdmin || !_selectedDepartmentId.HasValue || l.DepartmentId == _selectedDepartmentId.Value) &&
         (string.IsNullOrWhiteSpace(_searchString) ||
          l.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
          l.UserName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+         (l.DepartmentName != null && l.DepartmentName.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
          (l.EntityType != null && l.EntityType.Contains(_searchString, StringComparison.OrdinalIgnoreCase))) &&
         (!_dateFrom.HasValue || (l.RawCreatedAt.HasValue && l.RawCreatedAt.Value.Date >= _dateFrom.Value.Date)) &&
         (!_dateTo.HasValue || (l.RawCreatedAt.HasValue && l.RawCreatedAt.Value.Date <= _dateTo.Value.Date)));
@@ -178,9 +236,18 @@
     {
         if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
         {
-            Snackbar.Add("عذراً، الاطلاع على سجل الحركات والتدقيق مقتصر على مدير النظام فقط!", Severity.Error);
+            Snackbar.Add("عذراً، الاطلاع على سجل الحركات والتدقيق مقتصر على المشرفين المصرح لهم فقط!", Severity.Error);
             Navigation.NavigateTo("/employees");
             return;
+        }
+
+        if (SessionService.IsSuperAdmin)
+        {
+            _departments = await DbContext.Departments
+                .AsNoTracking()
+                .Where(d => d.IsActive == 1)
+                .OrderBy(d => d.DepartmentId)
+                .ToListAsync();
         }
 
         await LoadLogs();
@@ -191,25 +258,70 @@
         _isLoading = true;
         try
         {
-            var rawLogs = await DbContext.AuditLogs
-                .OrderByDescending(l => l.LogId)
-                .Take(500)
+            // استعلام المستخدمين لبناء خريطة بيانات المستخدمين
+            var userQuery = DbContext.Users
+                .Include(u => u.Department)
                 .AsNoTracking()
+                .AsQueryable();
+
+            // إذا لم يكن المستخدم سوبر أدمن، يتم حصر خريطة المستخدمين بمستخدمي شعبته فقط
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (SessionService.CurrentDepartmentId.HasValue)
+                {
+                    int myDeptId = SessionService.CurrentDepartmentId.Value;
+                    userQuery = userQuery.Where(u => u.DepartmentId == myDeptId && u.IsSuperAdmin == 0);
+                }
+                else
+                {
+                    userQuery = userQuery.Where(u => false);
+                }
+            }
+
+            var users = await userQuery.ToListAsync();
+
+            var userMap = users.ToDictionary(
+                u => u.UserId,
+                u => new
+                {
+                    Name = string.IsNullOrWhiteSpace(u.FullName) ? u.UserName : u.FullName,
+                    DeptId = u.DepartmentId,
+                    DeptName = u.IsSuperAdmin == 1 ? "إدارة عامة" : (u.Department?.Name ?? "غير محدد")
+                });
+
+            // استعلام الحركات
+            var logQuery = DbContext.AuditLogs.AsNoTracking().AsQueryable();
+
+            // عزل أمني صارم: مدير الشعبة يرى فقط الحركات الصادرة من مستخدمي شعبته
+            if (!SessionService.IsSuperAdmin)
+            {
+                var allowedUserIds = userMap.Keys.ToList();
+                logQuery = logQuery.Where(l => l.UserId.HasValue && allowedUserIds.Contains(l.UserId.Value));
+            }
+
+            var rawLogs = await logQuery
+                .OrderByDescending(l => l.LogId)
+                .Take(700)
                 .ToListAsync();
 
-            var users = await DbContext.Users.AsNoTracking().ToListAsync();
-            var userMap = users.ToDictionary(u => u.UserId, u => u.UserName);
+            _logs = rawLogs.Select(l =>
+            {
+                bool hasUser = l.UserId.HasValue && userMap.ContainsKey(l.UserId.Value);
+                var u = hasUser ? userMap[l.UserId!.Value] : null;
 
-            _logs = rawLogs.Select(l => new AuditLogView(
-                l.LogId,
-                l.UserId.HasValue && userMap.ContainsKey(l.UserId.Value) ? userMap[l.UserId.Value] : "المسؤول",
-                l.ActionType,
-                l.EntityType,
-                l.EntityId,
-                l.Description,
-                l.CreatedAt,
-                l.CreatedAt?.ToString("yyyy/MM/dd hh:mm tt") ?? "—"
-            )).ToList();
+                return new AuditLogView(
+                    l.LogId,
+                    u?.Name ?? (SessionService.IsSuperAdmin ? "النظام" : "مستخدم"),
+                    u?.DeptId,
+                    u?.DeptName,
+                    l.ActionType,
+                    l.EntityType,
+                    l.EntityId,
+                    l.Description,
+                    l.CreatedAt,
+                    l.CreatedAt?.ToString("yyyy/MM/dd hh:mm tt") ?? "—"
+                );
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -224,6 +336,10 @@
     private void ResetFilters()
     {
         _searchString = string.Empty;
+        if (SessionService.IsSuperAdmin)
+        {
+            _selectedDepartmentId = null;
+        }
         _selectedActionType = "الكل";
         _dateFrom = null;
         _dateTo = null;
@@ -235,6 +351,17 @@
 
         if (!string.IsNullOrWhiteSpace(_selectedActionType) && _selectedActionType != "الكل")
             queryParams.Add($"action={Uri.EscapeDataString(_selectedActionType)}");
+
+        // حصر الشعبة في رابط الطباعة تلقائياً لمدير الشعبة
+        if (SessionService.IsSuperAdmin)
+        {
+            if (_selectedDepartmentId.HasValue)
+                queryParams.Add($"dept={_selectedDepartmentId.Value}");
+        }
+        else if (SessionService.CurrentDepartmentId.HasValue)
+        {
+            queryParams.Add($"dept={SessionService.CurrentDepartmentId.Value}");
+        }
 
         if (!string.IsNullOrWhiteSpace(_searchString))
             queryParams.Add($"search={Uri.EscapeDataString(_searchString)}");
@@ -253,7 +380,7 @@
             actionType: "طباعة تقرير",
             entityType: "سجل التدقيق",
             entityId: null,
-            description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بفتح ومعاينة تقرير طباعة سجل حركات النظام للفترة: {(_dateFrom?.ToString("yyyy-MM-dd") ?? "البداية")} إلى {(_dateTo?.ToString("yyyy-MM-dd") ?? "اليوم")}."
+            description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بفتح تقرير طباعة سجل الحركات للفترة: {(_dateFrom?.ToString("yyyy-MM-dd") ?? "البداية")} إلى {(_dateTo?.ToString("yyyy-MM-dd") ?? "اليوم")}."
         );
     }
 }

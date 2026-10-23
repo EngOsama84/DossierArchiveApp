@@ -2,6 +2,7 @@
 @using DossierArchiveApp.Models
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Services
+@using System.IO
 @inject UserSessionService SessionService
 @inject AppDbContext DbContext
 @inject ISnackbar Snackbar
@@ -16,6 +17,34 @@
         </TitleContent>
         <DialogContent>
             <MudForm @ref="_form" @bind-IsValid="_isValid">
+
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <MudSelect T="int?"
+                               @bind-Value="_selectedDepartmentId"
+                               Label="الشعبة التابع لها الموظف"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Required="true"
+                               RequiredError="يرجى تحديد الشعبة التابع لها الموظف"
+                               Dense="true"
+                               Class="mb-4">
+                        @foreach (var dept in _departments)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <div class="pa-2 mb-3 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">الشعبة المسجلة للإضبارة:</MudText>
+                        <MudText Typo="Typo.body2" Class="fw-bold" Style="color: #1B4D3E;">
+                            @(_currentDeptName ?? SessionService.CurrentDepartmentName)
+                        </MudText>
+                    </div>
+                }
+
                 <MudTextField T="string"
                               Label="اسم الموظف الكامل"
                               @bind-Value="_employeeName"
@@ -78,13 +107,32 @@
     private string _fileNumber = string.Empty;
     private bool _isActive = true;
 
-    protected override void OnInitialized()
+    private int? _selectedDepartmentId;
+    private string? _currentDeptName;
+    private List<Department> _departments = new();
+
+    protected override async Task OnInitializedAsync()
     {
         if (EmployeeToEdit != null)
         {
             _employeeName = EmployeeToEdit.EmployeeName;
             _fileNumber = EmployeeToEdit.FileNumber;
             _isActive = EmployeeToEdit.IsActive == 1;
+            _selectedDepartmentId = EmployeeToEdit.DepartmentId;
+
+            if (EmployeeToEdit.DepartmentId.HasValue)
+            {
+                var dept = await DbContext.Departments.FindAsync(EmployeeToEdit.DepartmentId.Value);
+                _currentDeptName = dept?.Name;
+            }
+
+            if (SessionService.IsSuperAdmin)
+            {
+                _departments = await DbContext.Departments
+                    .Where(d => d.IsActive == 1)
+                    .OrderBy(d => d.DepartmentId)
+                    .ToListAsync();
+            }
         }
     }
 
@@ -95,13 +143,18 @@
         await _form.Validate();
         if (!_isValid) return;
 
+        if (SessionService.IsSuperAdmin && !_selectedDepartmentId.HasValue)
+        {
+            Snackbar.Add("يرجى اختيار الشعبة التي يتبع لها الموظف!", Severity.Warning);
+            return;
+        }
+
         string trimmedName = _employeeName.Trim();
         string trimmedFile = _fileNumber.Trim();
 
         _isSaving = true;
         try
         {
-            // 1. التحقق من مسار مجلد النظام الرئيسي (BaseFolderPath)
             var settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
             if (settings == null || string.IsNullOrWhiteSpace(settings.BaseFolderPath))
             {
@@ -117,7 +170,7 @@
                 return;
             }
 
-            // 2. التحقق من عدم التكرار مع موظف آخر
+            // التحقق من تكرار الاسم ورقم الإضبارة مع موظف آخر
             bool nameExists = await DbContext.Employees.AnyAsync(e => e.EmployeeId != EmployeeToEdit.EmployeeId && e.EmployeeName == trimmedName);
             if (nameExists)
             {
@@ -134,12 +187,24 @@
                 return;
             }
 
-            // 3. معالجة مجلد الموظف والمستندات الفيزيائية
             char[] invalidChars = Path.GetInvalidFileNameChars();
             string cleanName = string.Concat(trimmedName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
             string cleanFile = string.Concat(trimmedFile.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
 
-            string newFolderRelPath = $"{cleanFile}_{cleanName}";
+            int? targetDeptId = SessionService.IsSuperAdmin ? _selectedDepartmentId : EmployeeToEdit.DepartmentId;
+
+            // تحديد اسم مجلد الشعبة الفيزيائي الجديد
+            string deptFolderName = "المديرية العامة";
+            if (targetDeptId.HasValue)
+            {
+                var targetDept = await DbContext.Departments.FindAsync(targetDeptId.Value);
+                if (targetDept != null && !string.IsNullOrWhiteSpace(targetDept.Name))
+                {
+                    deptFolderName = string.Concat(targetDept.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                }
+            }
+
+            string newFolderRelPath = Path.Combine(deptFolderName, $"{cleanFile}_{cleanName}");
             string newFolderFullPath = Path.Combine(settings.BaseFolderPath, newFolderRelPath);
 
             string oldFolderRelPath = EmployeeToEdit.EmployeeFolderPath ?? string.Empty;
@@ -147,15 +212,20 @@
                 ? Path.Combine(settings.BaseFolderPath, oldFolderRelPath)
                 : string.Empty;
 
-            // هل حدث تغيير في اسم المجلد الفيزيائي؟
+            // معالجة نقل المجلد الفيزيائي إذا تغير الاسم، الرقم، أو الشعبة
             if (!string.Equals(oldFolderRelPath, newFolderRelPath, StringComparison.OrdinalIgnoreCase))
             {
+                string? targetParentDir = Path.GetDirectoryName(newFolderFullPath);
+                if (!string.IsNullOrEmpty(targetParentDir) && !Directory.Exists(targetParentDir))
+                {
+                    Directory.CreateDirectory(targetParentDir);
+                }
+
                 if (!string.IsNullOrWhiteSpace(oldFolderFullPath) && Directory.Exists(oldFolderFullPath))
                 {
-                    // نقل وتغيير اسم المجلد القديم بكل ما يحتويه من كتب وتصنيفات إلى الاسم الجديد
                     Directory.Move(oldFolderFullPath, newFolderFullPath);
 
-                    // تحديث مسارات المستندات التابعة للموظف في جدول الربط TB_DocumentEmployees
+                    // تحديث مسارات المستندات في جدول الربط TB_DocumentEmployees
                     var docEmployees = await DbContext.DocumentEmployees
                         .Where(de => de.EmployeeId == EmployeeToEdit.EmployeeId)
                         .ToListAsync();
@@ -170,29 +240,41 @@
                 }
                 else
                 {
-                    // إنشاء المجلد الجديد وتصنيفاته
                     if (!Directory.Exists(newFolderFullPath))
                     {
                         Directory.CreateDirectory(newFolderFullPath);
                     }
 
+                    // تجهيز التصنيفات الأساسية
+                    string[] rootBranches = { "الصادر", "الوارد" };
                     var primaryCategories = await DbContext.PrimaryCategories.AsNoTracking().ToListAsync();
-                    if (primaryCategories.Any())
+                    List<string> categoryNames = primaryCategories
+                        .Select(c => c.Name.Trim())
+                        .Where(name => name != "صادر" && name != "وارد" && name != "الصادر" && name != "الوارد")
+                        .Distinct()
+                        .ToList();
+
+                    if (!categoryNames.Any())
                     {
-                        foreach (var cat in primaryCategories)
+                        categoryNames = new List<string> { "أوامر إدارية", "استمارات ومستمسكات", "طلبات شخصية", "كتب اعتيادية" };
+                    }
+
+                    foreach (var branch in rootBranches)
+                    {
+                        string branchFullPath = Path.Combine(newFolderFullPath, branch);
+                        if (!Directory.Exists(branchFullPath)) Directory.CreateDirectory(branchFullPath);
+
+                        foreach (var cat in categoryNames)
                         {
-                            string cleanCat = string.Concat(cat.Name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                            string subCategoryFolder = Path.Combine(newFolderFullPath, cleanCat);
-                            if (!Directory.Exists(subCategoryFolder))
-                            {
-                                Directory.CreateDirectory(subCategoryFolder);
-                            }
+                            string cleanCat = string.Concat(cat.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+                            string subCategoryFolder = Path.Combine(branchFullPath, cleanCat);
+                            if (!Directory.Exists(subCategoryFolder)) Directory.CreateDirectory(subCategoryFolder);
                         }
                     }
                 }
             }
 
-            // 4. تحديث سجل الموظف في قاعدة البيانات
+            // تحديث السجل في قاعدة البيانات
             var empDb = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == EmployeeToEdit.EmployeeId);
             if (empDb != null)
             {
@@ -200,28 +282,29 @@
 
                 empDb.EmployeeName = trimmedName;
                 empDb.FileNumber = trimmedFile;
+                empDb.DepartmentId = targetDeptId;
                 empDb.IsActive = _isActive ? 1 : 0;
                 empDb.EmployeeFolderPath = newFolderRelPath;
-                empDb.UpdatedAt = DateTime.Now; // إسناد مباشر كـ DateTime? بدلاً من النص
+                empDb.UpdatedAt = DateTime.Now;
 
                 await DbContext.SaveChangesAsync();
 
-                // توثيق حركة التعديل في سجل الحركات
                 await SessionService.LogActivityAsync(
                     actionType: "تعديل موظف",
                     entityType: "موظف",
                     entityId: empDb.EmployeeId,
-                    description: $"تم تعديل بيانات الموظف ({oldName}) - الاسم الجديد: ({empDb.EmployeeName}) ورقم الإضبارة: ({empDb.FileNumber})."
+                    description: $"تم تعديل بيانات الموظف ({oldName}) - الاسم: ({empDb.EmployeeName})، رقم الإضبارة: ({empDb.FileNumber})، الشعبة: ({deptFolderName})."
                 );
 
-                // تحديث الكائن في الذاكرة للعرض الفوري
+                // مزامنة الكائن المعروض في الشاشة
                 EmployeeToEdit.EmployeeName = empDb.EmployeeName;
                 EmployeeToEdit.FileNumber = empDb.FileNumber;
+                EmployeeToEdit.DepartmentId = empDb.DepartmentId;
                 EmployeeToEdit.IsActive = empDb.IsActive;
                 EmployeeToEdit.EmployeeFolderPath = empDb.EmployeeFolderPath;
                 EmployeeToEdit.UpdatedAt = empDb.UpdatedAt;
 
-                Snackbar.Add("تم تحديث بيانات الموظف ومجلداته ومستنداته بنجاح!", Severity.Success);
+                Snackbar.Add("تم تحديث بيانات الموظف والشعبة ومجلداته بنجاح!", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(EmployeeToEdit));
             }
             else

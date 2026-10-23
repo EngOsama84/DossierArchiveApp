@@ -22,9 +22,17 @@
                     الأرشفة المجمعة الذكية (سحب وإفلات مع التحليل والمشاركة)
                 </MudText>
             </div>
-            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
-                الموظف: @Employee.EmployeeName (إضبارة: @Employee.FileNumber)
-            </MudChip>
+            <div class="d-flex align-center gap-2">
+                @if (Employee.Department != null)
+                {
+                    <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                        @Employee.Department.Name
+                    </MudChip>
+                }
+                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                    الموظف: @Employee.EmployeeName (إضبارة: @Employee.FileNumber)
+                </MudChip>
+            </div>
         </div>
     </TitleContent>
 
@@ -443,6 +451,15 @@
     private int _processedCount = 0;
     private double _progressPercentage => _items.Count == 0 ? 0 : (_processedCount * 100.0) / _items.Count;
 
+    protected override void OnInitialized()
+    {
+        if (!SessionService.CanAccessEmployee(Employee))
+        {
+            Snackbar.Add("عذراً، لا تمتلك الصلاحية للأرشفة في هذه الإضبارة!", Severity.Error);
+            MudDialog.Cancel();
+        }
+    }
+
     private string GetMainCatName(int? id)
     {
         if (!id.HasValue) return string.Empty;
@@ -537,7 +554,7 @@
         var primCat = PrimaryCategories.FirstOrDefault(p => p.PrimaryCategoryId == primaryCatId.Value);
         string primName = primCat?.Name?.Trim() ?? string.Empty;
         var dbList = SecondaryCategories.Where(s => s.PrimaryCategoryId == primaryCatId.Value)
-                                        .GroupBy(s => s.Name.Trim()).Select(g => g.First()).ToList();
+                                         .GroupBy(s => s.Name.Trim()).Select(g => g.First()).ToList();
 
         string? matchedKey = _primaryToSecondaryMap.Keys.FirstOrDefault(k => primName.Contains(k));
         if (matchedKey != null)
@@ -655,7 +672,6 @@
         item.TertiaryCategoryId = null;
     }
 
-    // تطبيق القيم على مرحلتين لضمان جاهزية قائمة الفرعي الثاني وملئها من الضغطة الأولى
     private async Task ApplyBulkCategoryToAll()
     {
         foreach (var item in _items)
@@ -678,7 +694,7 @@
 
     private void OnFilesDropped(IReadOnlyList<IBrowserFile> files)
     {
-        const long maxFileSizeBytes = 20 * 1024 * 1024; // 20 ميغابايت
+        const long maxFileSizeBytes = 20 * 1024 * 1024;
 
         foreach (var file in files)
         {
@@ -862,25 +878,43 @@
 
             char[] invalidChars = Path.GetInvalidFileNameChars();
 
-            // 1. جلب الموظفين المشتركين بدفعة واحدة
+            // 1. جلب الموظفين المشتركين مع شعبهم بدفعة واحدة مع تطبيق شرط الأمان
             var allTargetEmployeeIds = _items.SelectMany(i => i.SharedEmployeeIds).Distinct().ToList();
-            var sharedEmployeesMap = await DbContext.Employees
-                .Where(e => allTargetEmployeeIds.Contains(e.EmployeeId))
-                .ToDictionaryAsync(e => e.EmployeeId, e => e);
+
+            var sharedEmployeesQuery = DbContext.Employees
+                .Include(e => e.Department)
+                .Where(e => allTargetEmployeeIds.Contains(e.EmployeeId));
+
+            if (!SessionService.IsSuperAdmin && SessionService.CurrentDepartmentId.HasValue)
+            {
+                int myDeptId = SessionService.CurrentDepartmentId.Value;
+                sharedEmployeesQuery = sharedEmployeesQuery.Where(e => e.DepartmentId == myDeptId);
+            }
+
+            var sharedEmployeesMap = await sharedEmployeesQuery.ToDictionaryAsync(e => e.EmployeeId, e => e);
 
             string cleanEmpName = string.Concat(Employee.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
             string cleanEmpFile = string.Concat(Employee.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-            string employeeFolderRelPath = !string.IsNullOrWhiteSpace(Employee.EmployeeFolderPath)
-                ? Employee.EmployeeFolderPath
-                : $"{cleanEmpFile}_{cleanEmpName}";
+
+            // تحديد مسار الموظف المعزول بالشعبة
+            string employeeFolderRelPath;
+            if (!string.IsNullOrWhiteSpace(Employee.EmployeeFolderPath))
+            {
+                employeeFolderRelPath = Employee.EmployeeFolderPath;
+            }
+            else
+            {
+                string deptFolder = Employee.Department != null
+                    ? string.Concat(Employee.Department.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries))
+                    : "المديرية العامة";
+                employeeFolderRelPath = Path.Combine(deptFolder, $"{cleanEmpFile}_{cleanEmpName}");
+            }
 
             string employeeRootFullPath = Path.Combine(baseFolder, employeeFolderRelPath);
             if (!Directory.Exists(employeeRootFullPath)) Directory.CreateDirectory(employeeRootFullPath);
 
-            // قاموس مؤقت لمنع تكرار إدخال نفس التصنيف الفرعي الجديد أكثر من مرة في نفس عملية الحفظ
             var createdSecCategories = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-            // استخدام معاملة موحدة لضمان تكامل البيانات
             await using var transaction = await DbContext.Database.BeginTransactionAsync();
 
             foreach (var item in _items)
@@ -909,7 +943,6 @@
                     {
                         secName = secCat.Name.Trim();
 
-                        // التحقق من التصنيفات المؤقتة ومنع تكرار إضافتها
                         if (actualSecondaryId is < 0 && item.PrimaryCategoryId.HasValue)
                         {
                             string catKey = $"{item.PrimaryCategoryId.Value}_{secName}";
@@ -920,7 +953,6 @@
                             }
                             else
                             {
-                                // فحص وجوده المسبق في قاعدة البيانات أولاً
                                 var existingDbCat = await DbContext.SecondaryCategories
                                     .FirstOrDefaultAsync(s => s.PrimaryCategoryId == item.PrimaryCategoryId.Value && s.Name == secName);
 
@@ -965,7 +997,6 @@
                     physicalFilePath = Path.Combine(primaryTargetDir, fileName);
                 }
 
-                // كتابة الملف للقرص بكفاءة وسرعة عبر FileStream
                 await using (var fileStream = new FileStream(physicalFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
                 {
                     await item.File.OpenReadStream(maxAllowedSize: 25 * 1024 * 1024).CopyToAsync(fileStream);
@@ -987,34 +1018,45 @@
                     PrimaryCategoryId = item.PrimaryCategoryId ?? 0,
                     SecondaryCategoryId = actualSecondaryId,
                     TertiaryCategoryId = actualTertiaryId,
+                    CreatedBy = SessionService.CurrentUser?.UserId,
                     IsDeleted = 0,
                     CreatedAt = DateTime.Now,
                     UpdatedAt = DateTime.Now
                 };
 
                 DbContext.Documents.Add(newDoc);
-                await DbContext.SaveChangesAsync(); // توليد DocumentId
+                await DbContext.SaveChangesAsync();
 
-                // ربط الموظف الأصلي
                 var docEmployeesToAdd = new List<DocumentEmployee>
-            {
-                new DocumentEmployee
                 {
-                    DocumentId = newDoc.DocumentId,
-                    EmployeeId = Employee.EmployeeId,
-                    EmployeeFilePath = relativeFilePath,
-                    CreatedAt = DateTime.Now
-                }
-            };
+                    new DocumentEmployee
+                    {
+                        DocumentId = newDoc.DocumentId,
+                        EmployeeId = Employee.EmployeeId,
+                        EmployeeFilePath = relativeFilePath,
+                        CreatedAt = DateTime.Now
+                    }
+                };
 
-                // توزيع نسخ الموظفين المشتركين
                 foreach (var sharedEmpId in item.SharedEmployeeIds)
                 {
                     if (sharedEmployeesMap.TryGetValue(sharedEmpId, out var sharedEmp))
                     {
                         string sCleanName = string.Concat(sharedEmp.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                         string sCleanFile = string.Concat(sharedEmp.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                        string sEmpFolderRel = !string.IsNullOrWhiteSpace(sharedEmp.EmployeeFolderPath) ? sharedEmp.EmployeeFolderPath : $"{sCleanFile}_{sCleanName}";
+
+                        string sEmpFolderRel;
+                        if (!string.IsNullOrWhiteSpace(sharedEmp.EmployeeFolderPath))
+                        {
+                            sEmpFolderRel = sharedEmp.EmployeeFolderPath;
+                        }
+                        else
+                        {
+                            string sDeptFolder = sharedEmp.Department != null
+                                ? string.Concat(sharedEmp.Department.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries))
+                                : "المديرية العامة";
+                            sEmpFolderRel = Path.Combine(sDeptFolder, $"{sCleanFile}_{sCleanName}");
+                        }
 
                         string sEmpTargetDir = Path.Combine(baseFolder, sEmpFolderRel, cleanBranch, cleanPri);
                         if (!string.IsNullOrWhiteSpace(secName))
@@ -1044,7 +1086,6 @@
                     }
                 }
 
-                // إضافة جميع علاقات الموظفين لهذا المستند في استدعاء واحد
                 DbContext.DocumentEmployees.AddRange(docEmployeesToAdd);
                 await DbContext.SaveChangesAsync();
 
@@ -1058,7 +1099,7 @@
                 actionType: "أرشفة ذكية مجمعة ومشاركة",
                 entityType: "إضبارة موظف",
                 entityId: Employee.EmployeeId,
-                description: $"أرشفة وتوزيع ({_items.Count}) كتاباً مع إدارة المشاركة الجماعية بنجاح."
+                description: $"أرشفة وتوزيع ({_items.Count}) كتاباً ضمن إضبارة ({Employee.EmployeeName})."
             );
 
             Snackbar.Add($"تم حفظ وتوزيع {_items.Count} كتاباً بنجاح في أضابير الموظفين المعنيين!", Severity.Success);

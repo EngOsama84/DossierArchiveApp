@@ -58,6 +58,24 @@ namespace DossierArchiveApp.Migrations
                     b.ToTable("TB_AuditLog");
                 });
 
+            modelBuilder.Entity("DossierArchiveApp.Models.Department", b =>
+                {
+                    b.Property<int>("DepartmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DepartmentId");
+
+                    b.ToTable("Departments");
+                });
+
             modelBuilder.Entity("DossierArchiveApp.Models.Document", b =>
                 {
                     b.Property<int>("DocumentId")
@@ -244,6 +262,9 @@ namespace DossierArchiveApp.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("DeletedBy");
 
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("EmployeeFolderPath")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -276,6 +297,8 @@ namespace DossierArchiveApp.Migrations
                         .HasColumnName("UpdatedBy");
 
                     b.HasKey("EmployeeId");
+
+                    b.HasIndex("DepartmentId");
 
                     b.HasIndex("EmployeeName")
                         .HasDatabaseName("IX_Employees_EmployeeName");
@@ -343,6 +366,29 @@ namespace DossierArchiveApp.Migrations
                     b.HasKey("SecondaryCategoryId");
 
                     b.ToTable("TB_SecondaryCategories");
+                });
+
+            modelBuilder.Entity("DossierArchiveApp.Models.SubUnit", b =>
+                {
+                    b.Property<int>("SubUnitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SubUnitId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.ToTable("SubUnits");
                 });
 
             modelBuilder.Entity("DossierArchiveApp.Models.SystemSetting", b =>
@@ -498,6 +544,9 @@ namespace DossierArchiveApp.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("CreatedAt");
 
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -510,6 +559,9 @@ namespace DossierArchiveApp.Migrations
                     b.Property<int>("IsAdmin")
                         .HasColumnType("INTEGER")
                         .HasColumnName("IsAdmin");
+
+                    b.Property<int>("IsSuperAdmin")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("LastLogin")
                         .HasColumnType("TEXT")
@@ -535,7 +587,41 @@ namespace DossierArchiveApp.Migrations
 
                     b.HasKey("UserId");
 
+                    b.HasIndex("DepartmentId");
+
                     b.ToTable("TB_Users");
+                });
+
+            modelBuilder.Entity("DossierArchiveApp.Models.Employee", b =>
+                {
+                    b.HasOne("DossierArchiveApp.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId");
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("DossierArchiveApp.Models.SubUnit", b =>
+                {
+                    b.HasOne("DossierArchiveApp.Models.Department", "Department")
+                        .WithMany("SubUnits")
+                        .HasForeignKey("DepartmentId");
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("DossierArchiveApp.Models.User", b =>
+                {
+                    b.HasOne("DossierArchiveApp.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId");
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("DossierArchiveApp.Models.Department", b =>
+                {
+                    b.Navigation("SubUnits");
                 });
 #pragma warning restore 612, 618
         }

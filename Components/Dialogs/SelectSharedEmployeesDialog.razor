@@ -3,7 +3,9 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
+@inject UserSessionService SessionService
 
 <MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
     <TitleContent>
@@ -21,6 +23,25 @@
                 الموظف الأساسي: <strong>@PrimaryEmployee.EmployeeName</strong> (إضبارة: @PrimaryEmployee.FileNumber) - مثبت تلقائياً.
             </MudAlert>
 
+            <!-- فلتر الشُعب يظهر للمدير العام فقط -->
+            @if (SessionService.IsSuperAdmin)
+            {
+                <MudSelect T="int?"
+                           @bind-Value="_selectedDepartmentFilter"
+                           Label="تصفية حسب الشُعبة"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           Clearable="true"
+                           Class="mb-2">
+                    <MudSelectItem T="int?" Value="@((int?)null)">كافة الشُعب</MudSelectItem>
+                    @foreach (var dept in _departments)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
             <!-- حقل بحث سريع لتصفية أسماء الموظفين -->
             <MudTextField @bind-Value="_searchText"
                           Placeholder="بحث بالاسم أو رقم الإضبارة..."
@@ -33,10 +54,16 @@
                           Class="mb-3" />
 
             <div style="max-height: 320px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px;" class="pa-2">
-                @if (!_allEmployees.Any())
+                @if (_loading)
                 {
                     <div class="d-flex justify-center pa-4">
                         <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Small" />
+                    </div>
+                }
+                else if (!FilteredEmployees.Any())
+                {
+                    <div class="pa-4 text-center text-muted" style="font-size: 0.85rem;">
+                        لا يوجد موظفون متاحون للمشاركة مطابقون لمعايير البحث.
                     </div>
                 }
                 else
@@ -48,7 +75,15 @@
                              style="border-bottom: 1px solid #f5f5f5; border-radius: 4px; background-color: @(isChecked ? "#e8f5e9" : "transparent");">
                             <div>
                                 <MudText Typo="Typo.body2" Class="fw-bold">@emp.EmployeeName</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">إضبارة: @emp.FileNumber</MudText>
+                                <div class="d-flex align-center gap-1 mt-1">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">إضبارة: @emp.FileNumber</MudText>
+                                    @if (SessionService.IsSuperAdmin && emp.Department != null)
+                                    {
+                                        <span style="font-size: 0.7rem; color: #1B4D3E; background-color: #E8F5E9; padding: 1px 5px; border-radius: 4px;">
+                                            @emp.Department.Name
+                                        </span>
+                                    }
+                                </div>
                             </div>
                             <MudCheckBox T="bool"
                                          Value="@isChecked"
@@ -96,24 +131,69 @@
     public List<int> InitialSelectedIds { get; set; } = new();
 
     private List<Employee> _allEmployees = new();
+    private List<Department> _departments = new();
     private HashSet<int> _selectedEmployeeIds = new();
+    private int? _selectedDepartmentFilter = null;
     private string _searchText = "";
+    private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
         _selectedEmployeeIds = new HashSet<int>(InitialSelectedIds);
+        _loading = true;
 
-        // جلب الموظفين الفعالين عدا الموظف الأساسي
-        _allEmployees = await DbContext.Employees
-            .AsNoTracking()
-            .Where(e => e.IsActive == 1 && e.IsDeleted == 0 && e.EmployeeId != PrimaryEmployee.EmployeeId)
-            .OrderBy(e => e.FileNumber)
-            .ToListAsync();
+        try
+        {
+            if (SessionService.IsSuperAdmin)
+            {
+                _departments = await DbContext.Departments
+                    .Where(d => d.IsActive == 1)
+                    .OrderBy(d => d.DepartmentId)
+                    .ToListAsync();
+            }
+
+            // استعلام الموظفين
+            var query = DbContext.Employees
+                .Include(e => e.Department)
+                .AsNoTracking()
+                .Where(e => e.IsActive == 1 && e.IsDeleted == 0 && e.EmployeeId != PrimaryEmployee.EmployeeId);
+
+            // عزل أمني صارم: إذا لم يكن المستخدم مديراً عاماً، يُحصر بنطاق شعبته حصراً
+            if (!SessionService.IsSuperAdmin)
+            {
+                int? myDeptId = SessionService.CurrentDepartmentId;
+                if (myDeptId.HasValue)
+                {
+                    query = query.Where(e => e.DepartmentId == myDeptId.Value);
+                }
+                else
+                {
+                    query = query.Where(e => false);
+                }
+            }
+
+            _allEmployees = await query.OrderBy(e => e.FileNumber).ToListAsync();
+
+            // تنظيف المعرفات المحددة سلفاً لمنع إبقاء أي موظف خارج نطاق الشعبة المسموحة
+            if (!SessionService.IsSuperAdmin)
+            {
+                var allowedIds = _allEmployees.Select(e => e.EmployeeId).ToHashSet();
+                _selectedEmployeeIds.RemoveWhere(id => !allowedIds.Contains(id));
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private IEnumerable<Employee> FilteredEmployees => _allEmployees.Where(e =>
     {
+        if (SessionService.IsSuperAdmin && _selectedDepartmentFilter.HasValue && e.DepartmentId != _selectedDepartmentFilter.Value)
+            return false;
+
         if (string.IsNullOrWhiteSpace(_searchText)) return true;
+
         return e.EmployeeName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
                e.FileNumber.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     });

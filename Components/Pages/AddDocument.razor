@@ -29,7 +29,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.NoteAdd" Class="ml-1" Size="Size.Small" /> إضافة مستند جديد
             </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-none d-sm-block">
-                أرشفة الكتب الرسمية عبر المسح الضوئي المباشر أو رفع ملفات الـ PDF
+                أرشفة الكتب الرسمية ضمن اختصاص (@(!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? SessionService.CurrentDepartmentName : "الإدارة العامة"))
             </MudText>
         </div>
 
@@ -93,6 +93,12 @@
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
                         </div>
                     }
+                    else if (!FilteredEmployees.Any())
+                    {
+                        <div class="pa-3 text-center text-muted" style="font-size: 0.82rem;">
+                            لا يوجد موظفون متاحون ضمن نطاق صلاحيتك.
+                        </div>
+                    }
                     else
                     {
                         @foreach (var emp in FilteredEmployees)
@@ -104,6 +110,12 @@
                                 <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
                                              ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
                                 <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
+                                @if (SessionService.IsSuperAdmin && emp.Department != null)
+                                {
+                                    <span class="ms-auto" style="font-size: 0.72rem; color: #2e7d32; background-color: #e8f5e9; padding: 1px 6px; border-radius: 4px;">
+                                        @emp.Department.Name
+                                    </span>
+                                }
                             </div>
                         }
                     }
@@ -441,9 +453,20 @@
         await LoadCategories();
         await LoadEmployees();
 
+        // فحص الأمان للموظف الممرر في الرابط
         if (InitialEmployeeId.HasValue)
         {
-            _selectedEmployeeIds.Add(InitialEmployeeId.Value);
+            var targetEmp = await DbContext.Employees.FirstOrDefaultAsync(e => e.EmployeeId == InitialEmployeeId.Value);
+            if (targetEmp != null && (SessionService.IsSuperAdmin || (SessionService.CurrentDepartmentId.HasValue && targetEmp.DepartmentId == SessionService.CurrentDepartmentId.Value)))
+            {
+                _selectedEmployeeIds.Add(InitialEmployeeId.Value);
+            }
+            else
+            {
+                Snackbar.Add("عذراً، لا تمتلك الصلاحية لأرشفة كتب لهذا الموظف خارج شعبتك!", Severity.Warning);
+                Navigation.NavigateTo("/employees");
+                return;
+            }
         }
     }
 
@@ -472,8 +495,26 @@
         _loadingEmployees = true;
         try
         {
-            _employees = await DbContext.Employees
-                .Where(e => e.IsActive == 1 && e.IsDeleted == 0)
+            var query = DbContext.Employees
+                .Include(e => e.Department)
+                .AsNoTracking()
+                .Where(e => e.IsActive == 1);
+
+            // تطبيق العزل الإداري الصارم: حصر الموظفين برقم شعبة المستخدم إلا إذا كان مديراً عاماً
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (SessionService.CurrentDepartmentId.HasValue)
+                {
+                    int myDeptId = SessionService.CurrentDepartmentId.Value;
+                    query = query.Where(e => e.DepartmentId == myDeptId);
+                }
+                else
+                {
+                    query = query.Where(e => false);
+                }
+            }
+
+            _employees = await query
                 .OrderBy(e => e.FileNumber)
                 .ToListAsync();
         }
@@ -645,7 +686,6 @@
         return result;
     }
 
-    // استخراج رقم وتاريخ وموضوع الكتاب ذكياً عند اختيار ملف PDF من الحاسوب
     private async Task OnPdfFileSelected(IBrowserFile file)
     {
         if (file == null) return;
@@ -655,7 +695,6 @@
             _selectedFile = file;
             _finalExtension = Path.GetExtension(file.Name).ToLower();
 
-            // تطبيق التحليل الذكي على اسم الملف المختار وحقن البيانات تلقائياً
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
             var parsed = ParseFileNameUltra(fileNameWithoutExt);
 
@@ -690,7 +729,6 @@
         }
     }
 
-    // دالة التحليل الذكي المعتمدة في الأرشفة المجمعة
     private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameUltra(string rawName)
     {
         string name = rawName.Trim();
@@ -788,17 +826,6 @@
         if (string.IsNullOrWhiteSpace(docNum)) docNum = "1";
 
         return (docNum.Trim(), subject.Trim(), detectedDate ?? DateTime.Today);
-    }
-
-    private async Task ClearPreview()
-    {
-        if (!string.IsNullOrEmpty(_previewFileUrl))
-        {
-            await JS.InvokeVoidAsync("revokeBlobUrl", _previewFileUrl);
-        }
-        _previewFileUrl = string.Empty;
-        _documentBytes = null;
-        _selectedFile = null;
     }
 
     private async Task StartScannerAcquisition()
@@ -934,6 +961,7 @@
                 PrimaryCategoryId = _selectedPrimaryCatId ?? 0,
                 SecondaryCategoryId = actualSecondaryId,
                 TertiaryCategoryId = actualTertiaryId,
+                CreatedBy = SessionService.CurrentUser?.UserId,
                 CreatedAt = DateTime.Now,
                 UpdatedAt = DateTime.Now,
                 IsDeleted = 0
@@ -942,7 +970,9 @@
             DbContext.Documents.Add(document);
             await DbContext.SaveChangesAsync();
 
+            // جلب بيانات الموظفين المحددين مع الشُعب التابعين لها
             var selectedEmployees = await DbContext.Employees
+                .Include(e => e.Department)
                 .Where(e => _selectedEmployeeIds.Contains(e.EmployeeId))
                 .ToListAsync();
 
@@ -952,9 +982,19 @@
             {
                 string cleanEmpName = string.Concat(emp.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                 string cleanEmpFile = string.Concat(emp.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                string empFolderRel = !string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)
-                    ? emp.EmployeeFolderPath
-                    : $"{cleanEmpFile}_{cleanEmpName}";
+
+                string empFolderRel;
+                if (!string.IsNullOrWhiteSpace(emp.EmployeeFolderPath))
+                {
+                    empFolderRel = emp.EmployeeFolderPath;
+                }
+                else
+                {
+                    string deptFolder = emp.Department != null
+                        ? string.Concat(emp.Department.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries))
+                        : "المديرية العامة";
+                    empFolderRel = Path.Combine(deptFolder, $"{cleanEmpFile}_{cleanEmpName}");
+                }
 
                 string targetCategoryDir = Path.Combine(baseFolder, empFolderRel, branchName, primaryFolderName);
 

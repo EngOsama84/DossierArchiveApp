@@ -4,7 +4,9 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
+@inject UserSessionService SessionService
 @inject ISnackbar Snackbar
 
 <PageTitle>الإحصائيات والتقارير</PageTitle>
@@ -17,7 +19,7 @@
             <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="ml-2" Size="Size.Medium" /> الإحصائيات العامة
         </MudText>
         <MudText Typo="Typo.caption" Color="Color.Secondary">
-            مؤشرات أداء أرشفة الكتب والوثائق وتوزيعها السنوي والشهري
+            مؤشرات أداء أرشفة الكتب والوثائق وتوزيعها السنوي والشهري ضمن نطاق (@(SessionService.IsSuperAdmin && _selectedDepartmentId.HasValue ? _departments.FirstOrDefault(d => d.DepartmentId == _selectedDepartmentId.Value)?.Name : (!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? SessionService.CurrentDepartmentName : "الإدارة العامة")))
         </MudText>
     </div>
 
@@ -25,24 +27,48 @@
     <MudPaper Elevation="1" Class="pa-3 mb-4" Style="background-color: white; border-radius: 8px;">
         <MudGrid Spacing="2" Class="align-center">
 
-            <!-- قائمة الموظفين -->
-            <MudItem xs="12" sm="6" md="6">
+            <!-- فلتر الشعب يظهر للمدير العام فقط -->
+            @if (SessionService.IsSuperAdmin)
+            {
+                <MudItem xs="12" sm="4" md="3">
+                    <MudSelect T="int?" Value="_selectedDepartmentId"
+                               ValueChanged="OnDepartmentChanged"
+                               Label="الشعبة"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Dense="true"
+                               Clearable="true"
+                               Style="background-color: white;">
+                        <MudSelectItem Value="@((int?)null)">كافة الشُعب</MudSelectItem>
+                        @foreach (var dept in _departments)
+                        {
+                            <MudSelectItem Value="@((int?)dept.DepartmentId)">@dept.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+
+            <!-- قائمة الموظفين (معزولة بدقة) -->
+            <MudItem xs="12" sm="@(SessionService.IsSuperAdmin ? 4 : 6)" md="@(SessionService.IsSuperAdmin ? 4 : 5)">
                 <MudSelect T="int?" @bind-Value="_selectedEmployeeId"
                            Label="تحديد الموظف"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
                            Dense="true"
+                           Clearable="true"
                            Style="background-color: white;">
-                    <MudSelectItem Value="@((int?)null)">كل الموظفين</MudSelectItem>
-                    @foreach (var emp in _employees)
+                    <MudSelectItem Value="@((int?)null)">كل الموظفين المتاحين</MudSelectItem>
+                    @foreach (var emp in FilteredEmployeesList)
                     {
-                        <MudSelectItem Value="@((int?)emp.EmployeeId)">@emp.EmployeeName</MudSelectItem>
+                        <MudSelectItem Value="@((int?)emp.EmployeeId)">
+                            @emp.EmployeeName (@emp.FileNumber)
+                        </MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
 
             <!-- حقل السنة -->
-            <MudItem xs="6" sm="3" md="3">
+            <MudItem xs="6" sm="2" md="2">
                 <MudNumericField T="int" @bind-Value="_selectedYear"
                                  Label="السنة"
                                  Variant="Variant.Outlined"
@@ -52,8 +78,8 @@
                                  Style="background-color: white; text-align: center;" />
             </MudItem>
 
-            <!-- زر عرض -->
-            <MudItem xs="6" sm="3" md="3">
+            <!-- زر التحديث -->
+            <MudItem xs="6" sm="2" md="2">
                 <MudButton Variant="Variant.Filled"
                            FullWidth="true"
                            OnClick="LoadStatistics"
@@ -62,7 +88,7 @@
                     @if (_isLoading)
                     {
                         <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
-                        <span>جارٍ الجلب...</span>
+                        <span>جلب...</span>
                     }
                     else
                     {
@@ -96,12 +122,12 @@
         <MudItem xs="12" sm="4">
             <MudPaper Elevation="1" Class="pa-3 text-center kpi-card">
                 <MudText Typo="Typo.h4" Class="fw-bold mb-1" Style="color: #1B4D3E;">@_totalCount</MudText>
-                <MudText Typo="Typo.subtitle2" Style="color: #607d8b; font-weight: bold;">إجمالي الكتب</MudText>
+                <MudText Typo="Typo.subtitle2" Style="color: #607d8b; font-weight: bold;">إجمالي الكتب المؤرشفة</MudText>
             </MudPaper>
         </MudItem>
     </MudGrid>
 
-    <!-- قسم المخطط البياني للأشهر مع حماية العرض بالتمرير الأفقي -->
+    <!-- قسم المخطط البياني للأشهر -->
     <MudPaper Elevation="1" Class="pa-3 pa-md-4 mb-4" Style="background-color: white; border-radius: 8px;">
         <div class="d-flex justify-space-between align-center mb-3">
             <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="color: #2c3e50;">
@@ -196,9 +222,11 @@
 @code {
     private int _selectedYear = 2026;
     private int? _selectedEmployeeId = null;
+    private int? _selectedDepartmentId = null;
     private bool _isLoading = false;
 
     private List<Employee> _employees = new();
+    private List<Department> _departments = new();
 
     private int _totalCount = 0;
     private int _outgoingCount = 0;
@@ -210,9 +238,30 @@
     private record CategoryStat(string CategoryName, int Count);
     private List<CategoryStat> _categoryBreakdown = new();
 
+    private IEnumerable<Employee> FilteredEmployeesList =>
+        SessionService.IsSuperAdmin && _selectedDepartmentId.HasValue
+            ? _employees.Where(e => e.DepartmentId == _selectedDepartmentId.Value)
+            : _employees;
+
     protected override async Task OnInitializedAsync()
     {
+        if (SessionService.IsSuperAdmin)
+        {
+            _departments = await DbContext.Departments
+                .AsNoTracking()
+                .Where(d => d.IsActive == 1)
+                .OrderBy(d => d.DepartmentId)
+                .ToListAsync();
+        }
+
         await LoadEmployees();
+        await LoadStatistics();
+    }
+
+    private async Task OnDepartmentChanged(int? deptId)
+    {
+        _selectedDepartmentId = deptId;
+        _selectedEmployeeId = null;
         await LoadStatistics();
     }
 
@@ -220,10 +269,26 @@
     {
         try
         {
-            _employees = await DbContext.Employees
-                .Where(e => e.IsActive == 1)
-                .OrderBy(e => e.FileNumber)
+            var query = DbContext.Employees
+                .Include(e => e.Department)
                 .AsNoTracking()
+                .Where(e => e.IsActive == 1 && e.IsDeleted == 0);
+
+            // عزل أمني: إذا لم يكن المستخدم مديراً عاماً، نحصر الموظفين بشعبته فقط
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (SessionService.CurrentDepartmentId.HasValue)
+                {
+                    query = query.Where(e => e.DepartmentId == SessionService.CurrentDepartmentId.Value);
+                }
+                else
+                {
+                    query = query.Where(e => false);
+                }
+            }
+
+            _employees = await query
+                .OrderBy(e => e.FileNumber)
                 .ToListAsync();
         }
         catch (Exception ex)
@@ -240,17 +305,50 @@
             DateTime startDate = new DateTime(_selectedYear, 1, 1);
             DateTime endDate = new DateTime(_selectedYear, 12, 31, 23, 59, 59);
 
-            IQueryable<Document> query = DbContext.Documents
+            // 1. تحديد قائمة معرّفات الموظفين المسموح باحتساب إحصائياتهم
+            var empQuery = DbContext.Employees
                 .AsNoTracking()
-                .Where(d => d.IsDeleted == 0 && d.DocumentDate >= startDate && d.DocumentDate <= endDate);
+                .Where(e => e.IsActive == 1 && e.IsDeleted == 0);
+
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (SessionService.CurrentDepartmentId.HasValue)
+                {
+                    int myDeptId = SessionService.CurrentDepartmentId.Value;
+                    empQuery = empQuery.Where(e => e.DepartmentId == myDeptId);
+                }
+                else
+                {
+                    empQuery = empQuery.Where(e => false);
+                }
+            }
+            else if (_selectedDepartmentId.HasValue)
+            {
+                empQuery = empQuery.Where(e => e.DepartmentId == _selectedDepartmentId.Value);
+            }
 
             if (_selectedEmployeeId.HasValue)
             {
-                query = query.Where(d => DbContext.DocumentEmployees
-                    .Any(de => de.DocumentId == d.DocumentId && de.EmployeeId == _selectedEmployeeId.Value));
+                empQuery = empQuery.Where(e => e.EmployeeId == _selectedEmployeeId.Value);
             }
 
-            var docs = await query.ToListAsync();
+            var allowedEmpIds = await empQuery.Select(e => e.EmployeeId).ToListAsync();
+
+            // 2. استعلام روابط الكتب لأولئك الموظفين
+            var linksQuery = DbContext.DocumentEmployees
+                .AsNoTracking()
+                .Where(de => de.IsDeleted == 0 && allowedEmpIds.Contains(de.EmployeeId));
+
+            var allowedDocIds = await linksQuery.Select(de => de.DocumentId).Distinct().ToListAsync();
+
+            // 3. استعلام المستندات المشمولة
+            var docs = await DbContext.Documents
+                .AsNoTracking()
+                .Where(d => d.IsDeleted == 0 &&
+                            allowedDocIds.Contains(d.DocumentId) &&
+                            d.DocumentDate >= startDate &&
+                            d.DocumentDate <= endDate)
+                .ToListAsync();
 
             _totalCount = docs.Count;
 

@@ -53,4 +53,9 @@ public class User
 
     [Column("LastLogin")]
     public DateTime? LastLogin { get; set; }
+    public int? DepartmentId { get; set; }
+    public Department? Department { get; set; }
+
+    // لتحديد ما إذا كان المستخدم مديراً عاماً يرى كل الشُعب (مثل حساب admin الافتراضي)
+    public int IsSuperAdmin { get; set; } = 0;
 }

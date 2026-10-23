@@ -22,7 +22,14 @@
                 <MudIcon Icon="@Icons.Material.Filled.ManageAccounts" Class="ml-2" /> إدارة المستخدمين
             </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                التحكم بحسابات مستخدمي النظام وتحديد مستويات الوصول والحالة
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <span>إدارة شاملة لكافة حسابات النظام وتوزيع الشُعب والصلاحيات العليا</span>
+                }
+                else
+                {
+                    <span>إدارة مستخدمي وموظفي (@(SessionService.CurrentDepartmentName ?? "الشعبة")) وتحديد الصلاحيات التشغيلية</span>
+                }
             </MudText>
         </div>
 
@@ -41,6 +48,7 @@
             <HeaderContent>
                 <MudTh Style="font-weight: bold; width: 80px;">رقم الحساب</MudTh>
                 <MudTh Style="font-weight: bold;">اسم المستخدم / الكامل</MudTh>
+                <MudTh Style="font-weight: bold; text-align: center;">الشعبة / نطاق الوصول</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center;">الدور / الصلاحيات</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center;">آخر تسجيل دخول</MudTh>
                 <MudTh Style="font-weight: bold; text-align: center;">تاريخ الإنشاء</MudTh>
@@ -61,39 +69,55 @@
                         </div>
                     </div>
                 </MudTd>
-                <MudTd DataLabel="الدور / الصلاحيات" Style="text-align: center;">
-                    @if (context.IsAdmin == 1)
+
+                <!-- الشعبة ونطاق الوصول -->
+                <MudTd DataLabel="الشعبة" Style="text-align: center;">
+                    @if (context.IsSuperAdmin == 1 || context.UserName.ToLower() == "admin")
                     {
-                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
-                            مدير نظام
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                            مدير عام (كافة الشعب)
                         </MudChip>
+                    }
+                    else if (context.Department != null)
+                    {
+                        <span class="fw-bold" style="color: #1B4D3E;">@context.Department.Name</span>
                     }
                     else
                     {
-                        <div class="d-flex justify-center gap-1 flex-wrap">
-                            @if (context.CanAdd == 1)
-                            {
-                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">إضافة</MudChip>
-                            }
-                            @if (context.CanEdit == 1)
-                            {
-                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">تعديل</MudChip>
-                            }
-                            @if (context.CanDelete == 1)
-                            {
-                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">حذف</MudChip>
-                            }
-                            @if (context.CanExport == 1)
-                            {
-                                <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">تصدير</MudChip>
-                            }
-                            @if (context.CanAdd == 0 && context.CanEdit == 0 && context.CanDelete == 0 && context.CanExport == 0)
-                            {
-                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">عرض فقط</MudChip>
-                            }
-                        </div>
+                        <span class="text-muted" style="font-size: 0.85rem;">غير محدد</span>
                     }
                 </MudTd>
+
+                <!-- الصلاحيات التشغيلية -->
+                <MudTd DataLabel="الدور / الصلاحيات" Style="text-align: center;">
+                    <div class="d-flex justify-center gap-1 flex-wrap">
+                        @if (context.IsAdmin == 1)
+                        {
+                            <MudChip T="string" Color="Color.Dark" Size="Size.Small" Variant="Variant.Filled">مسؤول إدارة</MudChip>
+                        }
+                        @if (context.CanAdd == 1)
+                        {
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">إضافة</MudChip>
+                        }
+                        @if (context.CanEdit == 1)
+                        {
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">تعديل</MudChip>
+                        }
+                        @if (context.CanDelete == 1)
+                        {
+                            <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">حذف</MudChip>
+                        }
+                        @if (context.CanExport == 1)
+                        {
+                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">تصدير</MudChip>
+                        }
+                        @if (context.IsAdmin == 0 && context.CanAdd == 0 && context.CanEdit == 0 && context.CanDelete == 0 && context.CanExport == 0)
+                        {
+                            <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">عرض فقط</MudChip>
+                        }
+                    </div>
+                </MudTd>
+
                 <MudTd DataLabel="آخر دخول" Style="text-align: center; direction: ltr; font-size: 0.85rem; color: #555;">
                     @(context.LastLogin?.ToString("yyyy-MM-dd HH:mm") ?? "—")
                 </MudTd>
@@ -104,21 +128,31 @@
                     <MudSwitch T="bool"
                                Value="@(context.IsActive == 1)"
                                ValueChanged="@(async (bool val) => await ToggleUserStatus(context, val))"
+                               Disabled="@(context.UserName.ToLower() == "admin" || (!SessionService.IsSuperAdmin && context.IsAdmin == 1))"
                                Color="Color.Success" />
                 </MudTd>
                 <MudTd DataLabel="إجراء" Style="text-align: center;">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                   Color="Color.Info"
-                                   Size="Size.Small"
-                                   OnClick="@(() => OpenEditUserDialog(context))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                   Color="Color.Error"
-                                   Size="Size.Small"
-                                   OnClick="@(async () => await DeleteUser(context))" />
+                    @* شروط التعديل: المدير العام يعدل الجميع عدا قواعد النظام، ومدير الشعبة يعدل فقط المستخدمين العاديين في شعبته *@
+                    @if (CanEditTargetUser(context))
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       OnClick="@(() => OpenEditUserDialog(context))" />
+                    }
+
+                    @* شروط الحذف: لا يمكن حذف الحساب الحالي أو حساب admin، ومدير الشعبة لا يحذف مدراء آخرين *@
+                    @if (CanDeleteTargetUser(context))
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(async () => await DeleteUser(context))" />
+                    }
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>
-                <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا يوجد مستخدمون مضافون حالياً.</MudText>
+                <MudText Typo="Typo.body2" Class="pa-4 text-center text-muted">لا يوجد مستخدمون متاحون للعرض.</MudText>
             </NoRecordsContent>
         </MudTable>
     </MudPaper>
@@ -127,26 +161,74 @@
 
 @code {
     private List<User> _users = new();
+    private List<Department> _departments = new();
     private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
         {
-            Snackbar.Add("عذراً، إدارة المستخدمين مقتصرة على مدير النظام فقط!", Severity.Error);
+            Snackbar.Add("عذراً، إدارة المستخدمين مقتصرة على المشرفين المصرح لهم فقط!", Severity.Error);
             Navigation.NavigateTo("/employees");
             return;
         }
 
-        await LoadUsers();
+        await LoadData();
     }
 
-    private async Task LoadUsers()
+    private bool CanEditTargetUser(User target)
+    {
+        if (SessionService.IsSuperAdmin) return true;
+
+        // مدير الشعبة لا يعدل حساب الآدمن ولا السوبر أدمن ولا يعدل حساب مدير شعبة آخر
+        if (target.UserName.ToLower() == "admin" || target.IsSuperAdmin == 1) return false;
+        if (target.IsAdmin == 1 && target.UserId != SessionService.CurrentUser?.UserId) return false;
+
+        return true;
+    }
+
+    private bool CanDeleteTargetUser(User target)
+    {
+        if (target.UserName.ToLower() == "admin") return false;
+        if (target.UserId == SessionService.CurrentUser?.UserId) return false;
+
+        if (SessionService.IsSuperAdmin) return true;
+
+        // مدير الشعبة لا يحذف سوبر أدمن ولا يحذف مدراء شُعب
+        if (target.IsSuperAdmin == 1 || target.IsAdmin == 1) return false;
+
+        return true;
+    }
+
+    private async Task LoadData()
     {
         _isLoading = true;
         try
         {
-            _users = await DbContext.Users.OrderBy(u => u.UserId).ToListAsync();
+            var query = DbContext.Users
+                .Include(u => u.Department)
+                .OrderBy(u => u.UserId)
+                .AsQueryable();
+
+            // عزل أمني: إذا لم يكن مديراً عاماً، يرى فقط مستخدمي شعبته ويُستبعد أي سوبر أدمن
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (SessionService.CurrentDepartmentId.HasValue)
+                {
+                    query = query.Where(u => u.DepartmentId == SessionService.CurrentDepartmentId.Value && u.IsSuperAdmin == 0);
+                }
+                else
+                {
+                    query = query.Where(u => false);
+                }
+            }
+
+            _users = await query.ToListAsync();
+
+            _departments = await DbContext.Departments
+                .Where(d => d.IsActive == 1)
+                .OrderBy(d => d.DepartmentId)
+                .ToListAsync();
         }
         catch (Exception ex)
         {
@@ -160,6 +242,12 @@
 
     private async Task ToggleUserStatus(User user, bool isActive)
     {
+        if (!CanEditTargetUser(user))
+        {
+            Snackbar.Add("ليس لديك صلاحية لتعديل حالة هذا الحساب!", Severity.Warning);
+            return;
+        }
+
         user.IsActive = isActive ? 1 : 0;
         user.UpdatedAt = DateTime.Now;
         await DbContext.SaveChangesAsync();
@@ -168,57 +256,238 @@
 
     private async Task OpenAddUserDialog()
     {
+        var newUser = new User
+        {
+            IsActive = 1,
+            CanAdd = 1,
+            CanEdit = 1,
+            CanDelete = 0,
+            CanExport = 1,
+            MustChangePassword = true,
+            CreatedAt = DateTime.Now
+        };
+
+        // تقييد أمني للمنشئ إذا لم يكن مديراً عاماً
+        if (!SessionService.IsSuperAdmin)
+        {
+            newUser.IsSuperAdmin = 0;
+            newUser.DepartmentId = SessionService.CurrentDepartmentId;
+            newUser.IsAdmin = 0; // يمنع إنشاء مدير شعبة آخر
+        }
+
         var parameters = new DialogParameters
         {
-            ["UserToEdit"] = new User
-            {
-                IsActive = 1,
-                CanAdd = 1,
-                MustChangePassword = true,
-                CreatedAt = DateTime.Now
-            }
+            ["User"] = newUser,
+            ["Departments"] = _departments
         };
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
         var dialog = await DialogService.ShowAsync<UserDialog>("إضافة مستخدم جديد", parameters, options);
         var result = await dialog.Result;
-        if (result is not null && !result.Canceled)
+
+        if (result is not null && !result.Canceled && result.Data is User createdUser)
         {
-            await LoadUsers();
+            // صمام أمان سيرفر نهائي قبل الحفظ
+            if (!SessionService.IsSuperAdmin)
+            {
+                createdUser.IsSuperAdmin = 0;
+                createdUser.DepartmentId = SessionService.CurrentDepartmentId;
+                createdUser.IsAdmin = 0;
+            }
+
+            bool exists = await DbContext.Users.AnyAsync(u => u.UserName.ToLower() == createdUser.UserName.Trim().ToLower());
+            if (exists)
+            {
+                Snackbar.Add("اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر!", Severity.Warning);
+                return;
+            }
+
+            createdUser.CreatedAt = DateTime.Now;
+            createdUser.UpdatedAt = DateTime.Now;
+
+            DbContext.Users.Add(createdUser);
+            await DbContext.SaveChangesAsync();
+
+            await SessionService.LogActivityAsync(
+                actionType: "إضافة مستخدم",
+                entityType: "المستخدمين",
+                entityId: createdUser.UserId,
+                description: $"تم إنشاء حساب جديد للمستخدم ({createdUser.UserName}) ضمن شعبة ({createdUser.Department?.Name ?? SessionService.CurrentDepartmentName})."
+            );
+
+            Snackbar.Add("تمت إضافة المستخدم بنجاح!", Severity.Success);
+            await LoadData();
         }
     }
 
     private async Task OpenEditUserDialog(User user)
     {
-        var parameters = new DialogParameters { ["UserToEdit"] = user };
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<UserDialog>("تعديل بيانات المستخدم", parameters, options);
-        var result = await dialog.Result;
-        if (result is not null && !result.Canceled)
+        if (!CanEditTargetUser(user))
         {
-            await LoadUsers();
+            Snackbar.Add("ليس لديك صلاحية لتعديل هذا المستخدم!", Severity.Warning);
+            return;
+        }
+
+        var userClone = new User
+        {
+            UserId = user.UserId,
+            UserName = user.UserName,
+            FullName = user.FullName,
+            PasswordHash = user.PasswordHash,
+            DepartmentId = user.DepartmentId,
+            IsSuperAdmin = user.IsSuperAdmin,
+            IsAdmin = user.IsAdmin,
+            CanAdd = user.CanAdd,
+            CanEdit = user.CanEdit,
+            CanDelete = user.CanDelete,
+            CanExport = user.CanExport,
+            IsActive = user.IsActive
+        };
+
+        var parameters = new DialogParameters
+        {
+            ["User"] = userClone,
+            ["Departments"] = _departments
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("تعديل بيانات المستخدم والصلاحيات", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is User updatedUser)
+        {
+            // صمام أمان سيرفر: منع مدير الشعبة من التلاعب برتبة الحساب أو شعبته
+            if (!SessionService.IsSuperAdmin)
+            {
+                updatedUser.IsSuperAdmin = 0;
+                updatedUser.DepartmentId = SessionService.CurrentDepartmentId;
+                updatedUser.IsAdmin = 0;
+            }
+
+            bool exists = await DbContext.Users.AnyAsync(u => u.UserId != user.UserId && u.UserName.ToLower() == updatedUser.UserName.Trim().ToLower());
+            if (exists)
+            {
+                Snackbar.Add("اسم المستخدم مستخدم مسبقاً لحساب آخر!", Severity.Warning);
+                return;
+            }
+
+            var dbUser = await DbContext.Users.FindAsync(user.UserId);
+            if (dbUser != null)
+            {
+                dbUser.FullName = updatedUser.FullName.Trim();
+                dbUser.UserName = updatedUser.UserName.Trim();
+                dbUser.DepartmentId = updatedUser.DepartmentId;
+                dbUser.IsSuperAdmin = updatedUser.IsSuperAdmin;
+                dbUser.IsAdmin = updatedUser.IsAdmin;
+                dbUser.CanAdd = updatedUser.CanAdd;
+                dbUser.CanEdit = updatedUser.CanEdit;
+                dbUser.CanDelete = updatedUser.CanDelete;
+                dbUser.CanExport = updatedUser.CanExport;
+                dbUser.IsActive = updatedUser.IsActive;
+                dbUser.UpdatedAt = DateTime.Now;
+
+                if (!string.IsNullOrWhiteSpace(updatedUser.PasswordHash) && updatedUser.PasswordHash != dbUser.PasswordHash)
+                {
+                    dbUser.PasswordHash = updatedUser.PasswordHash;
+                }
+
+                await DbContext.SaveChangesAsync();
+
+                await SessionService.LogActivityAsync(
+                    actionType: "تعديل مستخدم",
+                    entityType: "المستخدمين",
+                    entityId: dbUser.UserId,
+                    description: $"تم تحديث صلاحيات وبيانات المستخدم ({dbUser.UserName})."
+                );
+
+                Snackbar.Add("تم حفظ التعديلات بنجاح!", Severity.Success);
+                await LoadData();
+            }
         }
     }
 
     private async Task DeleteUser(User user)
     {
-        if (SessionService.CurrentUser?.UserId == user.UserId)
+        if (!CanDeleteTargetUser(user))
         {
-            Snackbar.Add("لا يمكنك حذف الحساب الذي تستخدمه حالياً!", Severity.Warning);
+            Snackbar.Add("ليس لديك صلاحية لحذف هذا الحساب!", Severity.Warning);
             return;
         }
 
-        bool? confirm = await DialogService.ShowMessageBox(
-            "تأكيد الحذف",
-            $"هل أنت متأكد من حذف الحساب ({user.UserName})؟",
-            yesText: "نعم، حذف",
+        // 1. الفحص الشامل للنشاطات والحركات المرتبطة بهذا المستخدم
+        bool hasAuditLogs = await DbContext.AuditLogs.AnyAsync(a => a.UserId == user.UserId);
+
+        // فحص جدول المستندات وفق نوع الحقل الرقمي UserId
+        bool hasUploadedDocs = await DbContext.Documents.AnyAsync(d => d.CreatedBy == user.UserId);
+
+        bool hasActivities = hasAuditLogs || hasUploadedDocs;
+
+        // 2. إذا كانت له حركات سابقة: منع الحذف وتقديم خيار التعطيل فقط
+        if (hasActivities)
+        {
+            bool? disableConfirm = await DialogService.ShowMessageBox(
+                title: "تنبيه أمان: تعذر الحذف النهائي",
+                markupMessage: (MarkupString)$@"
+                <div style='text-align: right; line-height: 1.8;'>
+                    <p style='color: #c62828; font-weight: bold;'>لا يمكن حذف المستخدم ({user.UserName}) نهائياً من قاعدة البيانات!</p>
+                    <p>هذا الحساب يمتلك حركات أرشفة أو سجلات نشاط مسجلة باسمه، وحذفه سيؤدي إلى تلف سجل التدقيق الإداري.</p>
+                    <hr style='border: none; border-top: 1px solid #eee; margin: 10px 0;' />
+                    <p>هل ترغب في <b>إيقاف الحساب عن العمل (تعطيله)</b> بدلاً من الحذف لمنعه من تسجيل الدخول نهائياً؟</p>
+                </div>",
+                yesText: "نعم، تعطيل الحساب",
+                cancelText: "إلغاء");
+
+            if (disableConfirm == true)
+            {
+                var dbUserToDisable = await DbContext.Users.FindAsync(user.UserId);
+                if (dbUserToDisable != null)
+                {
+                    dbUserToDisable.IsActive = 0;
+                    dbUserToDisable.UpdatedAt = DateTime.Now;
+                    await DbContext.SaveChangesAsync();
+
+                    await SessionService.LogActivityAsync(
+                        actionType: "تعطيل حساب",
+                        entityType: "المستخدمين",
+                        entityId: user.UserId,
+                        description: $"تم إيقاف الحساب ({user.UserName}) عن العمل لوجود سجلات مرتبطة به ومنعه من تسجيل الدخول."
+                    );
+
+                    Snackbar.Add($"تم إيقاف الحساب ({user.UserName}) عن العمل بنجاح وحماية سجلاته", Severity.Info);
+                    await LoadData();
+                }
+            }
+
+            return;
+        }
+
+        // 3. إذا لم تكن لديه أي حركات إطلاقاً: السماح بالحذف النهائي
+        bool? confirmDelete = await DialogService.ShowMessageBox(
+            title: "تأكيد الحذف النهائي",
+            markupMessage: (MarkupString)$@"
+            <div style='text-align: right; line-height: 1.6;'>
+                <p>تم التحقق: هذا المستخدم <b>لا يمتلك أي حركات</b> أو سجلات أرشفة مرتبطة به.</p>
+                <p style='color: #d32f2f; font-weight: bold;'>هل أنت متأكد من حذف الحساب ({user.UserName}) بشكل نهائي؟</p>
+            </div>",
+            yesText: "نعم، حذف نهائي",
             cancelText: "إلغاء");
 
-        if (confirm == true)
+        if (confirmDelete == true)
         {
-            DbContext.Users.Remove(user);
-            await DbContext.SaveChangesAsync();
-            await LoadUsers();
-            Snackbar.Add("تم حذف المستخدم بنجاح", Severity.Success);
+            var dbUser = await DbContext.Users.FindAsync(user.UserId);
+            if (dbUser != null)
+            {
+                DbContext.Users.Remove(dbUser);
+                await DbContext.SaveChangesAsync();
+
+                await SessionService.LogActivityAsync(
+                    actionType: "حذف مستخدم",
+                    entityType: "المستخدمين",
+                    entityId: user.UserId,
+                    description: $"تم حذف المستخدم ({user.UserName}) نهائياً لعدم وجود أي نشاطات مرتبطة به."
+                );
+
+                await LoadData();
+                Snackbar.Add("تم حذف المستخدم نهائياً بنجاح", Severity.Success);
+            }
         }
     }
 }

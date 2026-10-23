@@ -28,7 +28,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.EditNote" Class="ml-1" Size="Size.Small" /> تعديل بيانات ومستند الأضبارة
             </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-none d-sm-block">
-                تعديل الموظفين، بيانات الكتاب، أو استبدال الملف المرفق
+                تعديل الموظفين، بيانات الكتاب، أو استبدال الملف المرفق ضمن نطاق (@(!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? SessionService.CurrentDepartmentName : "الإدارة العامة"))
             </MudText>
         </div>
 
@@ -70,7 +70,7 @@
     }
     else if (_document == null)
     {
-        <MudAlert Severity="Severity.Error">لم يتم العثور على المستند المطلوب!</MudAlert>
+        <MudAlert Severity="Severity.Error">لم يتم العثور على المستند المطلوب أو ليس لديك صلاحية للوصول إليه!</MudAlert>
     }
     else
     {
@@ -98,16 +98,31 @@
                     </div>
 
                     <div style="max-height: 135px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 3px; background-color: #fafafa;">
-                        @foreach (var emp in FilteredEmployees)
+                        @if (!FilteredEmployees.Any())
                         {
-                            bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
-                            <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
-                                 @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
-                                 style="cursor: pointer; border-radius: 4px; font-size: 0.86rem; min-height: 32px;">
-                                <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
-                                             ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
-                                <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
+                            <div class="pa-3 text-center text-muted" style="font-size: 0.82rem;">
+                                لا يوجد موظفون متاحون ضمن نطاق اختصاصك.
                             </div>
+                        }
+                        else
+                        {
+                            @foreach (var emp in FilteredEmployees)
+                            {
+                                bool isSelected = _selectedEmployeeIds.Contains(emp.EmployeeId);
+                                <div class="d-flex align-center px-2 py-1 employee-select-row @(isSelected ? "selected-emp" : "")"
+                                     @onclick="@(() => ToggleEmployeeSelection(emp.EmployeeId))"
+                                     style="cursor: pointer; border-radius: 4px; font-size: 0.86rem; min-height: 32px;">
+                                    <MudCheckBox T="bool" Value="@isSelected" Color="Color.Primary" Dense="true" StopClickPropagation="true"
+                                                 ValueChanged="@((val) => ToggleEmployeeSelection(emp.EmployeeId))" />
+                                    <span class="ms-2">@($"{emp.EmployeeName} — {emp.FileNumber}")</span>
+                                    @if (SessionService.IsSuperAdmin && emp.Department != null)
+                                    {
+                                        <span class="ms-auto" style="font-size: 0.72rem; color: #2e7d32; background-color: #e8f5e9; padding: 1px 6px; border-radius: 4px;">
+                                            @emp.Department.Name
+                                        </span>
+                                    }
+                                </div>
+                            }
                         }
                     </div>
                 </MudPaper>
@@ -429,8 +444,56 @@
         {
             _settings = await DbContext.SystemSettings.FirstOrDefaultAsync();
 
-            _allEmployees = await DbContext.Employees
-                .Where(e => e.IsActive == 1 && e.IsDeleted == 0)
+            _document = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == DocumentId && d.IsDeleted == 0);
+            if (_document == null)
+            {
+                _isLoading = false;
+                return;
+            }
+
+            // 1. جلب الموظفين المرتبطين حالياً بالكتاب
+            _existingDocEmployees = await DbContext.DocumentEmployees
+                .Where(de => de.DocumentId == _document.DocumentId && de.IsDeleted == 0)
+                .ToListAsync();
+
+            var linkedEmpIds = _existingDocEmployees.Select(de => de.EmployeeId).ToList();
+
+            // 2. فحص الأمان: هل يمتلك المستخدم حق الوصول لهذا الكتاب عبر موظفي شعبته؟
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (!SessionService.CurrentDepartmentId.HasValue)
+                {
+                    Snackbar.Add("عذراً، حسابك غير مرتبط بأي شعبة!", Severity.Error);
+                    Navigation.NavigateTo("/employees");
+                    return;
+                }
+
+                int myDeptId = SessionService.CurrentDepartmentId.Value;
+                var accessibleCount = await DbContext.Employees
+                    .CountAsync(e => linkedEmpIds.Contains(e.EmployeeId) && e.DepartmentId == myDeptId);
+
+                if (accessibleCount == 0)
+                {
+                    Snackbar.Add("عذراً، لا تمتلك الصلاحية لتعديل هذا المستند لأنه خارج اختصاص شعبتك!", Severity.Error);
+                    Navigation.NavigateTo("/employees");
+                    return;
+                }
+            }
+
+            // 3. استعلام الموظفين مع تطبيق العزل الإداري الصارم
+            var empQuery = DbContext.Employees
+                .Include(e => e.Department)
+                .AsNoTracking()
+                .Where(e => e.IsActive == 1 && e.IsDeleted == 0);
+
+            if (!SessionService.IsSuperAdmin)
+            {
+                int myDeptId = SessionService.CurrentDepartmentId!.Value;
+                // إظهار موظفي شعبة المستخدم + أي موظف مرتبط حالياً بهذا المستند حتى لو كان قيد المعالجة
+                empQuery = empQuery.Where(e => e.DepartmentId == myDeptId || linkedEmpIds.Contains(e.EmployeeId));
+            }
+
+            _allEmployees = await empQuery
                 .OrderBy(e => e.FileNumber)
                 .ToListAsync();
 
@@ -439,44 +502,36 @@
             _allSecondaryCategories = await DbContext.SecondaryCategories.ToListAsync();
             _allTertiaryCategories = await DbContext.TertiaryCategories.ToListAsync();
 
-            _document = await DbContext.Documents.FirstOrDefaultAsync(d => d.DocumentId == DocumentId);
-            if (_document != null)
+            _subject = _document.Subject;
+            _documentNumber = _document.DocumentNumber;
+            _documentDate = _document.DocumentDate;
+
+            _selectedMainCatId = _document.MainCategoryId > 0 ? _document.MainCategoryId : null;
+            _selectedPrimaryCatId = _document.PrimaryCategoryId > 0 ? _document.PrimaryCategoryId : null;
+            _selectedSecondaryCatId = _document.SecondaryCategoryId;
+            _selectedTertiaryCatId = _document.TertiaryCategoryId;
+
+            if (_selectedMainCatId.HasValue)
             {
-                _subject = _document.Subject;
-                _documentNumber = _document.DocumentNumber;
-                _documentDate = _document.DocumentDate;
-
-                _selectedMainCatId = _document.MainCategoryId > 0 ? _document.MainCategoryId : null;
-                _selectedPrimaryCatId = _document.PrimaryCategoryId > 0 ? _document.PrimaryCategoryId : null;
-                _selectedSecondaryCatId = _document.SecondaryCategoryId;
-                _selectedTertiaryCatId = _document.TertiaryCategoryId;
-
-                if (_selectedMainCatId.HasValue)
-                {
-                    _availablePrimaryCategories = _allPrimaryCategories
-                        .Where(p => p.MainCategoryId == _selectedMainCatId.Value)
-                        .ToList();
-                }
-
-                if (_selectedPrimaryCatId.HasValue)
-                {
-                    PopulateAvailableSecondaryCategories(_selectedPrimaryCatId.Value);
-                }
-
-                if (_selectedSecondaryCatId.HasValue)
-                {
-                    PopulateAvailableTertiaryCategories(_selectedSecondaryCatId.Value);
-                }
-
-                _existingDocEmployees = await DbContext.DocumentEmployees
-                    .Where(de => de.DocumentId == _document.DocumentId)
-                    .ToListAsync();
-
-                _selectedEmployeeIds = _existingDocEmployees.Select(de => de.EmployeeId).ToHashSet();
-                _initialEmployeeIds = new HashSet<int>(_selectedEmployeeIds);
-
-                await LoadExistingFile();
+                _availablePrimaryCategories = _allPrimaryCategories
+                    .Where(p => p.MainCategoryId == _selectedMainCatId.Value)
+                    .ToList();
             }
+
+            if (_selectedPrimaryCatId.HasValue)
+            {
+                PopulateAvailableSecondaryCategories(_selectedPrimaryCatId.Value);
+            }
+
+            if (_selectedSecondaryCatId.HasValue)
+            {
+                PopulateAvailableTertiaryCategories(_selectedSecondaryCatId.Value);
+            }
+
+            _selectedEmployeeIds = _existingDocEmployees.Select(de => de.EmployeeId).ToHashSet();
+            _initialEmployeeIds = new HashSet<int>(_selectedEmployeeIds);
+
+            await LoadExistingFile();
         }
         catch (Exception ex)
         {
@@ -625,14 +680,12 @@
         }
     }
 
-    // استخراج رقم وتاريخ وموضوع الكتاب ذكياً عند اختيار ملف PDF بديل من الحاسوب
     private async Task OnNewPdfSelected(IBrowserFile file)
     {
         if (file == null) return;
 
         try
         {
-            // استخراج وتعبئة البيانات من اسم الملف تلقائياً
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
             var parsed = ParseFileNameUltra(fileNameWithoutExt);
 
@@ -668,7 +721,6 @@
         }
     }
 
-    // دالة التحليل الذكي الفائقة
     private (string DocNum, string Subject, DateTime? DocDate) ParseFileNameUltra(string rawName)
     {
         string name = rawName.Trim();
@@ -943,7 +995,7 @@
 
             byte[] activeFileBytes = _newReplacementBytes ?? _originalFileBytes ?? Array.Empty<byte>();
 
-            // 1. معالجة الموظفين المحذوفين من الكتاب
+            // 1. معالجة الموظفين المستبعدين من الكتاب
             var removedEmpIds = _initialEmployeeIds.Except(_selectedEmployeeIds).ToList();
             foreach (var empId in removedEmpIds)
             {
@@ -962,19 +1014,35 @@
                 }
             }
 
-            // 2. معالجة الموظفين المستمرين بالكتاب وتحديث ملفاتهم
+            // جلب موظفي النظام المشاركين مع الشُعب التابعين لها
+            var allTargetEmployees = await DbContext.Employees
+                .Include(e => e.Department)
+                .Where(e => _selectedEmployeeIds.Contains(e.EmployeeId))
+                .ToListAsync();
+
+            // 2. معالجة الموظفين المستمرين بالكتاب وتحديث ملفاتهم ومساراتهم
             var stayingEmpIds = _initialEmployeeIds.Intersect(_selectedEmployeeIds).ToList();
             foreach (var empId in stayingEmpIds)
             {
-                var emp = _allEmployees.FirstOrDefault(e => e.EmployeeId == empId);
+                var emp = allTargetEmployees.FirstOrDefault(e => e.EmployeeId == empId);
                 var docEmp = _existingDocEmployees.FirstOrDefault(de => de.EmployeeId == empId);
                 if (emp == null || docEmp == null) continue;
 
                 string cleanEmpName = string.Concat(emp.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                 string cleanEmpFile = string.Concat(emp.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                string empFolderRel = !string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)
-                    ? emp.EmployeeFolderPath
-                    : $"{cleanEmpFile}_{cleanEmpName}";
+
+                string empFolderRel;
+                if (!string.IsNullOrWhiteSpace(emp.EmployeeFolderPath))
+                {
+                    empFolderRel = emp.EmployeeFolderPath;
+                }
+                else
+                {
+                    string deptFolder = emp.Department != null
+                        ? string.Concat(emp.Department.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries))
+                        : "المديرية العامة";
+                    empFolderRel = Path.Combine(deptFolder, $"{cleanEmpFile}_{cleanEmpName}");
+                }
 
                 string oldRelPath = docEmp.EmployeeFilePath ?? string.Empty;
                 string oldFullDiskPath = Path.Combine(_settings.BaseFolderPath, oldRelPath);
@@ -1028,14 +1096,24 @@
             var addedEmpIds = _selectedEmployeeIds.Except(_initialEmployeeIds).ToList();
             foreach (var empId in addedEmpIds)
             {
-                var emp = _allEmployees.FirstOrDefault(e => e.EmployeeId == empId);
+                var emp = allTargetEmployees.FirstOrDefault(e => e.EmployeeId == empId);
                 if (emp == null) continue;
 
                 string cleanEmpName = string.Concat(emp.EmployeeName.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
                 string cleanEmpFile = string.Concat(emp.FileNumber.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
-                string empFolderRel = !string.IsNullOrWhiteSpace(emp.EmployeeFolderPath)
-                    ? emp.EmployeeFolderPath
-                    : $"{cleanEmpFile}_{cleanEmpName}";
+
+                string empFolderRel;
+                if (!string.IsNullOrWhiteSpace(emp.EmployeeFolderPath))
+                {
+                    empFolderRel = emp.EmployeeFolderPath;
+                }
+                else
+                {
+                    string deptFolder = emp.Department != null
+                        ? string.Concat(emp.Department.Name.Trim().Split(invalidChars, StringSplitOptions.RemoveEmptyEntries))
+                        : "المديرية العامة";
+                    empFolderRel = Path.Combine(deptFolder, $"{cleanEmpFile}_{cleanEmpName}");
+                }
 
                 string newTargetDir = Path.Combine(_settings.BaseFolderPath, empFolderRel, branchName, primFolder);
                 if (_selectedSecondaryCatId.HasValue)
@@ -1072,7 +1150,7 @@
                 DbContext.DocumentEmployees.Add(newDocEmp);
             }
 
-            // معالجة التصنيف الفرعي الأول والثاني إذا كان معرّفاً افتراضياً سالباً
+            // معالجة التصنيف الفرعي الأول والثاني إذا كان افتراضياً
             int? actualSecondaryId = _selectedSecondaryCatId;
             if (actualSecondaryId.HasValue && actualSecondaryId.Value < 0)
             {
@@ -1093,7 +1171,7 @@
             // 4. تحديث سجل المستند الرئيسي
             _document.Subject = _subject.Trim();
             _document.DocumentNumber = _documentNumber.Trim();
-            _documentDate = _documentDate;
+            _document.DocumentDate = _documentDate;
             _document.StoredFileName = newFileName;
             if (_newReplacementBytes != null && !string.IsNullOrEmpty(_replacementFileName))
             {
@@ -1103,6 +1181,7 @@
             _document.PrimaryCategoryId = _selectedPrimaryCatId ?? 0;
             _document.SecondaryCategoryId = actualSecondaryId;
             _document.TertiaryCategoryId = actualTertiaryId;
+            _document.UpdatedBy = SessionService.CurrentUser?.UserId;
             _document.UpdatedAt = DateTime.Now;
 
             await DbContext.SaveChangesAsync();

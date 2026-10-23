@@ -20,21 +20,22 @@ builder.Services.AddServerSideBlazor()
 
 builder.Services.AddMudServices();
 
-// ŞÑÇÁÉ ãÓÇÑ ÇáÇÊÕÇá ãä appsettings.json ãÚ ŞíãÉ ÇÍÊíÇØíÉ ÇİÊÑÇÖíÉ İí ÍÇá ÚÏã ÇáÚËæÑ Úáíå
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                       ?? "Data Source=dossiers.sqlite3";
-
-builder.Services.AddDbContextFactory<AppDbContext>(options =>
-    options.UseSqlite(connectionString));
-
-// ÅÊÇÍÉ ÍŞä AppDbContext ÇáãÈÇÔÑ (@inject AppDbContext) áÖãÇä ÇáÊæÇİŞ ÇáÊÇã ãÚ ßÇİÉ ÇáÕİÍÇÊ ÇáÍÇáíÉ
-builder.Services.AddScoped(sp =>
-    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
-
-// ÊÓÌíá ÇáÎÏãÇÊ ÇáãÎÕÕÉ
+// ÊÓÌíá ÇáÎÏãÇÊ ÇáãÎÕÕÉ ßÜ Scoped
 builder.Services.AddScoped<ScannerService>();
 builder.Services.AddScoped<UserSessionService>();
 builder.Services.AddScoped<ExportService>();
+
+// ŞÑÇÁÉ ãÓÇÑ ÇáÇÊÕÇá ãä appsettings.json
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                       ?? "Data Source=dossiers.sqlite3";
+
+// ÊÓÌíá ÇáÜ Factory ßÜ Singleton ãÓÊŞá æäÙíİ
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+// ÊÓÌíá AppDbContext ßÜ Scoped ãÚÒæá æÈÓíØ ãÓÊÎÑÌ ãä ÇáÜ Factory ãÈÇÔÑÉ
+builder.Services.AddScoped<AppDbContext>(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
 // 2. ÈäÇÁ ÇáÊØÈíŞ
 var app = builder.Build();
@@ -206,6 +207,115 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         };
 
         await db.SystemSettings.AddAsync(setting);
+        await db.SaveChangesAsync();
+    }
+
+    // 4. ÈĞÑ ÇáÔõÚÈ æÇáæÍÏÇÊ ÇáÅÏÇÑíÉ ÇáÊÇÈÚÉ æÇáãÓÊŞáÉ
+    if (!await db.Departments.AnyAsync())
+    {
+        var departments = new List<Department>
+        {
+            new Department
+            {
+                Name = "ÇáÔÚÈÉ ÇáÅÏÇÑíÉ æÇáãÇáíÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÅÏÇÑÉ ÇáãæÇÑÏ ÇáÈÔÑíÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÊÏÑíÈ æÇáÊØæíÑ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÍÓÇÈÇÊ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÎÏãÇÊ ÇáÅÏÇÑíÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáãÎÇÒä" }
+                }
+            },
+            new Department
+            {
+                Name = "ÔÚÈÉ ÔÄæä ÇáãæÇØäíä",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ Ğæí ÇáÇÍÊíÇÌÇÊ ÇáÎÇÕÉ" }
+                }
+            },
+            new Department { Name = "ÇáÔÚÈÉ ÇáŞÇäæäíÉ" },
+            new Department
+            {
+                Name = "ÔÚÈÉ ÇáÃãáÇß ÇáãæŞæİÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÍÓÇÈÇÊ ÇáÃãáÇß ÇáãæŞæİÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÒÑÇÚí" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÊÌÇÑí" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÓßäí" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÚŞæÏ" }
+                }
+            },
+            new Department
+            {
+                Name = "ÔÚÈÉ ÇáÊÎØíØ æÇáãÊÇÈÚÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÇáÓáÇãÉ ÇáãåäíÉ" }
+                }
+            },
+            new Department
+            {
+                Name = "ÇáÔÚÈÉ ÇáåäÏÓíÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÇáãÓÇÍÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáßåÑæãíßÇäíß" }
+                }
+            },
+            new Department
+            {
+                Name = "ÔÚÈÉ ÅÍíÇÁ ÇáÔÚÇÆÑ ÇáÍÓíäíÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÊÓÌíá ÇáãæÇßÈ ÇáÍÓíäíÉ" }
+                }
+            },
+            new Department { Name = "ÔÚÈÉ ÇáÅÚáÇã æÇáÇÊÕÇá ÇáÍßæãí" },
+            new Department { Name = "ÔÚÈÉ ÇáÈÍæË æÇáÏÑÇÓÇÊ" },
+            new Department { Name = "ÔÚÈÉ ÇáÊÏŞíŞ æÇáÑŞÇÈÉ ÇáÏÇÎáíÉ" },
+            new Department
+            {
+                Name = "ÔÚÈÉ ÇáÊÚáíã ÇáÏíäí æÇáÏÑÇÓÇÊ ÇáÅÓáÇãíÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÇáãæÇÑÏ ÇáÈÔÑíÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÊÚáíã ÇáÇÓáÇãí" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÇÚÏÇÏíÇÊ æÇáãÚÇåÏ ÇáãáÛÇÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÇãÊÍÇä ÇáÎÇÑÌí" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÊÚáíã ÇáÚÇã" }
+                }
+            },
+            new Department
+            {
+                Name = "ÔÚÈÉ ÇáãÄÓÓÇÊ ÇáÏíäíÉ æÇáÎíÑíÉ",
+                SubUnits = new List<SubUnit>
+                {
+                    new SubUnit { Name = "æÍÏÉ ÇáãæÇÑÏ ÇáÈÔÑíÉ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáÍÌÌ æÇáÊæáíÇÊ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáãÓÇÌÏ" },
+                    new SubUnit { Name = "æÍÏÉ ÇáãŞÇãÇÊ" }
+                }
+            },
+            new Department { Name = "ÔÚÈÉ ÊßäæáæÌíÇ ÇáãÚáæãÇÊ" },
+            new Department { Name = "ÔÚÈÉ ãÊÇÈÚÉ ÇáÇÓÊËãÇÑ" }
+        };
+
+        await db.Departments.AddRangeAsync(departments);
+
+        // ÅÖÇİÉ ÇáæÍÏÇÊ ÇáãÓÊŞáÉ
+        var independentUnits = new List<SubUnit>
+        {
+            new SubUnit { Name = "æÍÏÉ ÇáÊÕÇÑíÍ ÇáÃãäíÉ æÇáãÚáæãÇÊ", DepartmentId = null },
+            new SubUnit { Name = "æÍÏÉ ÓáÇãÉ ÇááÛÉ ÇáÚÑÈíÉ", DepartmentId = null },
+            new SubUnit { Name = "æÍÏÉ ÇáÏİÇÚ ÇáãÏäí", DepartmentId = null },
+            new SubUnit { Name = "æÍÏÉ ÔÄæä ÇáãÑÃÉ", DepartmentId = null },
+            new SubUnit { Name = "æÍÏÉ Úáæã ÇáŞÑÂä", DepartmentId = null }
+        };
+
+        await db.SubUnits.AddRangeAsync(independentUnits);
         await db.SaveChangesAsync();
     }
 }

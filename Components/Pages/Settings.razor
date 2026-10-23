@@ -7,6 +7,7 @@
 @using DossierArchiveApp.Services
 @using System.IO
 @using System.IO.Compression
+@using DossierArchiveApp.Components.Dialogs
 @inject AppDbContext DbContext
 @inject ScannerService ScannerService
 @inject ISnackbar Snackbar
@@ -22,10 +23,17 @@
     <div class="d-flex justify-space-between align-center mb-4">
         <div>
             <MudText Typo="Typo.h5" Class="fw-bold" Style="color: #1B4D3E;">
-                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="ml-2" /> إعدادات النظام الشاملة
+                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="ml-2" /> إعدادات النظام
             </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                إدارة الهوية الرسمية، الماسح الضوئي، مسارات التخزين، والنسخ الاحتياطي الشامل
+                @if (SessionService.IsSuperAdmin)
+                {
+                    <span>إدارة الهوية الرسمية، الهيكل الإداري، الماسح الضوئي، مسارات التخزين، والنسخ الاحتياطي الشامل</span>
+                }
+                else
+                {
+                    <span>تخصيص جهاز الماسح الضوئي وإعدادات العرض الخاصة باختصاص (@(!string.IsNullOrWhiteSpace(SessionService.CurrentDepartmentName) ? SessionService.CurrentDepartmentName : "الشعبة"))</span>
+                }
             </MudText>
         </div>
         <MudButton Variant="Variant.Filled"
@@ -41,7 +49,7 @@
             }
             else
             {
-                <span>حفظ كافة الإعدادات</span>
+                <span>حفظ التعديلات</span>
             }
         </MudButton>
     </div>
@@ -54,399 +62,535 @@
     }
     else
     {
-        <MudGrid Spacing="3">
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Color="Color.Primary">
 
-            <!-- 1. الهوية المؤسسية والواجهة -->
-            <MudItem xs="12" md="6">
-                <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
-                    <div class="d-flex align-center gap-2 mb-3">
-                        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" />
-                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الهوية المؤسسية والواجهة</MudText>
-                    </div>
+            <!-- تبويب 1: الإعدادات والعتاد -->
+            <MudTabPanel Text="الإعدادات العامة والعتاد" Icon="@Icons.Material.Filled.Tune">
+                <MudGrid Spacing="3">
 
-                    <MudTextField @bind-Value="_settings.DirectorateName"
-                                  Label="اسم المديرية / الدائرة الرسمية"
-                                  HelperText="يظهر في شريط النظام العلوي والترويسات الرسمية"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Immediate="true"
-                                  Class="mb-3" />
+                    <!-- 1. الهوية المؤسسية والواجهة -->
+                    <MudItem xs="12" md="6">
+                        <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
+                            <div class="d-flex align-center gap-2 mb-3">
+                                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الهوية المؤسسية والواجهة</MudText>
+                            </div>
 
-                    <MudTextField @bind-Value="_settings.DepartmentName"
-                                  Label="اسم القسم / الشعبة"
-                                  HelperText="يظهر أسفل اسم المديرية في شريط العنوان"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Immediate="true"
-                                  Class="mb-3" />
+                            <MudTextField @bind-Value="_settings.DirectorateName"
+                                          Label="اسم المديرية / الدائرة الرسمية"
+                                          HelperText="@(SessionService.IsSuperAdmin ? "يظهر في شريط النظام العلوي والترويسات الرسمية" : "تعديل هذا الحقل مقتصر على المدير العام فقط")"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          ReadOnly="@(!SessionService.IsSuperAdmin)"
+                                          Class="mb-3" />
 
-                    <MudSelect T="string" @bind-Value="_settings.FontFamily"
-                               Label="نوع الخط المعتمد للواجهة"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Class="mb-3">
-                        <MudSelectItem Value="@("Dubai")">خط دبي (Dubai) - النمط الحكومي المعتمد</MudSelectItem>
-                        <MudSelectItem Value="@("Calibri")">Calibri (النمط الإداري)</MudSelectItem>
-                        <MudSelectItem Value="@("Segoe UI")">Segoe UI (النمط الحديث)</MudSelectItem>
-                        <MudSelectItem Value="@("Tahoma")">Tahoma</MudSelectItem>
-                    </MudSelect>
+                            <MudTextField @bind-Value="_settings.DepartmentName"
+                                          Label="اسم القسم / الشعبة"
+                                          HelperText="@(SessionService.IsSuperAdmin ? "يظهر أسفل اسم المديرية في شريط العنوان" : "تعديل هذا الحقل مقتصر على المدير العام فقط")"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          ReadOnly="@(!SessionService.IsSuperAdmin)"
+                                          Class="mb-3" />
 
-                    <!-- شعار المديرية وإدارته -->
-                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">شعار المديرية / الدائرة:</MudText>
-                    <div class="d-flex align-center gap-3">
-                        <img src="@GetEffectiveLogoUrl()"
-                             style="width: 70px; height: 70px; object-fit: contain; border: 1px solid #ddd; border-radius: 8px; padding: 4px; background-color: #fff;"
-                             alt="الشعار الرسمي" />
+                            <MudSelect T="string" @bind-Value="_settings.FontFamily"
+                                       Label="نوع الخط المعتمد للواجهة"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Disabled="@(!SessionService.IsSuperAdmin)"
+                                       Class="mb-3">
+                                <MudSelectItem Value="@("Dubai")">خط دبي (Dubai) - النمط الحكومي المعتمد</MudSelectItem>
+                                <MudSelectItem Value="@("Calibri")">Calibri (النمط الإداري)</MudSelectItem>
+                                <MudSelectItem Value="@("Segoe UI")">Segoe UI (النمط الحديث)</MudSelectItem>
+                                <MudSelectItem Value="@("Tahoma")">Tahoma</MudSelectItem>
+                            </MudSelect>
 
-                        <div class="d-flex flex-column gap-2">
-                            <div class="d-flex gap-2">
-                                <MudFileUpload T="IBrowserFile" FilesChanged="UploadLogo" Accept=".png, .jpg, .jpeg">
-                                    <ActivatorContent>
-                                        <MudButton Variant="Variant.Outlined"
-                                                   Color="Color.Primary"
-                                                   Size="Size.Small"
-                                                   StartIcon="@Icons.Material.Filled.CloudUpload">
-                                            تغيير الشعار
-                                        </MudButton>
-                                    </ActivatorContent>
-                                </MudFileUpload>
+                            <!-- شعار المديرية وإدارته -->
+                            <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">شعار المديرية / الدائرة:</MudText>
+                            <div class="d-flex align-center gap-3">
+                                <img src="@GetEffectiveLogoUrl()"
+                                     style="width: 70px; height: 70px; object-fit: contain; border: 1px solid #ddd; border-radius: 8px; padding: 4px; background-color: #fff;"
+                                     alt="الشعار الرسمي" />
 
-                                @if (IsCustomLogoActive())
+                                <div class="d-flex flex-column gap-2">
+                                    @if (SessionService.IsSuperAdmin)
+                                    {
+                                        <div class="d-flex gap-2">
+                                            <MudFileUpload T="IBrowserFile" FilesChanged="UploadLogo" Accept=".png, .jpg, .jpeg">
+                                                <ActivatorContent>
+                                                    <MudButton Variant="Variant.Outlined"
+                                                               Color="Color.Primary"
+                                                               Size="Size.Small"
+                                                               StartIcon="@Icons.Material.Filled.CloudUpload">
+                                                        تغيير الشعار
+                                                    </MudButton>
+                                                </ActivatorContent>
+                                            </MudFileUpload>
+
+                                            @if (IsCustomLogoActive())
+                                            {
+                                                <MudButton Variant="Variant.Text"
+                                                           Color="Color.Secondary"
+                                                           Size="Size.Small"
+                                                           StartIcon="@Icons.Material.Filled.Restore"
+                                                           OnClick="ResetToDefaultLogo">
+                                                    استعادة الافتراضي
+                                                </MudButton>
+                                            }
+                                        </div>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            الصيغ المدعومة: PNG, JPG (الحد الأقصى 5 ميغابايت)
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            * تغيير الشعار الرسمي مقتصر على الإدارة العليا للنظام.
+                                        </MudText>
+                                    }
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- 2. بطاقة الماسح الضوئي (متاحة للجميع لضبط ماسح كل جهاز) -->
+                    <MudItem xs="12" md="6">
+                        <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
+                            <div class="d-flex align-center justify-space-between mb-3">
+                                <div class="d-flex align-center gap-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Scanner" Color="Color.Primary" />
+                                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الماسح الضوئي المحلي</MudText>
+                                </div>
+                                <MudButton Variant="Variant.Outlined"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Refresh"
+                                           OnClick="RefreshConnectedScanners">
+                                    تحديث الأجهزة
+                                </MudButton>
+                            </div>
+
+                            <MudSelect T="string"
+                                       @bind-Value="_settings.DefaultScannerName"
+                                       Label="الماسح الضوئي المعتمد لهذا الجهاز"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Class="mb-3">
+                                @if (!_availableScanners.Any())
                                 {
-                                    <MudButton Variant="Variant.Text"
-                                               Color="Color.Secondary"
-                                               Size="Size.Small"
-                                               StartIcon="@Icons.Material.Filled.Restore"
-                                               OnClick="ResetToDefaultLogo">
-                                        استعادة الافتراضي
+                                    <MudSelectItem Value="@("")">لم يتم العثور على أجهزة مسح ضوئي متصلة</MudSelectItem>
+                                }
+                                else
+                                {
+                                    <MudSelectItem Value="@("")">-- اختر الماسح الضوئي --</MudSelectItem>
+                                    @foreach (var s in _availableScanners)
+                                    {
+                                        <MudSelectItem Value="@s.Name">@s.Name</MudSelectItem>
+                                    }
+                                }
+                            </MudSelect>
+
+                            <MudSelect T="string"
+                                       @bind-Value="_settings.ScanSource"
+                                       Label="طريقة سحب الأوراق"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Class="mb-3">
+                                <MudSelectItem Value="@("Feeder")">سحب آلي من الفيدر (ADF) - للملفات المتعددة</MudSelectItem>
+                                <MudSelectItem Value="@("Flatbed")">السطح الزجاجي (Flatbed) - للهويات والوثائق الفردية</MudSelectItem>
+                            </MudSelect>
+
+                            @if (_settings.ScanSource == "Feeder")
+                            {
+                                <MudSwitch @bind-Value="_isDuplex"
+                                           Color="Color.Success"
+                                           Class="mb-2"
+                                           Label="مسح الوجهين آلياً (Duplex Scanning)" />
+                            }
+
+                            <MudGrid Spacing="2">
+                                <MudItem xs="4">
+                                    <MudSelect T="int" @bind-Value="_settings.ScannerResolutionDPI"
+                                               Label="الدقة (DPI)"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense">
+                                        <MudSelectItem Value="@(150)">150 DPI</MudSelectItem>
+                                        <MudSelectItem Value="@(200)">200 DPI (موصى به)</MudSelectItem>
+                                        <MudSelectItem Value="@(300)">300 DPI</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="4">
+                                    <MudSelect T="string" @bind-Value="_settings.ScannerColorMode"
+                                               Label="نمط الألوان"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense">
+                                        <MudSelectItem Value="@("Grayscale")">رمادي (Grayscale)</MudSelectItem>
+                                        <MudSelectItem Value="@("Color")">ملون (Color)</MudSelectItem>
+                                        <MudSelectItem Value="@("BlackWhite")">أبيض وأسود</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="4">
+                                    <MudSelect T="string" @bind-Value="_settings.PdfCompressionLevel"
+                                               Label="ضغط الـ PDF"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense">
+                                        <MudSelectItem Value="@("High")">عالي (أقل حجم)</MudSelectItem>
+                                        <MudSelectItem Value="@("Medium")">متوسط (متوازن)</MudSelectItem>
+                                        <MudSelectItem Value="@("Low")">منخفض (أصلية)</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- 3. مسار التخزين الأساسي للمجلدات -->
+                    <MudItem xs="12" md="6">
+                        <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
+                            <div class="d-flex align-center gap-2 mb-3">
+                                <MudIcon Icon="@Icons.Material.Filled.FolderShared" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">مسار التخزين والأرشفة</MudText>
+                            </div>
+
+                            <div class="d-flex gap-2 mb-2 align-start">
+                                <MudTextField @bind-Value="_settings.BaseFolderPath"
+                                              Label="المسار الرئيسي لمجلد النظام (Base Folder Path)"
+                                              ReadOnly="@(!SessionService.IsSuperAdmin)"
+                                              HelperText="@(SessionService.IsSuperAdmin ? "المجلد الأساسي الذي يحتوي على كافة ملفات الموظفين المؤرشفة" : "المسار محدد مركزياً من الإدارة العليا")"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Class="flex-grow-1" />
+
+                                @if (SessionService.IsSuperAdmin)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.FolderOpen"
+                                               OnClick="BrowseBaseFolder"
+                                               Style="height: 40px; margin-top: 4px;">
+                                        استعراض...
                                     </MudButton>
                                 }
                             </div>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                الصيغ المدعومة: PNG, JPG (الحد الأقصى 5 ميغابايت)
-                            </MudText>
-                        </div>
-                    </div>
-                </MudPaper>
-            </MudItem>
 
-            <!-- 2. بطاقة الماسح الضوئي -->
-            <MudItem xs="12" md="6">
-                <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
-                    <div class="d-flex align-center justify-space-between mb-3">
-                        <div class="d-flex align-center gap-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Scanner" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الماسح الضوئي (NAPS2 Driver)</MudText>
-                        </div>
-                        <MudButton Variant="Variant.Outlined"
-                                   Size="Size.Small"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Refresh"
-                                   OnClick="RefreshConnectedScanners">
-                            تحديث الأجهزة
-                        </MudButton>
-                    </div>
+                            <div class="d-flex gap-2 mb-3">
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                                           OnClick="CheckBaseFolder">
+                                    فحص جاهزية المجلد
+                                </MudButton>
+                            </div>
 
-                    <MudSelect T="string"
-                               @bind-Value="_settings.DefaultScannerName"
-                               Label="الماسح الضوئي الافتراضي"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Class="mb-3">
-                        @if (!_availableScanners.Any())
-                        {
-                            <MudSelectItem Value="@("")">لم يتم العثور على أجهزة مسح ضوئي متصلة</MudSelectItem>
-                        }
-                        else
-                        {
-                            <MudSelectItem Value="@("")">-- اختر الماسح الضوئي --</MudSelectItem>
-                            @foreach (var s in _availableScanners)
+                            <MudGrid Spacing="2">
+                                <MudItem xs="6">
+                                    <MudSelect T="int" @bind-Value="_settings.MaxFileSize"
+                                               Label="الحد الأقصى لحجم الملف المرفوع"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               Disabled="@(!SessionService.IsSuperAdmin)">
+                                        <MudSelectItem Value="@(10485760)">10 ميغابايت</MudSelectItem>
+                                        <MudSelectItem Value="@(26214400)">25 ميغابايت</MudSelectItem>
+                                        <MudSelectItem Value="@(52428800)">50 ميغابايت (الموصى به)</MudSelectItem>
+                                        <MudSelectItem Value="@(104857600)">100 ميغابايت</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudSelect T="string" @bind-Value="_settings.PDFViewerMode"
+                                               Label="طريقة استعراض الكتب (PDF)"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense">
+                                        <MudSelectItem Value="@("internal")">عارض المستندات المدمج</MudSelectItem>
+                                        <MudSelectItem Value="@("external")">تطبيق النظام الافتراضي</MudSelectItem>
+                                        <MudSelectItem Value="@("browser")">فتح في تبويب متصفح مستقل</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- 4. النسخ الاحتياطي والاستعادة (محصن أمنياً) -->
+                    <MudItem xs="12" md="6">
+                        <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
+                            <div class="d-flex align-center justify-space-between mb-3">
+                                <div class="d-flex align-center gap-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Backup" Color="Color.Primary" />
+                                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">النسخ الاحتياطي والاستعادة</MudText>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2 mb-2 align-start">
+                                <MudTextField @bind-Value="_settings.BackupFolderPath"
+                                              Label="مسار مجلد النسخ الاحتياطي (Backup Folder)"
+                                              ReadOnly="@(!SessionService.IsSuperAdmin)"
+                                              HelperText="@(SessionService.IsSuperAdmin ? "المسار المعتمد لحفظ ملفات النسخ الاحتياطية" : "محدد مركزياً من الإدارة العليا")"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Class="flex-grow-1" />
+
+                                @if (SessionService.IsSuperAdmin)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.FolderOpen"
+                                               OnClick="BrowseBackupFolder"
+                                               Style="height: 40px; margin-top: 4px;">
+                                        استعراض...
+                                    </MudButton>
+                                }
+                            </div>
+
+                            @if (SessionService.IsSuperAdmin)
                             {
-                                <MudSelectItem Value="@s.Name">@s.Name</MudSelectItem>
-                            }
-                        }
-                    </MudSelect>
+                                <div class="pa-3 mb-3 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
+                                    <MudRadioGroup @bind-Value="_backupScope">
+                                        <MudRadio Value="@("dbOnly")" Color="Color.Primary" Dense="true">
+                                            <span class="fw-bold" style="font-size: 0.85rem;">قاعدة البيانات فقط (.sqlite3)</span>
+                                            <span class="d-block text-secondary" style="font-size: 0.75rem;">سريع وصغير الحجم، يشمل الجداول والربط</span>
+                                        </MudRadio>
+                                        <MudRadio Value="@("full")" Color="Color.Success" Dense="true" Class="mt-2">
+                                            <span class="fw-bold" style="font-size: 0.85rem;">نسخ احتياطي شامل متكامل (.zip)</span>
+                                            <span class="d-block text-secondary" style="font-size: 0.75rem;">يجمع قاعدة البيانات مع كافة المجلدات والملفات المؤرشفة</span>
+                                        </MudRadio>
+                                    </MudRadioGroup>
+                                </div>
 
-                    <MudSelect T="string"
-                               @bind-Value="_settings.ScanSource"
-                               Label="طريقة سحب الأوراق"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Class="mb-3">
-                        <MudSelectItem Value="@("Feeder")">سحب آلي من الفيدر (ADF) - للملفات المتعددة</MudSelectItem>
-                        <MudSelectItem Value="@("Flatbed")">السطح الزجاجي (Flatbed) - للهويات والوثائق الفردية</MudSelectItem>
-                    </MudSelect>
+                                <div class="d-flex justify-space-between align-center mb-3">
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Warning"
+                                               Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.CloudSync"
+                                               Disabled="_isBackingUp"
+                                               OnClick="TriggerManualBackup">
+                                        @if (_isBackingUp)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
+                                            <span>جارٍ إنشاء النسخة...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>إنشاء نسخة احتياطية الآن</span>
+                                        }
+                                    </MudButton>
 
-                    @if (_settings.ScanSource == "Feeder")
-                    {
-                        <MudSwitch @bind-Value="_isDuplex"
-                                   Color="Color.Success"
-                                   Class="mb-2"
-                                   Label="مسح الوجهين آلياً (Duplex Scanning)" />
-                    }
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadBackupFiles">
+                                        تحديث قائمة النسخ
+                                    </MudButton>
+                                </div>
 
-                    <MudGrid Spacing="2">
-                        <MudItem xs="4">
-                            <MudSelect T="int" @bind-Value="_settings.ScannerResolutionDPI"
-                                       Label="الدقة (DPI)"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@(150)">150 DPI</MudSelectItem>
-                                <MudSelectItem Value="@(200)">200 DPI (موصى به)</MudSelectItem>
-                                <MudSelectItem Value="@(300)">300 DPI</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="4">
-                            <MudSelect T="string" @bind-Value="_settings.ScannerColorMode"
-                                       Label="نمط الألوان"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@("Grayscale")">رمادي (Grayscale)</MudSelectItem>
-                                <MudSelectItem Value="@("Color")">ملون (Color)</MudSelectItem>
-                                <MudSelectItem Value="@("BlackWhite")">أبيض وأسود</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="4">
-                            <MudSelect T="string" @bind-Value="_settings.PdfCompressionLevel"
-                                       Label="ضغط الـ PDF"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@("High")">عالي (أقل حجم)</MudSelectItem>
-                                <MudSelectItem Value="@("Medium")">متوسط (متوازن)</MudSelectItem>
-                                <MudSelectItem Value="@("Low")">منخفض (أصلية)</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                    </MudGrid>
-                </MudPaper>
-            </MudItem>
+                                @if (!_backupFiles.Any())
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true" Class="my-2" style="font-size: 0.8rem;">
+                                        لا توجد نسخ احتياطية في المسار المحدد حالياً.
+                                    </MudAlert>
+                                }
+                                else
+                                {
+                                    <div style="max-height: 140px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px;" class="mb-2">
+                                        <MudList T="string" Dense="true">
+                                            @foreach (var file in _backupFiles.Take(6))
+                                            {
+                                                <MudListItem T="string">
+                                                    <div class="d-flex align-center justify-space-between w-100">
+                                                        <div class="d-flex flex-column text-right">
+                                                            <div class="d-flex align-center gap-1">
+                                                                <MudIcon Icon="@(file.Extension.ToLower() == ".zip" ? Icons.Material.Filled.FolderZip : Icons.Material.Filled.Storage)"
+                                                                         Size="Size.Small"
+                                                                         Color="@(file.Extension.ToLower() == ".zip" ? Color.Success : Color.Primary)" />
+                                                                <span style="font-size: 0.82rem; font-weight: bold; direction: ltr; text-align: right;">@file.Name</span>
+                                                            </div>
+                                                            <span style="font-size: 0.72rem; color: #888;">
+                                                                @file.CreationTime.ToString("yyyy-MM-dd hh:mm tt") (@((file.Length / 1024.0 / 1024.0).ToString("F2")) MB)
+                                                            </span>
+                                                        </div>
+                                                        <MudButton Size="Size.Small"
+                                                                   Variant="Variant.Filled"
+                                                                   Color="Color.Error"
+                                                                   StartIcon="@Icons.Material.Filled.SettingsBackupRestore"
+                                                                   OnClick="@(() => RestoreFromLocalFile(file.FullName, file.Name))">
+                                                            استعادة
+                                                        </MudButton>
+                                                    </div>
+                                                </MudListItem>
+                                            }
+                                        </MudList>
+                                    </div>
+                                }
 
-            <!-- 3. مسار التخزين الأساسي للمجلدات وعارض الـ PDF -->
-            <MudItem xs="12" md="6">
-                <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
-                    <div class="d-flex align-center gap-2 mb-3">
-                        <MudIcon Icon="@Icons.Material.Filled.FolderShared" Color="Color.Primary" />
-                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">مسار التخزين ونظام الأضابير</MudText>
-                    </div>
+                                <MudDivider Class="my-2" />
 
-                    <div class="d-flex gap-2 mb-2 align-start">
-                        <MudTextField @bind-Value="_settings.BaseFolderPath"
-                                      Label="المسار الرئيسي لمجلد النظام (Base Folder Path)"
-                                      Placeholder="مثال: D:\الاضبارة الالكترونية للموظفين"
-                                      HelperText="المجلد الأساسي الذي يحتوي على كافة ملفات الموظفين المؤرشفة"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Class="flex-grow-1" />
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudSwitch @bind-Value="_auditLog"
+                                               Color="Color.Primary"
+                                               Label="تفعيل سجل التدقيق (Audit Log)" />
 
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.FolderOpen"
-                                   OnClick="BrowseBaseFolder"
-                                   Style="height: 40px; margin-top: 4px;">
-                            استعراض...
-                        </MudButton>
-                    </div>
-
-                    <div class="d-flex gap-2 mb-3">
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.CheckCircle"
-                                   OnClick="CheckBaseFolder">
-                            فحص وإنشاء المجلد
-                        </MudButton>
-                    </div>
-
-                    <MudGrid Spacing="2">
-                        <MudItem xs="6">
-                            <MudSelect T="int" @bind-Value="_settings.MaxFileSize"
-                                       Label="الحد الأقصى لحجم الملف المرفوع"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@(10485760)">10 ميغابايت</MudSelectItem>
-                                <MudSelectItem Value="@(26214400)">25 ميغابايت</MudSelectItem>
-                                <MudSelectItem Value="@(52428800)">50 ميغابايت (الموصى به)</MudSelectItem>
-                                <MudSelectItem Value="@(104857600)">100 ميغابايت</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="6">
-                            <MudSelect T="string" @bind-Value="_settings.PDFViewerMode"
-                                       Label="طريقة استعراض الكتب (PDF)"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@("internal")">عارض المستندات المدمج</MudSelectItem>
-                                <MudSelectItem Value="@("external")">تطبيق النظام الافتراضي</MudSelectItem>
-                                <MudSelectItem Value="@("browser")">فتح في تبويب متصفح مستقل</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                    </MudGrid>
-                </MudPaper>
-            </MudItem>
-
-            <!-- 4. النسخ الاحتياطي والاستعادة -->
-            <MudItem xs="12" md="6">
-                <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white; height: 100%;">
-                    <div class="d-flex align-center justify-space-between mb-3">
-                        <div class="d-flex align-center gap-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Backup" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">النسخ الاحتياطي والاستعادة</MudText>
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-2 mb-2 align-start">
-                        <MudTextField @bind-Value="_settings.BackupFolderPath"
-                                      Label="مسار مجلد النسخ الاحتياطي (Backup Folder)"
-                                      Placeholder="مثال: D:\Backups\DossierArchive"
-                                      HelperText="المسار المعتمد لحفظ ملفات النسخ الاحتياطية"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Class="flex-grow-1" />
-
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.FolderOpen"
-                                   OnClick="BrowseBackupFolder"
-                                   Style="height: 40px; margin-top: 4px;">
-                            استعراض...
-                        </MudButton>
-                    </div>
-
-                    <div class="pa-3 mb-3 rounded" style="background-color: #f1f8f5; border: 1px solid #c8e6c9;">
-                        <MudRadioGroup @bind-Value="_backupScope">
-                            <MudRadio Value="@("dbOnly")" Color="Color.Primary" Dense="true">
-                                <span class="fw-bold" style="font-size: 0.85rem;">قاعدة البيانات فقط (.sqlite3)</span>
-                                <span class="d-block text-secondary" style="font-size: 0.75rem;">سريع جداً وصغير الحجم، يشمل الجداول وسجلات الموظفين والربط</span>
-                            </MudRadio>
-                            <MudRadio Value="@("full")" Color="Color.Success" Dense="true" Class="mt-2">
-                                <span class="fw-bold" style="font-size: 0.85rem;">نسخ احتياطي شامل متكامل (.zip)</span>
-                                <span class="d-block text-secondary" style="font-size: 0.75rem;">يجمع قاعدة البيانات مع كافة المجلدات والملفات الممسوحة في أرشيف مضغوط واحد</span>
-                            </MudRadio>
-                        </MudRadioGroup>
-                    </div>
-
-                    <div class="d-flex justify-space-between align-center mb-3">
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Warning"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.CloudSync"
-                                   Disabled="_isBackingUp"
-                                   OnClick="TriggerManualBackup">
-                            @if (_isBackingUp)
-                            {
-                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-2" />
-                                <span>جارٍ إنشاء النسخة...</span>
+                                    <MudFileUpload T="IBrowserFile" FilesChanged="RestoreFromUploadedFile" Accept=".sqlite3, .zip">
+                                        <ActivatorContent>
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.FileOpen">
+                                                استعادة من ملف خارجي...
+                                            </MudButton>
+                                        </ActivatorContent>
+                                    </MudFileUpload>
+                                </div>
                             }
                             else
                             {
-                                <span>إنشاء نسخة احتياطية الآن</span>
+                                <MudAlert Severity="Severity.Normal" Dense="true">
+                                    إجراء عمليات النسخ الاحتياطي الكامل والاستعادة السيادية مقتصر حصراً على المدير العام لضمان سلامة بيانات كافة الشُعب.
+                                </MudAlert>
                             }
-                        </MudButton>
+                        </MudPaper>
+                    </MudItem>
 
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadBackupFiles">
-                            تحديث قائمة النسخ
-                        </MudButton>
-                    </div>
+                    <!-- 5. التفضيلات العامة وعرض البيانات -->
+                    <MudItem xs="12" md="12">
+                        <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white;">
+                            <div class="d-flex align-center gap-2 mb-3">
+                                <MudIcon Icon="@Icons.Material.Filled.Tune" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">التفضيلات العامة والبحث</MudText>
+                            </div>
 
-                    @if (!_backupFiles.Any())
-                    {
-                        <MudAlert Severity="Severity.Info" Dense="true" Class="my-2" style="font-size: 0.8rem;">
-                            لا توجد نسخ احتياطية في المسار المحدد حالياً.
-                        </MudAlert>
-                    }
-                    else
-                    {
-                        <div style="max-height: 140px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px;" class="mb-2">
-                            <MudList T="string" Dense="true">
-                                @foreach (var file in _backupFiles.Take(6))
-                                {
-                                    <MudListItem T="string">
-                                        <div class="d-flex align-center justify-space-between w-100">
-                                            <div class="d-flex flex-column text-right">
-                                                <div class="d-flex align-center gap-1">
-                                                    <MudIcon Icon="@(file.Extension.ToLower() == ".zip" ? Icons.Material.Filled.FolderZip : Icons.Material.Filled.Storage)"
-                                                             Size="Size.Small"
-                                                             Color="@(file.Extension.ToLower() == ".zip" ? Color.Success : Color.Primary)" />
-                                                    <span style="font-size: 0.82rem; font-weight: bold; direction: ltr; text-align: right;">@file.Name</span>
-                                                </div>
-                                                <span style="font-size: 0.72rem; color: #888;">
-                                                    @file.CreationTime.ToString("yyyy-MM-dd hh:mm tt") (@((file.Length / 1024.0 / 1024.0).ToString("F2")) MB)
-                                                </span>
-                                            </div>
-                                            <MudButton Size="Size.Small"
-                                                       Variant="Variant.Filled"
-                                                       Color="Color.Error"
-                                                       StartIcon="@Icons.Material.Filled.SettingsBackupRestore"
-                                                       OnClick="@(() => RestoreFromLocalFile(file.FullName, file.Name))">
-                                                استعادة
-                                            </MudButton>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            </MudList>
+                            <MudGrid Spacing="2">
+                                <MudItem xs="12" md="4">
+                                    <MudSelect T="string" @bind-Value="_settings.EmployeeDisplayMode"
+                                               Label="عرض الموظفين الافتراضي"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense">
+                                        <MudSelectItem Value="@("Active")">الموظفون الفعالون فقط</MudSelectItem>
+                                        <MudSelectItem Value="@("Inactive")">غير الفعالين فقط</MudSelectItem>
+                                        <MudSelectItem Value="@("All")">كافة الموظفين</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+
+                                <MudItem xs="12" md="4">
+                                    <MudNumericField @bind-Value="_settings.DefaultSearchLimit"
+                                                     Label="الحد الأقصى لنتائج البحث المسترجعة"
+                                                     Variant="Variant.Outlined"
+                                                     Margin="Margin.Dense"
+                                                     Min="50" Max="5000" />
+                                </MudItem>
+
+                                <MudItem xs="12" md="4">
+                                    <MudSelect T="string" @bind-Value="_settings.DefaultLanguage"
+                                               Label="لغة النظام الافتراضية"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               Disabled="@(!SessionService.IsSuperAdmin)">
+                                        <MudSelectItem Value="@("ar")">العربية (Arabic - العراق)</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    </MudItem>
+
+                </MudGrid>
+            </MudTabPanel>
+
+            <!-- تبويب 2: الهيكل الإداري (يظهر فقط للمدير العام) -->
+            @if (SessionService.IsSuperAdmin)
+            {
+                <MudTabPanel Text="الشعب والوحدات" Icon="@Icons.Material.Filled.AccountTree">
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <div>
+                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">الهيكل الإداري والتنظيمي</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">إدارة الشُعب الرئيسية والوحدات التابعة والمستقلة وتفعيلها</MudText>
                         </div>
-                    }
-
-                    <MudDivider Class="my-2" />
-
-                    <div class="d-flex justify-space-between align-center">
-                        <MudSwitch @bind-Value="_auditLog"
-                                   Color="Color.Primary"
-                                   Label="تفعيل سجل التدقيق (Audit Log)" />
-
-                        <MudFileUpload T="IBrowserFile" FilesChanged="RestoreFromUploadedFile" Accept=".sqlite3, .zip">
-                            <ActivatorContent>
-                                <MudButton Variant="Variant.Outlined"
-                                           Color="Color.Error"
-                                           Size="Size.Small"
-                                           StartIcon="@Icons.Material.Filled.FileOpen">
-                                    استعادة من ملف خارجي...
-                                </MudButton>
-                            </ActivatorContent>
-                        </MudFileUpload>
-                    </div>
-                </MudPaper>
-            </MudItem>
-
-            <!-- 5. التفضيلات العامة وعرض البيانات -->
-            <MudItem xs="12" md="12">
-                <MudPaper Elevation="1" Class="pa-4" Style="border-radius: 8px; background-color: white;">
-                    <div class="d-flex align-center gap-2 mb-3">
-                        <MudIcon Icon="@Icons.Material.Filled.Tune" Color="Color.Primary" />
-                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #1B4D3E;">التفضيلات العامة والبحث</MudText>
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddBusiness" OnClick="OpenAddDepartmentDialog" Style="background-color: #1B4D3E;">
+                                إضافة شعبة جديدة
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddHomeWork" OnClick="OpenAddSubUnitDialog">
+                                إضافة وحدة إدارية
+                            </MudButton>
+                        </div>
                     </div>
 
-                    <MudGrid Spacing="2">
-                        <MudItem xs="12" md="4">
-                            <MudSelect T="string" @bind-Value="_settings.EmployeeDisplayMode"
-                                       Label="عرض الموظفين الافتراضي"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@("Active")">الموظفون الفعالون فقط</MudSelectItem>
-                                <MudSelectItem Value="@("Inactive")">غير الفعالين فقط</MudSelectItem>
-                                <MudSelectItem Value="@("All")">كافة الموظفين</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
+                    <!-- جدول الشعب -->
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold mt-2 mb-1" Style="color: #1B4D3E;">قائمة الشُعب الرئيسية</MudText>
+                    <MudTable Items="@_departmentsList" Dense="true" Hover="true" Striped="true" Elevation="1" Class="mb-4">
+                        <HeaderContent>
+                            <MudTh Style="width: 50px;">ت</MudTh>
+                            <MudTh>اسم الشعبة</MudTh>
+                            <MudTh>عدد الوحدات التابعة</MudTh>
+                            <MudTh>الحالة</MudTh>
+                            <MudTh Style="text-align: center; width: 140px;">الإجراءات</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.DepartmentId</MudTd>
+                            <MudTd Class="fw-bold">@context.Name</MudTd>
+                            <MudTd>
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                                    @(context.SubUnits?.Count ?? 0) وحدة
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>
+                                @if (context.IsActive == 1)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">نشطة</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">معطلة</MudChip>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: center;">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDepartmentDialog(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteDepartment(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Typo="Typo.body2" Class="pa-3 text-center text-muted">لا توجد شُعب مسجلة في النظام.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
 
-                        <MudItem xs="12" md="4">
-                            <MudNumericField @bind-Value="_settings.DefaultSearchLimit"
-                                             Label="الحد الأقصى لنتائج البحث المسترجعة"
-                                             Variant="Variant.Outlined"
-                                             Margin="Margin.Dense"
-                                             Min="50" Max="5000" />
-                        </MudItem>
+                    <!-- جدول الوحدات -->
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold mt-4 mb-1" Style="color: #1B4D3E;">قائمة الوحدات (التابعة والمستقلة)</MudText>
+                    <MudTable Items="@_subUnitsList" Dense="true" Hover="true" Striped="true" Elevation="1">
+                        <HeaderContent>
+                            <MudTh Style="width: 50px;">ت</MudTh>
+                            <MudTh>اسم الوحدة</MudTh>
+                            <MudTh>الارتباط التنظيمي / الشعبة التابعة</MudTh>
+                            <MudTh>الحالة</MudTh>
+                            <MudTh Style="text-align: center; width: 140px;">الإجراءات</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.SubUnitId</MudTd>
+                            <MudTd Class="fw-bold">@context.Name</MudTd>
+                            <MudTd>
+                                @if (context.Department != null)
+                                {
+                                    <span style="color: #1B4D3E; font-weight: 500;">@context.Department.Name</span>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Filled">مستقلة / مرتبطة بالمديرية مباشرة</MudChip>
+                                }
+                            </MudTd>
+                            <MudTd>
+                                @if (context.IsActive == 1)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">نشطة</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">معطلة</MudChip>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: center;">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditSubUnitDialog(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteSubUnit(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Typo="Typo.body2" Class="pa-3 text-center text-muted">لا توجد وحدات مسجلة في النظام.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudTabPanel>
+            }
 
-                        <MudItem xs="12" md="4">
-                            <MudSelect T="string" @bind-Value="_settings.DefaultLanguage"
-                                       Label="لغة النظام الافتراضية"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense">
-                                <MudSelectItem Value="@("ar")">العربية (Arabic - العراق)</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                    </MudGrid>
-                </MudPaper>
-            </MudItem>
-
-        </MudGrid>
+        </MudTabs>
     }
 </div>
 
@@ -463,6 +607,9 @@
     private List<ScannerInfo> _availableScanners = new();
     private List<FileInfo> _backupFiles = new();
 
+    private List<Department> _departmentsList = new();
+    private List<SubUnit> _subUnitsList = new();
+
     protected override async Task OnInitializedAsync()
     {
         if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers)
@@ -473,6 +620,10 @@
         }
 
         await LoadSettings();
+        if (SessionService.IsSuperAdmin)
+        {
+            await LoadDepartmentsAndUnitsAsync();
+        }
     }
 
     private async Task LoadSettings()
@@ -500,7 +651,10 @@
             _auditLog = _settings.KeepAuditLog == 1;
 
             RefreshConnectedScanners();
-            LoadBackupFiles();
+            if (SessionService.IsSuperAdmin)
+            {
+                LoadBackupFiles();
+            }
         }
         catch (Exception ex)
         {
@@ -512,9 +666,171 @@
         }
     }
 
-    // ==========================================
-    // منطق إدارة الشعار
-    // ==========================================
+    private async Task LoadDepartmentsAndUnitsAsync()
+    {
+        try
+        {
+            _departmentsList = await DbContext.Departments
+                .Include(d => d.SubUnits)
+                .OrderBy(d => d.DepartmentId)
+                .ToListAsync();
+
+            _subUnitsList = await DbContext.SubUnits
+                .Include(s => s.Department)
+                .OrderBy(s => s.DepartmentId.HasValue ? s.DepartmentId : 999)
+                .ThenBy(s => s.SubUnitId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"تعذر جلب الشُعب والوحدات: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddDepartmentDialog()
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        var parameters = new DialogParameters { ["Department"] = new Department() };
+        var dialog = await DialogService.ShowAsync<DepartmentDialog>("إضافة شعبة", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is Department newDept)
+        {
+            DbContext.Departments.Add(newDept);
+            await DbContext.SaveChangesAsync();
+            await LoadDepartmentsAndUnitsAsync();
+            Snackbar.Add("تمت إضافة الشعبة بنجاح", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDepartmentDialog(Department dept)
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        var deptClone = new Department { DepartmentId = dept.DepartmentId, Name = dept.Name, IsActive = dept.IsActive };
+        var parameters = new DialogParameters { ["Department"] = deptClone };
+        var dialog = await DialogService.ShowAsync<DepartmentDialog>("تعديل شعبة", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is Department updatedDept)
+        {
+            var existing = await DbContext.Departments.FindAsync(dept.DepartmentId);
+            if (existing != null)
+            {
+                existing.Name = updatedDept.Name;
+                existing.IsActive = updatedDept.IsActive;
+                await DbContext.SaveChangesAsync();
+                await LoadDepartmentsAndUnitsAsync();
+                Snackbar.Add("تم تحديث بيانات الشعبة بنجاح", Severity.Success);
+            }
+        }
+    }
+
+    private async Task DeleteDepartment(Department dept)
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد الحذف",
+            $"هل أنت متأكد من حذف ({dept.Name})؟\nسيؤدي ذلك لفك ارتباط الوحدات التابعة لها.",
+            yesText: "نعم، حذف",
+            cancelText: "إلغاء");
+
+        if (confirm == true)
+        {
+            var dbDept = await DbContext.Departments.Include(d => d.SubUnits).FirstOrDefaultAsync(d => d.DepartmentId == dept.DepartmentId);
+            if (dbDept != null)
+            {
+                foreach (var sub in dbDept.SubUnits)
+                {
+                    sub.DepartmentId = null;
+                }
+                DbContext.Departments.Remove(dbDept);
+                await DbContext.SaveChangesAsync();
+                await LoadDepartmentsAndUnitsAsync();
+                Snackbar.Add("تم حذف الشعبة بنجاح", Severity.Success);
+            }
+        }
+    }
+
+    private async Task OpenAddSubUnitDialog()
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        var parameters = new DialogParameters
+        {
+            ["SubUnit"] = new SubUnit(),
+            ["Departments"] = _departmentsList
+        };
+        var dialog = await DialogService.ShowAsync<SubUnitDialog>("إضافة وحدة", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is SubUnit newSub)
+        {
+            DbContext.SubUnits.Add(newSub);
+            await DbContext.SaveChangesAsync();
+            await LoadDepartmentsAndUnitsAsync();
+            Snackbar.Add("تمت إضافة الوحدة بنجاح", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditSubUnitDialog(SubUnit sub)
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        var subClone = new SubUnit
+        {
+            SubUnitId = sub.SubUnitId,
+            Name = sub.Name,
+            DepartmentId = sub.DepartmentId,
+            IsActive = sub.IsActive
+        };
+        var parameters = new DialogParameters
+        {
+            ["SubUnit"] = subClone,
+            ["Departments"] = _departmentsList
+        };
+        var dialog = await DialogService.ShowAsync<SubUnitDialog>("تعديل وحدة", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is SubUnit updatedSub)
+        {
+            var existing = await DbContext.SubUnits.FindAsync(sub.SubUnitId);
+            if (existing != null)
+            {
+                existing.Name = updatedSub.Name;
+                existing.DepartmentId = updatedSub.DepartmentId;
+                existing.IsActive = updatedSub.IsActive;
+                await DbContext.SaveChangesAsync();
+                await LoadDepartmentsAndUnitsAsync();
+                Snackbar.Add("تم تحديث بيانات الوحدة بنجاح", Severity.Success);
+            }
+        }
+    }
+
+    private async Task DeleteSubUnit(SubUnit sub)
+    {
+        if (!SessionService.IsSuperAdmin) return;
+
+        bool? confirm = await DialogService.ShowMessageBox(
+            "تأكيد الحذف",
+            $"هل أنت متأكد من حذف الوحدة ({sub.Name}) نهائياً؟",
+            yesText: "نعم، حذف",
+            cancelText: "إلغاء");
+
+        if (confirm == true)
+        {
+            var dbSub = await DbContext.SubUnits.FindAsync(sub.SubUnitId);
+            if (dbSub != null)
+            {
+                DbContext.SubUnits.Remove(dbSub);
+                await DbContext.SaveChangesAsync();
+                await LoadDepartmentsAndUnitsAsync();
+                Snackbar.Add("تم حذف الوحدة بنجاح", Severity.Success);
+            }
+        }
+    }
 
     private string GetEffectiveLogoUrl()
     {
@@ -534,19 +850,13 @@
 
     private async Task ResetToDefaultLogo()
     {
+        if (!SessionService.IsSuperAdmin) return;
+
         _settings.LogoPath = DefaultLogoPath;
         try
         {
             DbContext.SystemSettings.Update(_settings);
             await DbContext.SaveChangesAsync();
-
-            await SessionService.LogActivityAsync(
-                actionType: "استعادة الشعار الافتراضي",
-                entityType: "إعدادات النظام",
-                entityId: _settings.SettingId,
-                description: "تمت استعادة الشعار الافتراضي الرسمي للنظام بنجاح."
-            );
-
             Snackbar.Add("تمت استعادة الشعار الافتراضي بنجاح!", Severity.Success);
             StateHasChanged();
         }
@@ -558,7 +868,7 @@
 
     private async Task UploadLogo(IBrowserFile file)
     {
-        if (file == null) return;
+        if (!SessionService.IsSuperAdmin || file == null) return;
 
         try
         {
@@ -572,13 +882,6 @@
             DbContext.SystemSettings.Update(_settings);
             await DbContext.SaveChangesAsync();
 
-            await SessionService.LogActivityAsync(
-                actionType: "تحديث الشعار",
-                entityType: "إعدادات النظام",
-                entityId: _settings.SettingId,
-                description: "تم رفع وتعيين شعار مخصص جديد للنظام."
-            );
-
             Snackbar.Add("تم تحديث الشعار وتثبيته في النظام بنجاح!", Severity.Success);
             StateHasChanged();
         }
@@ -588,12 +891,10 @@
         }
     }
 
-    // ==========================================
-    // منطق اختيار المجلدات (Browse / Folder Picker)
-    // ==========================================
-
     private void BrowseBaseFolder()
     {
+        if (!SessionService.IsSuperAdmin) return;
+
         string? selected = OpenWindowsFolderPicker("اختر المجلد الأساسي لتخزين ملفات الأضابير");
         if (!string.IsNullOrWhiteSpace(selected))
         {
@@ -604,6 +905,8 @@
 
     private void BrowseBackupFolder()
     {
+        if (!SessionService.IsSuperAdmin) return;
+
         string? selected = OpenWindowsFolderPicker("اختر مجلد حفظ النسخ الاحتياطية");
         if (!string.IsNullOrWhiteSpace(selected))
         {
@@ -661,6 +964,8 @@
 
     private void LoadBackupFiles()
     {
+        if (!SessionService.IsSuperAdmin) return;
+
         _backupFiles.Clear();
         try
         {
@@ -682,7 +987,7 @@
     {
         if (string.IsNullOrWhiteSpace(_settings.BaseFolderPath))
         {
-            Snackbar.Add("يرجى إدخال أو استعراض مسار المجلد الأساسي أولاً", Severity.Warning);
+            Snackbar.Add("مسار المجلد الأساسي غير محدد!", Severity.Warning);
             return;
         }
 
@@ -690,8 +995,15 @@
         {
             if (!Directory.Exists(_settings.BaseFolderPath))
             {
-                Directory.CreateDirectory(_settings.BaseFolderPath);
-                Snackbar.Add("تم إنشاء المجلد في المسار المحدد وهو جاهز للاستخدام!", Severity.Success);
+                if (SessionService.IsSuperAdmin)
+                {
+                    Directory.CreateDirectory(_settings.BaseFolderPath);
+                    Snackbar.Add("تم إنشاء المجلد في المسار المحدد وهو جاهز للاستخدام!", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("المجلد الأساسي غير موجود على القرص، يرجى إبلاغ الإدارة العامة.", Severity.Error);
+                }
             }
             else
             {
@@ -700,7 +1012,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"تعذر إنشاء أو الوصول للمسار: {ex.Message}", Severity.Error);
+            Snackbar.Add($"تعذر الوصول للمسار: {ex.Message}", Severity.Error);
         }
     }
 
@@ -709,6 +1021,23 @@
         _isSaving = true;
         try
         {
+            // صمام أمان سيرفر: منع مدير الشعبة من تغيير إعدادات السيادة في الكائن
+            if (!SessionService.IsSuperAdmin)
+            {
+                var originalDbSettings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+                if (originalDbSettings != null)
+                {
+                    _settings.DirectorateName = originalDbSettings.DirectorateName;
+                    _settings.DepartmentName = originalDbSettings.DepartmentName;
+                    _settings.BaseFolderPath = originalDbSettings.BaseFolderPath;
+                    _settings.BackupFolderPath = originalDbSettings.BackupFolderPath;
+                    _settings.LogoPath = originalDbSettings.LogoPath;
+                    _settings.FontFamily = originalDbSettings.FontFamily;
+                    _settings.MaxFileSize = originalDbSettings.MaxFileSize;
+                    _settings.DefaultLanguage = originalDbSettings.DefaultLanguage;
+                }
+            }
+
             _settings.DuplexScan = _isDuplex ? 1 : 0;
             _settings.AutoBackupEnabled = _autoBackup ? 1 : 0;
             _settings.KeepAuditLog = _auditLog ? 1 : 0;
@@ -720,11 +1049,14 @@
                 actionType: "تعديل إعدادات",
                 entityType: "إعدادات النظام",
                 entityId: _settings.SettingId,
-                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بتحديث إعدادات النظام وبيانات المديرية ومسارات النسخ."
+                description: $"قام المستخدم ({SessionService.CurrentUser?.UserName}) بتحديث إعدادات النظام المتاحة له."
             );
 
-            Snackbar.Add("تم حفظ كافة الإعدادات بنجاح!", Severity.Success);
-            LoadBackupFiles();
+            Snackbar.Add("تم حفظ التعديلات بنجاح!", Severity.Success);
+            if (SessionService.IsSuperAdmin)
+            {
+                LoadBackupFiles();
+            }
             StateHasChanged();
         }
         catch (Exception ex)
@@ -737,12 +1069,14 @@
         }
     }
 
-    // ==========================================
-    // محرك النسخ الاحتياطي (قاعدة فقط أو شامل مع المجلدات)
-    // ==========================================
-
     private async Task TriggerManualBackup()
     {
+        if (!SessionService.IsSuperAdmin)
+        {
+            Snackbar.Add("النسخ الاحتياطي متاح فقط لمدير النظام العام!", Severity.Error);
+            return;
+        }
+
         string backupFolder = _settings.BackupFolderPath?.Trim().Trim('"', '\'') ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(backupFolder))
@@ -751,12 +1085,26 @@
             return;
         }
 
+        // صمام أمان: منع اختيار مجلد تشغيل البرنامج نفسه لتفادي أخطاء القفل والتكرار الدائري
+        string appBaseDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
+        string currentWorkingDir = Directory.GetCurrentDirectory().TrimEnd('\\', '/');
+        string normalizedBackupFolder = Path.GetFullPath(backupFolder).TrimEnd('\\', '/');
+
+        if (normalizedBackupFolder.Equals(appBaseDir, StringComparison.OrdinalIgnoreCase) ||
+            normalizedBackupFolder.StartsWith(appBaseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+            normalizedBackupFolder.Equals(currentWorkingDir, StringComparison.OrdinalIgnoreCase) ||
+            normalizedBackupFolder.StartsWith(currentWorkingDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("تحذير أمني: لا يمكن تحديد مجلد البرنامج كمسار للنسخ الاحتياطي! يرجى اختيار مجلد في مسار مستقل (مثل قرص D أو E).", Severity.Error);
+            return;
+        }
+
         _isBackingUp = true;
         try
         {
-            if (!Directory.Exists(backupFolder))
+            if (!Directory.Exists(normalizedBackupFolder))
             {
-                Directory.CreateDirectory(backupFolder);
+                Directory.CreateDirectory(normalizedBackupFolder);
             }
 
             string sourceDb = Path.Combine(AppContext.BaseDirectory, "dossiers.sqlite3");
@@ -776,9 +1124,14 @@
             if (_backupScope == "dbOnly")
             {
                 string backupFileName = $"DossierDB_{timestamp}.sqlite3";
-                string destPath = Path.Combine(backupFolder, backupFileName);
+                string destPath = Path.Combine(normalizedBackupFolder, backupFileName);
 
-                File.Copy(sourceDb, destPath, overwrite: true);
+                // استخدام FileShare.ReadWrite لتجاوز قفل محرك SQLite أثناء تشغيل التطبيق
+                await using (var sourceStream = new FileStream(sourceDb, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                await using (var destStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    await sourceStream.CopyToAsync(destStream);
+                }
 
                 await SessionService.LogActivityAsync(
                     actionType: "نسخ احتياطي (قاعدة فقط)",
@@ -792,23 +1145,49 @@
             else
             {
                 string zipFileName = $"DossierFullBackup_{timestamp}.zip";
-                string zipFullPath = Path.Combine(backupFolder, zipFileName);
+                string zipFullPath = Path.Combine(normalizedBackupFolder, zipFileName);
 
-                await Task.Run(() =>
+                await Task.Run(async () =>
                 {
                     using (var archive = ZipFile.Open(zipFullPath, ZipArchiveMode.Create))
                     {
-                        archive.CreateEntryFromFile(sourceDb, "dossiers.sqlite3", CompressionLevel.Optimal);
+                        // 1. إضافة ملف قاعدة البيانات باستخدام تدفق آمن يدعم المشاركة
+                        var dbEntry = archive.CreateEntry("dossiers.sqlite3", CompressionLevel.Optimal);
+                        await using (var entryStream = dbEntry.Open())
+                        await using (var dbFileStream = new FileStream(sourceDb, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            await dbFileStream.CopyToAsync(entryStream);
+                        }
 
+                        // 2. فحص وضغط مجلد الملفات والوثائق المؤرشفة
                         string baseFolder = _settings.BaseFolderPath?.Trim().Trim('"', '\'') ?? string.Empty;
                         if (!string.IsNullOrWhiteSpace(baseFolder) && Directory.Exists(baseFolder))
                         {
-                            var allFiles = Directory.GetFiles(baseFolder, "*.*", SearchOption.AllDirectories);
-                            foreach (var filePath in allFiles)
+                            // استثناء ملفات الـ Zip والملفات المؤقتة لـ SQLite
+                            var validFiles = Directory.GetFiles(baseFolder, "*.*", SearchOption.AllDirectories)
+                                .Where(f =>
+                                {
+                                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                                    return ext != ".zip" && ext != ".sqlite3-wal" && ext != ".sqlite3-shm" && ext != ".tmp";
+                                });
+
+                            foreach (var filePath in validFiles)
                             {
-                                string relativePath = Path.GetRelativePath(baseFolder, filePath);
-                                string entryName = Path.Combine("Files", relativePath).Replace('\\', '/');
-                                archive.CreateEntryFromFile(filePath, entryName, CompressionLevel.Optimal);
+                                try
+                                {
+                                    string relativePath = Path.GetRelativePath(baseFolder, filePath);
+                                    string entryName = Path.Combine("Files", relativePath).Replace('\\', '/');
+
+                                    var fileEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+                                    await using var fileEntryStream = fileEntry.Open();
+                                    await using var diskFileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                                    await diskFileStream.CopyToAsync(fileEntryStream);
+                                }
+                                catch
+                                {
+                                    // تخطي أي ملف معطوب أو محجوز كلياً دون إيقاف العملية
+                                    continue;
+                                }
                             }
                         }
                     }
@@ -818,17 +1197,13 @@
                     actionType: "نسخ احتياطي شامل",
                     entityType: "النظام والملفات",
                     entityId: null,
-                    description: $"تم إنشاء نسخة احتياطية شاملة (قاعدة + وثائق) باسم: {zipFileName}"
+                    description: $"تم إنشاء نسخة احتياطية شاملة باسم: {zipFileName}"
                 );
 
                 Snackbar.Add($"تم إنشاء النسخة الشاملة بنجاح: {zipFileName}", Severity.Success);
             }
 
             LoadBackupFiles();
-        }
-        catch (UnauthorizedAccessException uex)
-        {
-            Snackbar.Add($"صلاحيات الوصول مرفوضة في المسار المحدد: {uex.Message}. يرجى اختيار مسار على قرص D أو C مباشرة.", Severity.Error);
         }
         catch (Exception ex)
         {
@@ -840,18 +1215,20 @@
         }
     }
 
-    // ==========================================
-    // منطق الاستعادة (Restore Engine)
-    // ==========================================
-
     private async Task RestoreFromLocalFile(string filePath, string fileName)
     {
+        if (!SessionService.IsSuperAdmin)
+        {
+            Snackbar.Add("الاستعادة متاحة حصراً للمدير العام!", Severity.Error);
+            return;
+        }
+
         bool isZip = fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 
         bool? confirm = await DialogService.ShowMessageBox(
             "تأكيد استعادة النسخة الاحتياطية",
-            $"تحذير أمني عالي الأهمية:\nأنت على وشك استعادة النسخة ({fileName}).\n" +
-            (isZip ? "سيتم استبدال قاعدة البيانات واستخراج واستبدال مجلدات الوثائق بالكامل." : "سيتم استبدال قاعدة البيانات الحالية فقط بالبيانات الموجودة في هذه النسخة.") +
+            $"تحذير أمني:\nأنت على وشك استعادة النسخة ({fileName}).\n" +
+            (isZip ? "سيتم استبدال قاعدة البيانات واستخراج واستبدال مجلدات الوثائق بالكامل." : "سيتم استبدال قاعدة البيانات الحالية فقط.") +
             "\n\nهل ترغب بالمتابعة؟",
             yesText: "نعم، استعد الآن",
             cancelText: "إلغاء الأمر");
@@ -863,13 +1240,13 @@
 
     private async Task RestoreFromUploadedFile(IBrowserFile file)
     {
-        if (file == null) return;
+        if (!SessionService.IsSuperAdmin || file == null) return;
 
         bool isZip = file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 
         bool? confirm = await DialogService.ShowMessageBox(
             "تأكيد استعادة من ملف مخصص",
-            $"تحذير أمني عالي الأهمية:\nأنت على وشك استعادة ({file.Name}).\n" +
+            $"تحذير أمني:\nأنت على وشك استعادة ({file.Name}).\n" +
             (isZip ? "سيتم فك ضغط واستعادة قاعدة البيانات والملفات بالكامل." : "سيتم استبدال قاعدة البيانات الحالية.") +
             "\n\nهل أنت متأكد من سلامة الملف وترغب بالمتابعة؟",
             yesText: "نعم، استعد هذا الملف",
@@ -903,6 +1280,8 @@
 
     private async Task PerformRestoreAsync(string sourceBackupFile, bool isZip)
     {
+        if (!SessionService.IsSuperAdmin) return;
+
         string currentDbPath = Path.Combine(AppContext.BaseDirectory, "dossiers.sqlite3");
         if (!File.Exists(currentDbPath))
         {

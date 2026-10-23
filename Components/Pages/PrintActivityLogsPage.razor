@@ -5,8 +5,11 @@
 @using Microsoft.EntityFrameworkCore
 @using DossierArchiveApp.Data
 @using DossierArchiveApp.Models
+@using DossierArchiveApp.Services
 @inject AppDbContext DbContext
 @inject NavigationManager Navigation
+@inject UserSessionService SessionService
+@inject ISnackbar Snackbar
 
 <PageTitle>طباعة سجل تتبع الحركات والنشاطات</PageTitle>
 
@@ -15,6 +18,10 @@
      style="background-color: #1B4D3E; color: white; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
     <div style="font-size: 14px; font-weight: bold;">
         معاينة تقرير سجل تدقيق وتتبع حركات النظام
+        @if (!string.IsNullOrWhiteSpace(_selectedDeptName))
+        {
+            <span class="badge bg-light text-dark ms-2" style="font-size: 12px;">(@_selectedDeptName)</span>
+        }
     </div>
     <div class="d-flex gap-2">
         <button type="button" class="btn-print" onclick="window.print()">
@@ -44,7 +51,9 @@ else
                     <div style="text-align: right; min-width: 190px;">
                         <div style="font-size: 12pt; font-weight: bold; color: #1B4D3E;">ديوان الوقف الشيعي</div>
                         <div style="font-size: 10.5pt; font-weight: bold;">@(_settings?.DirectorateName ?? "مديرية الوقف الشيعي في ديالى")</div>
-                        <div style="font-size: 9.5pt; color: #444;">@(_settings?.DepartmentName ?? "شعبة تكنولوجيا المعلومات")</div>
+                        <div style="font-size: 9.5pt; color: #444;">
+                            @(!string.IsNullOrWhiteSpace(_selectedDeptName) ? _selectedDeptName : (_settings?.DepartmentName ?? "الشعبة الإدارية والمالية"))
+                        </div>
                     </div>
 
                     <div style="text-align: center;">
@@ -66,13 +75,15 @@ else
                 <span class="report-title">تقرير تتبع الحركات والنشاطات الإدارية</span>
             </div>
 
-            <!-- 3. جدول ملخص محددات وفلاتر التقرير مع التواريخ -->
+            <!-- 3. جدول ملخص محددات وفلاتر التقرير -->
             <table class="summary-table mb-2">
                 <tr>
+                    <td class="lbl">نطاق الشُعبة:</td>
+                    <td class="val fw-bold" style="color: #1B4D3E;">
+                        @(!string.IsNullOrWhiteSpace(_selectedDeptName) ? _selectedDeptName : "كافة شُعب وأقسام المديرية")
+                    </td>
                     <td class="lbl">نوع الإجراء:</td>
                     <td class="val">@(!string.IsNullOrWhiteSpace(_actionTypeFilter) ? _actionTypeFilter : "كافة الإجراءات")</td>
-                    <td class="lbl">نص البحث:</td>
-                    <td class="val">@(!string.IsNullOrWhiteSpace(_searchFilter) ? _searchFilter : "الكل")</td>
                 </tr>
                 <tr>
                     <td class="lbl">الفترة المحددة:</td>
@@ -91,11 +102,11 @@ else
                     <thead>
                         <tr>
                             <th style="width: 5%;">ت</th>
-                            <th style="width: 14%;">المستخدم</th>
-                            <th style="width: 15%;">نوع الإجراء</th>
-                            <th style="width: 15%;">الكيان المستهدف</th>
-                            <th style="width: 33%;">تفاصيل النشاط</th>
-                            <th style="width: 18%;">التاريخ والوقت</th>
+                            <th style="width: 17%;">المستخدم / الشُعبة</th>
+                            <th style="width: 13%;">نوع الإجراء</th>
+                            <th style="width: 14%;">الكيان المستهدف</th>
+                            <th style="width: 34%;">تفاصيل النشاط</th>
+                            <th style="width: 17%;">التاريخ والوقت</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -103,7 +114,7 @@ else
                         {
                             <tr>
                                 <td colspan="6" class="text-center py-4" style="color: #666; font-size: 9.5pt;">
-                                    لا توجد حركات مسجلة مطابقة لمحددات البحث والفترة المحددة.
+                                    لا توجد حركات مسجلة مطابقة لمحددات البحث والفترة المحددة ضمن صلاحيتك.
                                 </td>
                             </tr>
                         }
@@ -114,7 +125,13 @@ else
                             {
                                 <tr>
                                     <td class="text-center">@(idx++)</td>
-                                    <td class="text-center fw-bold">@log.UserName</td>
+                                    <td>
+                                        <div class="fw-bold">@log.UserName</div>
+                                        @if (!string.IsNullOrWhiteSpace(log.DepartmentName))
+                                        {
+                                            <div style="font-size: 7pt; color: #1B4D3E;">@log.DepartmentName</div>
+                                        }
+                                    </td>
                                     <td class="text-center">
                                         <span class="action-tag">@log.ActionType</span>
                                     </td>
@@ -328,10 +345,13 @@ else
 </style>
 
 @code {
-    public record AuditLogPrintItem(int LogId, string UserName, string ActionType, string? EntityType, string Description, string CreatedAt);
+    public record AuditLogPrintItem(int LogId, string UserName, string? DepartmentName, string ActionType, string? EntityType, string Description, string CreatedAt);
 
     [SupplyParameterFromQuery(Name = "action")]
     public string? _actionTypeFilter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "dept")]
+    public int? _departmentIdFilter { get; set; }
 
     [SupplyParameterFromQuery(Name = "search")]
     public string? _searchFilter { get; set; }
@@ -344,15 +364,81 @@ else
 
     private List<AuditLogPrintItem> _logs = new();
     private SystemSetting? _settings;
+    private string? _selectedDeptName;
     private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            // 1. التحقق من صلاحية الوصول والطباعة
+            if (SessionService.CurrentUser == null || !SessionService.CanAccessSettingsOrUsers || !SessionService.CanExport)
+            {
+                Snackbar.Add("عذراً، لا تمتلك الصلاحية للوصول إلى هذا التقرير أو طباعته!", Severity.Error);
+                Navigation.NavigateTo("/employees");
+                return;
+            }
+
             _settings = await DbContext.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
 
+            // 2. صمام أمان العزل: منع مستخدم الشعبة من استعراض حركات شعبة أخرى عبر تعديل الرابط
+            int? effectiveDeptId = null;
+
+            if (SessionService.IsSuperAdmin)
+            {
+                effectiveDeptId = _departmentIdFilter;
+                if (effectiveDeptId.HasValue)
+                {
+                    var dept = await DbContext.Departments.FindAsync(effectiveDeptId.Value);
+                    _selectedDeptName = dept?.Name;
+                }
+            }
+            else
+            {
+                effectiveDeptId = SessionService.CurrentDepartmentId;
+                _selectedDeptName = SessionService.CurrentDepartmentName;
+            }
+
+            // 3. بناء خريطة المستخدمين وفق نطاق الصلاحية
+            var userQuery = DbContext.Users
+                .Include(u => u.Department)
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!SessionService.IsSuperAdmin)
+            {
+                if (effectiveDeptId.HasValue)
+                {
+                    userQuery = userQuery.Where(u => u.DepartmentId == effectiveDeptId.Value && u.IsSuperAdmin == 0);
+                }
+                else
+                {
+                    userQuery = userQuery.Where(u => false);
+                }
+            }
+            else if (effectiveDeptId.HasValue)
+            {
+                userQuery = userQuery.Where(u => u.DepartmentId == effectiveDeptId.Value);
+            }
+
+            var users = await userQuery.ToListAsync();
+            var allowedUserIds = users.Select(u => u.UserId).ToList();
+
+            var userMap = users.ToDictionary(
+                u => u.UserId,
+                u => new
+                {
+                    Name = string.IsNullOrWhiteSpace(u.FullName) ? u.UserName : u.FullName,
+                    DeptName = u.IsSuperAdmin == 1 ? "إدارة عامة" : (u.Department?.Name ?? "غير محدد")
+                });
+
+            // 4. استعلام الحركات مع الفلترة المباشرة على قاعدة البيانات
             var query = DbContext.AuditLogs.AsNoTracking().AsQueryable();
+
+            if (!SessionService.IsSuperAdmin || effectiveDeptId.HasValue)
+            {
+                query = query.Where(l => l.UserId.HasValue && allowedUserIds.Contains(l.UserId.Value));
+            }
 
             if (!string.IsNullOrWhiteSpace(_actionTypeFilter) && _actionTypeFilter != "الكل")
             {
@@ -380,20 +466,24 @@ else
 
             var rawLogs = await query
                 .OrderByDescending(l => l.LogId)
-                .Take(35)
+                .Take(150)
                 .ToListAsync();
 
-            var users = await DbContext.Users.AsNoTracking().ToListAsync();
-            var userMap = users.ToDictionary(u => u.UserId, u => u.UserName);
+            _logs = rawLogs.Select(l =>
+            {
+                bool hasUser = l.UserId.HasValue && userMap.ContainsKey(l.UserId.Value);
+                var u = hasUser ? userMap[l.UserId!.Value] : null;
 
-            _logs = rawLogs.Select(l => new AuditLogPrintItem(
-                l.LogId,
-                l.UserId.HasValue && userMap.ContainsKey(l.UserId.Value) ? userMap[l.UserId.Value] : "المسؤول",
-                l.ActionType,
-                l.EntityType,
-                l.Description,
-                l.CreatedAt?.ToString("yyyy/MM/dd hh:mm tt") ?? "—"
-            )).ToList();
+                return new AuditLogPrintItem(
+                    l.LogId,
+                    u?.Name ?? (SessionService.IsSuperAdmin ? "النظام" : "مستخدم"),
+                    u?.DeptName,
+                    l.ActionType,
+                    l.EntityType,
+                    l.Description,
+                    l.CreatedAt?.ToString("yyyy/MM/dd hh:mm tt") ?? "—"
+                );
+            }).ToList();
         }
         finally
         {
