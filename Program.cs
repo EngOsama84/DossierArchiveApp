@@ -1,7 +1,10 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using DossierArchiveApp.Components;
 using DossierArchiveApp.Data;
 using DossierArchiveApp.Models;
 using DossierArchiveApp.Services;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
@@ -16,6 +19,11 @@ builder.Services.AddServerSideBlazor()
     {
         // —›⁄ «·Õœ «·√ﬁ’Ï ·ÕÃ„ «·—”«·… «·Ê«Õœ… «·„” ﬁ»·… ⁄»— SignalR ≈·Ï 64 „Ì€«»«Ì 
         options.MaximumReceiveMessageSize = 64 * 1024 * 1024; // 64 MB
+    })
+    .AddCircuitOptions(options =>
+    {
+        //  ﬁ·Ì’ „Â·… «·«Õ ›«Ÿ »«·œ«∆—… »⁄œ ≈€·«ﬁ «·‰«›–… „‰ 3 œﬁ«∆ﬁ ≈·Ï À«‰Ì… Ê«Õœ… ›ﬁÿ
+        options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromSeconds(1);
     });
 
 builder.Services.AddMudServices();
@@ -24,6 +32,9 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<ScannerService>();
 builder.Services.AddScoped<UserSessionService>();
 builder.Services.AddScoped<ExportService>();
+
+//  ”ÃÌ· „—«ﬁ» «·« ’«· ·≈€·«ﬁ «·”Ì—›— ›Ê— ≈€·«ﬁ ‰«›–… «·»—‰«„Ã (“— X)
+builder.Services.AddScoped<CircuitHandler, DesktopCircuitHandler>();
 
 // ﬁ—«¡… „”«— «·« ’«· „‰ appsettings.json
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -59,16 +70,150 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+//  ⁄ÿÌ· «· ÊÃÌÂ ·‹ HTTPS ·ﬂÊ‰ «· ÿ»Ìﬁ Ì⁄„· „Õ·Ì«/√Ê›·«Ì‰ »œÊ‰ ‘Â«œ… SSL
+// app.UseHttpsRedirection();
+
 app.UseStaticFiles();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// 5.  ‘€Ì· «· ÿ»Ìﬁ
-await app.RunAsync();
+// ==================== »œ«Ì… ﬂÊœ «· ‘€Ì· «·„ﬂ »Ì «·–ﬂÌ ====================
+const string appUrl = "http://127.0.0.1:5055";
 
+// 1. „‰⁄  ‘€Ì· √ﬂÀ— „‰ ”Ì—›— ›Ì «·Œ·›Ì… ⁄‰œ  ﬂ—«— «·‰ﬁ— ⁄·Ï «·√ÌﬁÊ‰…
+using var mutex = new System.Threading.Mutex(true, "DossierArchiveApp_SingleInstanceMutex", out bool isNewInstance);
+
+if (!isNewInstance)
+{
+    // «·”Ì—›— Ì⁄„· »«·›⁄· ›Ì «·Œ·›Ì…∫ ‰› Õ Ê«ÃÂ… «·»—‰«„Ã ›Ê—« Ê‰€·ﬁ «·⁄„·Ì… «·„ﬂ——…
+    LaunchDesktopWindow(appUrl, null);
+    return;
+}
+
+// 2. ÷»ÿ ⁄‰«ÊÌ‰ «·«” „«⁄ »„« Ì÷„‰ «· Ê«›ﬁ „⁄ »Ì∆… «· ÿÊÌ— Ê«·≈‰ «Ã
+if (!app.Environment.IsDevelopment())
+{
+    app.Urls.Clear();
+    app.Urls.Add(appUrl);
+}
+else
+{
+    if (!app.Urls.Contains(appUrl))
+    {
+        app.Urls.Add(appUrl);
+    }
+}
+
+// 3.  ‘€Ì· «·”Ì—›— Ê«·«‰ Ÿ«— Õ Ï Ì’»Õ Ã«Â“«  „«„« ·«” ﬁ»«· «·ÿ·»« 
+await app.StartAsync();
+
+// 4. › Õ ‰«›–… «·»—‰«„Ã «·„ﬂ »Ì… «·„” ﬁ·… »„·¡ «·‘«‘… Ê„—«ﬁ»… ≈€·«ﬁÂ«
+LaunchDesktopWindow(appUrl, app.Lifetime);
+
+// 5. ≈»ﬁ«¡ «·”Ì—›— Ì⁄„· Õ Ï Ì€·ﬁ «·„” Œœ„ «·‰«›–…
+await app.WaitForShutdownAsync();
+
+// ==========================================
+// «·œÊ«· «·„”«⁄œ… ·· ‘€Ì· Ê ﬂ»Ì— «·‰«›–…
+// ==========================================
+static void LaunchDesktopWindow(string url, IHostApplicationLifetime? lifetime)
+{
+    string? browserPath = FindChromiumBrowserPath();
+
+    if (!string.IsNullOrEmpty(browserPath))
+    {
+        try
+        {
+            // „”«— „” ﬁ· ÊÃœÌœ ·÷„«‰ ⁄œ„ ﬁ—«¡… «·ÕÃ„ «·’€Ì— «·”«»ﬁ Ê·⁄“· ⁄„·Ì… «·‰«›–…
+            string userDataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DossierArchiveApp_DesktopUI");
+
+            Directory.CreateDirectory(userDataDir);
+
+            // ≈‰‘«¡ „·› First Run ›«—€ ·„‰⁄ ŸÂÊ— ‰«›–… «· —ÕÌ» Ê«·„“«„‰… ›Ì Edge Ê Chrome
+            string firstRunFile = Path.Combine(userDataDir, "First Run");
+            if (!File.Exists(firstRunFile))
+            {
+                File.WriteAllText(firstRunFile, string.Empty);
+            }
+
+            var startTime = DateTime.UtcNow;
+
+            var uiProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = browserPath,
+                Arguments = $"--app={url} --start-maximized --user-data-dir=\"{userDataDir}\" --no-first-run --no-default-browser-check --disable-sync --disable-extensions --disable-features=Translate,msImplicitSignin,msEdgeFre",
+                UseShellExecute = false
+            });
+
+            if (uiProcess != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    // ≈Ã»«— ‰Ÿ«„ ÊÌ‰œÊ“ ⁄·Ï  ﬂ»Ì— «·‰«›–… (Maximize) ›Ê— ŸÂÊ—Â« ⁄·Ï «·‘«‘…
+                    for (int i = 0; i < 25; i++)
+                    {
+                        if (uiProcess.HasExited) break;
+                        uiProcess.Refresh();
+                        if (uiProcess.MainWindowHandle != IntPtr.Zero)
+                        {
+                            NativeWindowHelper.MaximizeWindow(uiProcess.MainWindowHandle);
+                            break;
+                        }
+                        await Task.Delay(200);
+                    }
+
+                    // «‰ Ÿ«— ≈€·«ﬁ «·‰«›–… „‰ ﬁ»· «·„” Œœ„ (“— X)
+                    await uiProcess.WaitForExitAsync();
+
+                    // ≈–« «” „—  «·⁄„·Ì… ·√ﬂÀ— „‰ À«‰Ì Ì‰ À„ √ı€·ﬁ ° ‰Êﬁ› «·”Ì—›— ›Ê—«
+                    if (lifetime != null && (DateTime.UtcNow - startTime).TotalSeconds > 2)
+                    {
+                        lifetime.StopApplication();
+                        await Task.Delay(300);
+                        Environment.Exit(0);
+                    }
+                });
+                return;
+            }
+        }
+        catch
+        {
+            // ›Ì Õ«· ÕœÊÀ √Ì «” À‰«¡ Ì‰ ﬁ· ··„ ’›Õ «·«› —«÷Ì »«·√”›·
+        }
+    }
+
+    // «·ŒÌ«— «·»œÌ· «·¬„‰: «·› Õ ⁄»— «·„ ’›Õ «·«› —«÷Ì ··‰Ÿ«„
+    Process.Start(new ProcessStartInfo
+    {
+        FileName = url,
+        UseShellExecute = true
+    });
+}
+
+static string? FindChromiumBrowserPath()
+{
+    string[] candidatePaths =
+    [
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Browser", "chrome.exe"),
+        @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Google\Chrome\Application\chrome.exe")
+    ];
+
+    foreach (var path in candidatePaths)
+    {
+        if (File.Exists(path))
+            return path;
+    }
+
+    return null;
+}
 
 // ==========================================
 // «·œÊ«· «·„”«⁄œ… · √”Ì” Ê»–— «·»Ì«‰«  «·√Ê·Ì…
@@ -78,13 +223,11 @@ static async Task SeedInitialDataAsync(AppDbContext db)
     // 1. »–— ‘Ã—… «· ’‰Ì›«  «·«› —«÷Ì…
     if (!await db.MainCategories.AnyAsync())
     {
-        // «·√‰Ê«⁄ «·—∆Ì”Ì…
         var mainIn = new MainCategory { Name = "Ê«—œ" };
         var mainOut = new MainCategory { Name = "’«œ—" };
         await db.MainCategories.AddRangeAsync(mainIn, mainOut);
         await db.SaveChangesAsync();
 
-        // «· ’‰Ì›«  «·—∆Ì”Ì… ·ﬂ·« «·‰Ê⁄Ì‰ (Ê«—œ Ê’«œ—)
         var primaryNames = new[] { "√„— ≈œ«—Ì", "«” „«—…", "ÿ·» ‘Œ’Ì", "«⁄ Ì«œÌ…" };
         var primaryList = new List<PrimaryCategory>();
 
@@ -102,7 +245,6 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         await db.PrimaryCategories.AddRangeAsync(primaryList);
         await db.SaveChangesAsync();
 
-        // «· ’‰Ì›«  «·›—⁄Ì… «·√Ê·Ï
         var secondaryNames = new[]
         {
             "„»«‘—…", "«‰›ﬂ«ﬂ", "⁄·«Ê…", " —›Ì⁄", "‘ﬂ—", "⁄ﬁÊ»…",
@@ -126,7 +268,6 @@ static async Task SeedInitialDataAsync(AppDbContext db)
         await db.SecondaryCategories.AddRangeAsync(secondaryList);
         await db.SaveChangesAsync();
 
-        // «· ’‰Ì›«  «·›—⁄Ì… «·À«‰Ì…
         var tertiaryNames = new[]
         {
             "œÊ—…", "„ƒ „—", "Ê—‘…", "≈Ã«“…", "‰ﬁ·",
@@ -305,7 +446,6 @@ static async Task SeedInitialDataAsync(AppDbContext db)
 
         await db.Departments.AddRangeAsync(departments);
 
-        // ≈÷«›… «·ÊÕœ«  «·„” ﬁ·…
         var independentUnits = new List<SubUnit>
         {
             new SubUnit { Name = "ÊÕœ… «· ’«—ÌÕ «·√„‰Ì… Ê«·„⁄·Ê„« ", DepartmentId = null },
@@ -317,5 +457,87 @@ static async Task SeedInitialDataAsync(AppDbContext db)
 
         await db.SubUnits.AddRangeAsync(independentUnits);
         await db.SaveChangesAsync();
+    }
+}
+
+// =========================================================================
+// «·›∆«  «·„”«⁄œ… ·· ﬂ»Ì— «· ·ﬁ«∆Ì Ê„—«ﬁ»… «·≈€·«ﬁ «·›Ê—Ì (›Ì ‰Â«Ì… «·„·›)
+// =========================================================================
+public static class NativeWindowHelper
+{
+    private const int SW_MAXIMIZE = 3;
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    public static void MaximizeWindow(IntPtr hWnd)
+    {
+        if (hWnd != IntPtr.Zero)
+        {
+            ShowWindowAsync(hWnd, SW_MAXIMIZE);
+            SetForegroundWindow(hWnd);
+        }
+    }
+}
+
+public class DesktopCircuitHandler : CircuitHandler
+{
+    private static int _activeConnections = 0;
+    private static readonly object _lock = new();
+    private static CancellationTokenSource? _shutdownCts;
+    private readonly IHostApplicationLifetime _lifetime;
+
+    public DesktopCircuitHandler(IHostApplicationLifetime lifetime)
+    {
+        _lifetime = lifetime;
+    }
+
+    public override Task OnConnectionUpAsync(Circuit circuit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _activeConnections++;
+            _shutdownCts?.Cancel();
+            _shutdownCts = null;
+        }
+        return Task.CompletedTask;
+    }
+
+    public override Task OnConnectionDownAsync(Circuit circuit, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _activeConnections--;
+            if (_activeConnections <= 0)
+            {
+                _activeConnections = 0;
+                _shutdownCts?.Cancel();
+                _shutdownCts = new CancellationTokenSource();
+                var token = _shutdownCts.Token;
+
+                // «‰ Ÿ«— 1.5 À«‰Ì… ›ﬁÿ ·· √ﬂœ „‰ √‰Â« ·Ì”  ≈⁄«œ…  Õ„Ì· (Refresh) À„ ≈€·«ﬁ «·»—‰«„Ã »«·ﬂ«„·
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(1500, token);
+                        if (!token.IsCancellationRequested)
+                        {
+                            _lifetime.StopApplication();
+                            await Task.Delay(300);
+                            Environment.Exit(0);
+                        }
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        //  „ ≈·€«¡ «·≈€·«ﬁ ·√‰ «·„” Œœ„ ﬁ«„ »⁄„· Refresh ··’›Õ…
+                    }
+                });
+            }
+        }
+        return Task.CompletedTask;
     }
 }
